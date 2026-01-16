@@ -1,0 +1,136 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<templates id="template" xml:space="preserve">
+
+    
+    <t t-name="meu_modulo.OrderReceipt" t-inherit="point_of_sale.OrderReceipt" t-inherit-mode="extension">
+        
+    <xpath expr="//ReceiptHeader" position="replace">
+
+        <div class="danfe-header">
+
+            <div class="danfe-emitente">
+                <div style="font-weight: bold;">MINHA LOJA TESTE LTDA</div>
+                 <div>
+                    CNPJ: 12.345.678/0001-99<br/>
+                    IE: 123.456.789.111
+                </div>
+
+                <div>
+                    Av. Paulista, 1000 - Bela Vista<br/>
+                    São Paulo - SP<br/>
+                    CEP 01310-100
+                </div>
+               
+            </div>
+
+            <div class="danfe-title">
+                DOCUMENTO AUXILIAR DA NOTA FISCAL DE CONSUMIDOR ELETRÔNICA
+            </div>
+
+        </div>
+
+    </xpath>
+
+    <xpath expr="//OrderWidget" position="replace">
+            
+            <div class="danfe-items">
+                
+                <div class="danfe-items-header">
+                    <span class="col-item">ITEM</span>
+                    <span class="col-cod">COD</span>
+                    <span class="col-desc">DESCRIÇÃO</span>
+                    <span class="col-qtd">QTD</span>
+                    <span class="col-un">UN</span>
+                    <span class="col-unit">VL.UN</span>
+                    <span class="col-desc">DESC</span>
+                    <span class="col-total">VL.TOT</span>
+                </div>
+
+                <t t-foreach="props.data.danfe_items" t-as="item" t-key="item.index">
+            
+                    <div class="danfe-item-cima">
+                        <span class="col-index"><t t-esc="item.index"/></span>
+                        
+                        <span class="col-code"><t t-esc="item.code"/></span>
+
+                        <span class="col-description"><t t-esc="item.description" /></span>
+                        
+                    </div>
+
+
+                    <div class="danfe-item-baixo">
+                        <span class="col-qntd"><t t-esc="item.qntd" /></span>
+
+                        <span class="col-unit">UN </span>
+                        
+                        <span class="col-vlr_unit"><t t-esc="item.vlr_unit" /></span>
+                        
+                        <span class="col-disc"><t t-esc="item.desc" /></span>
+
+                        <span class="col-vlr_total"><t t-esc="item.vlr_total" /></span>
+                    </div>
+
+                </t>
+
+            </div>
+
+        </xpath>
+
+        <xpath expr="//div[hasclass('pos-receipt-taxes')]" position="replace">
+    
+            <div class="pagamento">
+                
+                <span>
+                    <span class="label">QTD. TOTAL DE ITENS:</span>
+                    <span class="valor" t-esc="props.data.danfe_totais.qtd_itens"/>
+                </span>
+
+                <span>
+                    <span class="label">VALOR TOTAL R$:</span>
+                    <span class="valor" t-esc="props.data.danfe_totais.valor_total"/>
+                </span>
+
+                <span>
+                    <span class="label">ACRÉSCIMO:</span>
+                    <span class="valor" t-esc="props.data.danfe_totais.desconto_total"/>
+                </span>
+            
+                <span>
+                    <span class="label">DESCONTO:</span>
+                    <span class="valor" t-esc="props.data.danfe_totais.desconto_total"/>
+                </span>
+
+                <span>
+                    <span class="label">VALOR A PAGAR R$:</span>
+                    <span class="valor" t-esc="props.data.danfe_totais.valor_total"/>
+                </span>
+
+
+
+                <span>
+                    <t t-foreach="props.data.danfe_totais.metodos" t-as="pgto" t-key="pgto.metodo_nome">
+            
+                        <span class="label" t-esc="pgto.metodo_nome" />
+                
+                        <span class="valor" t-esc="props.formatCurrency(pgto.metodo_valor)" />              
+                
+                    </t>
+                </span>
+
+
+
+            </div>
+
+        </xpath>
+       
+
+
+
+
+
+
+
+
+    </t>
+
+</templates>

@@ -1,0 +1,71 @@
+.danfe-header {
+    width: 100%;
+    text-align: center;
+    font-size: 11px;
+    line-height: 1.3;
+    font-family: 'Inconsolata', 'Courier New', monospace;
+}
+.danfe-emitente {
+    margin-bottom: 3px;
+    border-bottom-style: dotted;
+}
+
+.danfe-title {
+    margin-bottom: 3px;
+    border-bottom-style: dotted;
+}
+
+.danfe-items {
+    font-family: 'Inconsolata', 'Courier New', monospace;
+    font-size: 11px;
+    margin-top:3px;
+    border-bottom-style: dotted;
+    margin-bottom: 5px;
+}
+
+.danfe-items-header {
+    display: flex;
+    font-weight: bold;
+    border-bottom-style: dotted;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 3px;
+}
+
+.danfe-item-cima {
+    margin-top: 3px;
+    display: flex;
+    align-items: center;
+    text-align: left;
+    gap: 2em;
+}
+
+.danfe-item-baixo {
+    margin-bottom: 1px;
+    display: flex;
+    justify-content: left;
+    align-items: center;
+    justify-content: space-between;
+}
+
+.pagamento {
+    font-size: 11px;
+    font-family: 'Inconsolata', 'Courier New', monospace;
+    width: 100%;
+}
+
+.pagamento > span {
+    display: flex;
+    justify-content: space-between;
+    width: 100%;
+
+}
+
+.pagamento .label {
+    text-align: left;
+
+}
+
+.pagamento .valor {
+    text-align: right;
+}

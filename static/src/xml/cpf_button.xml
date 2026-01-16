@@ -1,0 +1,21 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<templates id="template" xml:space="preserve">
+
+    <t t-inherit="point_of_sale.ControlButtons" t-inherit-mode="extension">
+        
+        <xpath expr="//div[contains(@class, 'control-buttons')]" position="inside">
+            
+            <button class="btn btn-secondary btn-lg d-flex flex-column align-items-center justify-content-center"
+                    t-on-click="clickCpfButton"
+                    style="min-width: 140px; min-height: 80px; margin: 4px;">
+                
+                <i class="fa fa-id-card fa-2x mb-2"/>
+                <span>CPF / Nota</span>
+                
+            </button>
+
+        </xpath>
+
+    </t>
+
+</templates>
