@@ -1,0 +1,23 @@
+# Pytho,
+
+__pycache__/
+*.pyc
+*.pyo
+
+
+# Odoo
+
+*.log
+*.sqlite
+.odoo/
+
+
+# vscode
+.vscode/
+.idea/
+*.code-workspace
+
+
+# So
+.DS_Store
+
