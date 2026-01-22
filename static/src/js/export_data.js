@@ -3,7 +3,17 @@
 import { PosOrder } from "@point_of_sale/app/models/pos_order";
 import { patch } from "@web/core/utils/patch";
 import { formatCurrency } from "@web/core/currency";
+
+
 patch(PosOrder.prototype, {
+    
+    init_from_JSON(json) {
+        super.init_from_JSON(...arguments);
+        
+        // Se o pedido tiver mensagem fiscal (vindo do loader_params), salva na memória
+        this.x_fiscal_mensagem = json.x_fiscal_mensagem || "";
+    },
+    
     export_as_JSON() {
         const json = super.export_as_JSON();
 
@@ -17,6 +27,8 @@ patch(PosOrder.prototype, {
         
         return json;
     },
+
+
 
     export_for_printing() {
         const result = super.export_for_printing(...arguments);
@@ -79,9 +91,16 @@ patch(PosOrder.prototype, {
 
 
         };
-        
+
+        console.log('teste log')
+
+        result.x_fiscal_mensagem = this.x_fiscal_mensagem;
+
+        console.log("=== RECIBO REIMPRESSO ===");
+        console.log("x_fiscal_mensagem:", this.x_fiscal_mensagem);
+        console.log("export_for_printing:", result);
         return result;
         
-    
+        
     }
 });

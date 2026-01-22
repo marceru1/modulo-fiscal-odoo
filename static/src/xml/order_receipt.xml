@@ -117,6 +117,21 @@
                     </t>
                 </span>
 
+                <span>
+                    <t t-if="props.data.fiscal_status">
+    <div class="pos-receipt-separator"/>
+
+    <div class="fiscal-info">
+        <strong>Status Fiscal:</strong>
+        <span t-esc="props.data.fiscal_status"/>
+    </div>
+
+    <div class="fiscal-msg">
+        <span t-esc="props.data.fiscal_mensagem"/>
+    </div>
+</t>
+
+                </span>
 
 
             </div>

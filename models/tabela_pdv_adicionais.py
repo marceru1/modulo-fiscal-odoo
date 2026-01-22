@@ -11,9 +11,9 @@ class PosOrder_Adicionais(models.Model):
     x_email_cliente = fields.Char(string="email do cliente")
 
 
-    # aqui cria no banco a coluna pra armazenar a resposta do middleware
-    # x_fiscal_status = fields.Char(string='Status Fiscal')
-    # x_fiscal_mensagem = fields.Text(string='Mensagem Fiscal')
+    #aqui cria no banco a coluna pra armazenar a resposta do middleware
+    x_fiscal_status = fields.Char(string='Status Fiscal')
+    x_fiscal_mensagem = fields.Text(string='Mensagem Fiscal')
 
     @api.model
     def _order_fields(self, ui_order):
