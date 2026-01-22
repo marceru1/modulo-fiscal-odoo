@@ -1,6 +1,6 @@
 import json
 import requests  # usado pra enviar requisicoes ao middleware
-from odoo import models, api
+from odoo import models, api, fields
 import logging
 
 # utlizamos o logger padrao do odoo pra debug
@@ -11,7 +11,14 @@ API_LARAVEL_URL = "http://127.0.0.1:8000/api/odoo/webhook"
 API_TOKEN = "123"
 
 
+
+
 class PosOrder(models.Model):
+
+
+
+
+
     _inherit = 'pos.order'
 
   
@@ -60,7 +67,7 @@ class PosOrder(models.Model):
                     'data': self.date_order,
                     'total': self.amount_total,
                     'numero_caixa': self.config_id.name,
-                    'numero_ordem': self.id,
+                    'numero_ordem': self.pos_reference,
                 },
                 'cliente': {
                     'nome': 'CONSUMIDOR FINAL',
@@ -82,7 +89,7 @@ class PosOrder(models.Model):
             json_payload = json.dumps(payload_completo, default=str)
             
             # loggando pra ver se deu certo
-            _logger.info(f"--- enviando venda {self.name} ---")
+            _logger.info(f"--- enviando venda {payload_completo} ---")
     
             
 
@@ -116,3 +123,17 @@ class PosOrder(models.Model):
             _logger.error(f"ERRO INESPERADO ao processar {self.name}: {e}. A venda PODE ter sido concluída, mas o JSON falhou.")
         
         return res
+    
+
+    class PosSession(models.Model):
+        _inherit = 'pos.session'
+
+        def _loader_params_pos_order(self):
+            # Pega a lista padrão de campos que o Odoo carrega
+            params = super(PosSession, self)._loader_params_pos_order()
+            
+            # Adiciona o seu campo 'x_fiscal_mensagem' na lista
+            # Agora, quando o PDV carregar os pedidos pagos, esse campo vem junto
+            params['search_params']['fields'].append('x_fiscal_mensagem')
+            
+            return params
