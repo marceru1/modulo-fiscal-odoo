@@ -90,8 +90,7 @@ class PosOrder(models.Model):
             
             # loggando pra ver se deu certo
             _logger.info(f"--- enviando venda {payload_completo} ---")
-    
-            
+
 
 
             # aqui embaixo eh pra fazer o envio
