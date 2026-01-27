@@ -14,6 +14,20 @@ class PosOrder_Adicionais(models.Model):
     #aqui cria no banco a coluna pra armazenar a resposta do middleware
     x_fiscal_status = fields.Char(string='Status Fiscal')
     x_fiscal_mensagem = fields.Text(string='Mensagem Fiscal')
+    x_fiscal_chave = fields.Char(string='Chave de Acesso')
+    x_fiscal_protocolo = fields.Char(string='Protocolo')
+    x_fiscal_numero = fields.Char(string='Número da NFCe')
+    x_fiscal_serie = fields.Char(string='Série')
+    
+    # Links e URLs
+    x_fiscal_qrcode_url = fields.Char(string='URL do QR Code')
+    x_fiscal_qrcode_b64 = fields.Text(string='QR Code Base64')
+    x_fiscal_url_consulta = fields.Char(string='URL de Consulta')
+    x_fiscal_url_pdf = fields.Char(string='Link do PDF (Danfe)')
+    x_fiscal_url_xml = fields.Char(string='Link do XML')
+
+    # Controle de Contingência (Boolean)
+    x_fiscal_offline = fields.Boolean(string='Emitido em Contingência?', default=False)
 
     @api.model
     def _order_fields(self, ui_order):

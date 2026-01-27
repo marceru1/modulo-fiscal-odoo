@@ -117,22 +117,76 @@
                     </t>
                 </span>
 
-                <span>
-                    <t t-if="props.data.fiscal_status">
-    <div class="pos-receipt-separator"/>
+            </div>
 
-    <div class="fiscal-info">
-        <strong>Status Fiscal:</strong>
-        <span t-esc="props.data.fiscal_status"/>
-    </div>
+            <div class="fiscal-data">
+                
+                <t t-if=" props.data.x_fiscal.status === 'autorizado'">
+                    
+                    <div class="fiscal-separador"></div>
 
-    <div class="fiscal-msg">
-        <span t-esc="props.data.fiscal_mensagem"/>
-    </div>
-</t>
+                    <div class="fiscal-center">
+                        Número: <strong><t t-esc="props.data.x_fiscal.numero"/></strong> 
+                        Série: <strong><t t-esc="props.data.x_fiscal.serie"/></strong>
+                        <br/>
+                        Emissão: <t t-esc="props.data.date"/>
+                    </div>
 
-                </span>
+                    <div class="fiscal-center">
+                        Consulte pela Chave de Acesso em:<br/>
+                        <span style="font-size: 10px;"><t t-esc="props.data.x_fiscal.url_consulta"/></span>
+                    </div>
 
+                    <div class="fiscal-center" style="margin-top: 5px;">
+                        <strong>CHAVE DE ACESSO</strong><br/>
+                        <span class="fiscal-chave"><t t-esc="props.data.x_fiscal.chave"/></span>
+                    </div>
+
+                    <div class="fiscal-center" style="margin-top: 5px;">
+                        <t t-if="props.data.x_cpf_nota">
+                            CONSUMIDOR CPF: <t t-esc="props.data.x_cpf_nota"/>
+                        </t>
+                        <t t-else="">
+                            CONSUMIDOR NÃO IDENTIFICADO
+                        </t>
+                    </div>
+
+                    <div class="fiscal-center">
+                        <t t-if="props.data.x_fiscal.offline">
+                            <br/>
+                            <strong>EMITIDA EM CONTINGÊNCIA</strong><br/>
+                            Pendente de Autorização
+                        </t>
+                        <t t-else="">
+                             Protocolo de Autorização: <t t-esc="props.data.x_fiscal.protocolo"/>
+                        </t>
+                    </div>
+
+                    <div class="fiscal-qrcode">
+                        <img style="width: 140px; height: 140px;"
+                             t-att-src="props.data.x_fiscal.qrcode_url"/>
+                    </div>
+                    
+                    <div class="fiscal-center" style="margin-top: 10px; font-size: 10px;">
+                        Tributos Totais Incidentes (Lei Federal 12.741/2012) R$ 0,00
+                    </div>
+
+                </t>
+
+                <t t-elif="props.data.x_fiscal and props.data.x_fiscal.status === 'erro'">
+                    <div class="fiscal-separador"></div>
+                    <div class="fiscal-erro">
+                        <strong>NFC-e REJEITADA</strong><br/>
+                        <t t-esc="props.data.x_fiscal.mensagem"/>
+                    </div>
+                </t>
+
+                <t t-else="">
+                    <div class="fiscal-separador"></div>
+                    <div class="fiscal-center">
+                        <em>Aguardando processamento fiscal...</em>
+                    </div>
+                </t>
 
             </div>
 
