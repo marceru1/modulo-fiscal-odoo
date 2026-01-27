@@ -15,6 +15,8 @@
     ],
     'assets': {
         'point_of_sale._assets_pos': [
+
+            'meu_modulo_fiscal/static/src/js/re_print_button.js',
             'meu_modulo_fiscal/static/src/js/confirm_popup.js',
             'meu_modulo_fiscal/static/src/js/export_data.js',
             'meu_modulo_fiscal/static/src/js/cpf_popup.js', 

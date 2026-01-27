@@ -72,3 +72,46 @@
 .pagamento .valor {
     text-align: right;
 }
+/* MANTENHA SEU CSS ANTERIOR AQUI ... */
+
+/* ... ADICIONE ISTO AO FINAL DO ARQUIVO CSS */
+
+.fiscal-data {
+    font-family: 'Inconsolata', 'Courier New', monospace;
+    font-size: 11px;
+    margin-top: 10px;
+    width: 100%;
+}
+
+.fiscal-separador {
+    border-bottom: 1px dashed black; /* Tracejado para separar produtos do fiscal */
+    margin-bottom: 8px;
+    margin-top: 8px;
+}
+
+.fiscal-center {
+    text-align: center;
+    line-height: 1.4;
+}
+
+.fiscal-chave {
+    font-size: 10px; 
+    letter-spacing: 0.5px; /* Espaçar um pouco os números */
+    word-wrap: break-word; /* Quebrar linha se for muito grande */
+}
+
+.fiscal-qrcode {
+    display: flex;
+    justify-content: center;
+    margin-top: 10px;
+    margin-bottom: 10px;
+}
+
+.fiscal-erro {
+    text-align: center;
+    font-weight: bold;
+    color: black; /* Impressora térmica não tem cor, mas ajuda na tela */
+    border: 1px solid black;
+    padding: 5px;
+    margin-top: 5px;
+}

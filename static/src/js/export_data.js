@@ -12,6 +12,17 @@ patch(PosOrder.prototype, {
 
         // Se o pedido tiver mensagem fiscal (vindo do loader_params), salva na memória
         this.x_fiscal_mensagem = json.x_fiscal_mensagem || "";
+
+        this.x_fiscal_status = json.x_fiscal_status || "";
+        this.x_fiscal_chave = json.x_fiscal_chave || "";
+        this.x_fiscal_qrcode_url = json.x_fiscal_qrcode_url || "";
+        this.x_fiscal_url_consulta = json.x_fiscal_url_consulta || "";
+        this.x_fiscal_numero = json.x_fiscal_numero || "";
+        this.x_fiscal_serie = json.x_fiscal_serie || "";
+        this.x_fiscal_protocolo = json.x_fiscal_protocolo || "";
+        
+        // Booleano precisa de tratamento especial se vier null
+        this.x_fiscal_offline = Boolean(json.x_fiscal_offline);
     },
 
     export_as_JSON() {
@@ -47,7 +58,7 @@ patch(PosOrder.prototype, {
             metodo_valor: p.amount,
         }));
 
-        console.log(metodos);
+        //console.log(metodos);
 
 
 
@@ -94,13 +105,30 @@ patch(PosOrder.prototype, {
 
         };
 
-        console.log('teste log')
+        // console.log('teste log')
 
-        result.x_fiscal_mensagem = this.x_fiscal_mensagem;
 
-        console.log("=== RECIBO REIMPRESSO ===");
-        console.log("x_fiscal_mensagem:", this.x_fiscal_mensagem);
-        console.log("export_for_printing:", result);
+
+        
+       result.x_fiscal = {
+            mensagem: this.x_fiscal_mensagem,
+            status: this.x_fiscal_status,
+            chave: this.x_fiscal_chave,
+            qrcode_url: this.x_fiscal_qrcode_url,
+            url_consulta: this.x_fiscal_url_consulta,
+            numero: this.x_fiscal_numero,
+            serie: this.x_fiscal_serie,
+            protocolo: this.x_fiscal_protocolo,
+            offline: this.x_fiscal_offline,
+        };
+
+//         console.log("=== RECIBO REIMPRESSO ===");
+
+// console.log("Status:", this.x_fiscal_status);
+//         console.log("QR Code:", this.x_fiscal_qrcode_url);
+//         console.log("Contingência:", this.x_fiscal_offline);
+//         console.log("Objeto Completo:", result.x_fiscal);
+
         return result;
 
 

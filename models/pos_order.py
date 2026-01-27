@@ -124,6 +124,9 @@ class PosOrder(models.Model):
         return res
     
 
+
+
+# isso aqui serve pra colocar oq vem do laravel-controller na nota do odoo
     class PosSession(models.Model):
         _inherit = 'pos.session'
 
@@ -133,6 +136,16 @@ class PosOrder(models.Model):
             
             # Adiciona o seu campo 'x_fiscal_mensagem' na lista
             # Agora, quando o PDV carregar os pedidos pagos, esse campo vem junto
-            params['search_params']['fields'].append('x_fiscal_mensagem')
+            params['search_params']['fields'].extend([
+                'x_fiscal_status',
+                'x_fiscal_mensagem',
+                'x_fiscal_chave',
+                'x_fiscal_qrcode_url',
+                'x_fiscal_url_consulta',
+                'x_fiscal_offline',
+                'x_fiscal_numero',
+                'x_fiscal_serie',
+                'x_fiscal_protocolo',
+            ])
             
             return params
