@@ -21,6 +21,7 @@ patch(PosOrder.prototype, {
         this.x_fiscal_serie = json.x_fiscal_serie || "";
         this.x_fiscal_protocolo = json.x_fiscal_protocolo || "";
         
+        this.x_fiscal_qrcode_b64 = json.x_fiscal_qrcode_b64 || "";
         // Booleano precisa de tratamento especial se vier null
         this.x_fiscal_offline = Boolean(json.x_fiscal_offline);
     },

@@ -1,35 +1,38 @@
 /** @odoo-module */
-
 import { PosStore } from "@point_of_sale/app/store/pos_store";
 import { patch } from "@web/core/utils/patch";
 
 patch(PosStore.prototype, {
     async printReceipt(options) {
         const order = this.get_order();
+        const posReference = order.pos_reference || order.name;
 
-        const posReference = order.pos_reference || order.name; //acha o pedido feito
-
-try {
-            // No Odoo JS, o método é searchRead (sem underline)
+        try {
             const result = await this.env.services.orm.searchRead(
                 "pos.order",
                 [["pos_reference", "=", posReference]],
-                ["x_fiscal_status", "x_fiscal_qrcode_url", "x_fiscal_chave", "x_fiscal_numero", "x_fiscal_serie", "x_fiscal_protocolo", "x_fiscal_offline"]
+                ["x_fiscal_status", "x_fiscal_qrcode_b64", "x_fiscal_chave", "x_fiscal_numero", "x_fiscal_serie", "x_fiscal_protocolo", "x_fiscal_offline"]
             );
 
             if (result && result.length > 0) {
                 const data = result[0];
-                console.log("Sucesso! Status recuperado:", data.x_fiscal_status);
 
-                // Mesclamos os dados novos no objeto da ordem atual
+                // 1. Mesclamos os dados (isso traz o x_fiscal_qrcode_b64 de 652 caracteres)
                 Object.assign(order, data);
-            } else {
-                console.warn("Nenhum dado encontrado no servidor para esta referência.");
+
+                // 2. Criamos a URL completa SEM CORTAR
+                if (data.x_fiscal_qrcode_b64) {
+                    // Usamos o valor direto do 'data' para garantir que temos os 652 caracteres
+                    const base64Completo = data.x_fiscal_qrcode_b64.trim().replace(/\s/g, '');
+                    order.x_fiscal_qrcode_url = "data:image/png;base64," + base64Completo;
+                    
+                    // LOG DE CONFERÊNCIA (Não use substring na variável de impressão!)
+                    console.log(">>> Sucesso! Tamanho enviado ao recibo:", order.x_fiscal_qrcode_url.length);
+                }
             }
         } catch (error) {
-            console.error("Erro técnico na chamada searchRead:", error);
+            console.error("Erro na busca fiscal:", error);
         }
-
 
         return await super.printReceipt(...arguments);
     },

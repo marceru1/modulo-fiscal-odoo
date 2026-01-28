@@ -21,7 +21,11 @@ class PosOrder_Adicionais(models.Model):
     
     # Links e URLs
     x_fiscal_qrcode_url = fields.Char(string='URL do QR Code')
-    x_fiscal_qrcode_b64 = fields.Text(string='QR Code Base64')
+
+    x_fiscal_qrcode_b64 = fields.Text(string='QR Code Base64',
+    help='QR Code fiscal em base64 (SEM prefixo data:image)'
+)
+    
     x_fiscal_url_consulta = fields.Char(string='URL de Consulta')
     x_fiscal_url_pdf = fields.Char(string='Link do PDF (Danfe)')
     x_fiscal_url_xml = fields.Char(string='Link do XML')
