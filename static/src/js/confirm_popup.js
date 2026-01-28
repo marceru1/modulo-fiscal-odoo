@@ -10,6 +10,8 @@ patch(PaymentScreen.prototype, {
     setup() {
         super.setup();
         this.dialog = useService("dialog");
+        this.ui = useService("ui");
+        this.orm = useService("orm");
     },
 
     async validateOrder(isForceValidate) {
@@ -49,6 +51,34 @@ patch(PaymentScreen.prototype, {
             
        
        await super.validateOrder(isForceValidate);
+       this.ui.block(); 
+
+        const pedido = this.pos.get_order();
+        const posReference = pedido.pos_reference || pedido.name;
+        let status = false;
+   
+           for (let i = 0; i < 5; i++) {
+            const result = await this.env.services.orm.searchRead(
+            "pos.order",
+            [["pos_reference", "=", posReference]],
+            ["x_fiscal_status"]
+        );
+
+            if (result.length && result[0].x_fiscal_status) {
+                status = result[0].x_fiscal_status;
+                console.log("✅ Status recebido:", status);
+                break;
+            }
+
+    await new Promise(r => setTimeout(r, 1000));
+}
+
+if (!status) {
+    console.log("❌ Status fiscal não chegou a tempo");
+}
+        this.ui.unblock();
+
+        console.log("4. Chamando validação original...");
         
         
     }
