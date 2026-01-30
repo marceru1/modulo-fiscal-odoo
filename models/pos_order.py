@@ -7,7 +7,8 @@ import logging
 _logger = logging.getLogger(__name__)
 
 # url e token de quem vai receber o hook
-API_LARAVEL_URL = "http://127.0.0.1:8000/api/odoo/webhook"
+# API_LARAVEL_URL = "http://127.0.0.1:8000/api/odoo/webhook"
+API_LARAVEL_URL = "https://silent-thunder-18.webhook.cool"
 API_TOKEN = "123"
 
 
@@ -40,58 +41,69 @@ class PosOrder(models.Model):
                     'valor': pagamento.amount,
                 })
 
+           # ... dentro do método action_pos_order_paid ...
+            
             dados_dos_produtos = []
-            numero_item_contador = 1 # A Focus exige sequencial: 1, 2, 3...
+            numero_item_contador = 1 
 
             for line in self.lines:
                 product = line.product_id
                 
-                # Prepara o NCM (como você disse que limpa no Laravel, mandamos o raw aqui, 
-                # MAS a chave tem que ser 'codigo_ncm')
+                # 1. CÁLCULO DOS VALORES
+                # price_unit é o preço ORIGINAL unitário (885.00)
+                valor_unitario = line.price_unit 
+                quantidade = line.qty
                 
-                dados_dos_produtos.append({
-                    # --- OBRIGATÓRIOS DA TABELA FOCUS ---
+                # Valor Bruto Total (Sem desconto) -> 885.00 * 1 = 885.00
+                valor_bruto_item = valor_unitario * quantidade
+                
+                # Valor Líquido (O que o cliente pagou) -> 840.75
+                # O Odoo já entrega esse valor calculado no campo price_subtotal_incl
+                valor_liquido_item = line.price_subtotal_incl 
+                
+                # 2. CÁLCULO DO DESCONTO EM DINHEIRO
+                # Se 885.00 - 840.75 = 44.25
+                valor_desconto_monetario = valor_bruto_item - valor_liquido_item
+                
+                # Pequena proteção para arredondamento (se for menor que 1 centavo, ignora)
+                if valor_desconto_monetario < 0.01:
+                    valor_desconto_monetario = 0.0
+
+                item_dict = {
                     'numero_item': numero_item_contador,
                     'codigo_produto': product.default_code or str(product.id),
                     'descricao': product.name,
-                    'codigo_ncm': product.x_ncm_id.code, # A API pede "codigo_ncm", não "ncm"
-                    'cfop': product.x_cfop,
-                    
-                    # GTIN (Opcional na tabela mas essencial pra validar sem erro)
-                    # Se não tiver, melhor não mandar ou mandar "SEM GTIN" dependendo da config do Laravel
                     'codigo_barras': product.barcode or 'SEM GTIN', 
+                    
+                    'codigo_ncm': product.x_ncm_id.code, 
+                    'cfop': product.x_cfop, 
 
-                    # --- QUANTIDADES E UNIDADES (Comercial vs Tributável) ---
-                    # Para varejo, geralmente são iguais
-                    'quantidade_comercial': line.qty,
-                    'quantidade_tributavel': line.qty,
+                    'quantidade_comercial': quantidade,
+                    'quantidade_tributavel': quantidade,
                     
                     'unidade_comercial': line.product_uom_id.name,
                     'unidade_tributavel': line.product_uom_id.name,
 
-                    # --- VALORES ---
-                    'valor_unitario_comercial': line.price_unit,
-                    'valor_unitario_tributavel': line.price_unit,
+                    # ATENÇÃO: Envie o valor ORIGINAL aqui (885.00)
+                    'valor_unitario_comercial': valor_unitario,
+                    'valor_unitario_tributavel': valor_unitario,
                     
-                    # A API pede valor_bruto. 
-                    # Se tiver desconto, o bruto é (unit * qty) e o desconto vai em campo separado.
-                    # Se 'price_subtotal_incl' já tem desconto deduzido, cuidado!
-                    'valor_bruto': line.price_unit * line.qty, 
+                    # Valor total SEM o desconto (885.00)
+                    'valor_bruto': valor_bruto_item, 
                     
-                    # Caso tenha desconto no item, a Focus pede o campo 'valor_desconto'
-                    # 'valor_desconto': (line.price_unit * line.qty) - line.price_subtotal_incl,
-
-                    # --- IMPOSTOS (ICMS/PIS/COFINS) ---
+                    # Impostos
                     'icms_origem': product.x_origem,
-                    
-                    # Simples Nacional (CSOSN 102 do seu XML)
-                    'icms_situacao_tributaria': product.x_icms, 
-                    
-                    # A documentação Focus para PIS/COFINS segue o padrão do ICMS
+                    'icms_situacao_tributaria': product.x_icms,
                     'pis_situacao_tributaria': product.x_pis,
                     'cofins_situacao_tributaria': product.x_cofins,
-                })
-                
+                }
+
+                # 3. INSERE O DESCONTO NO JSON SE HOUVER
+                # A Focus só quer esse campo se tiver valor > 0
+                if valor_desconto_monetario > 0:
+                    item_dict['valor_desconto'] = valor_desconto_monetario
+
+                dados_dos_produtos.append(item_dict)
                 numero_item_contador += 1
             
             # Cria o payload final
