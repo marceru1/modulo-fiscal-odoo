@@ -132,3 +132,5 @@ class ProductTemplate(models.Model):
         string="COFINS",
         default='07'
     )
+    
+
