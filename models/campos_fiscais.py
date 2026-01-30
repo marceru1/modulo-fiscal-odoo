@@ -2,38 +2,12 @@ from odoo import models, fields
 # Adiciona esses itens como colunas no banco de dados
 
 CST_PIS_COFINS = [
-    ('01', '01 - Operação Tributável com Alíquota Básica'),
-    ('02', '02 - Operação Tributável com Alíquota Diferenciada'),
-    ('03', '03 - Operação Tributável com Alíquota por Unidade de Medida de Produto'),
-    ('04', '04 - Operação Tributável Monofásica - Revenda a Alíquota Zero'),
-    ('05', '05 - Operação Tributável por Substituição Tributária'),
+    ('01', '01 - Operação Tributável (Alíquota Básica)'), # Cuidado: Exige alíquota
+    ('04', '04 - Operação Tributável Monofásica (Revenda Alíquota Zero)'), # Bebidas, Autopeças, Perfumaria
     ('06', '06 - Operação Tributável a Alíquota Zero'),
-    ('07', '07 - Operação Isenta da Contribuição'),
+    ('07', '07 - Operação Isenta da Contribuição'), # SEU PADRÃO (Simples Nacional)
     ('08', '08 - Operação sem Incidência da Contribuição'),
-    ('09', '09 - Operação com Suspensão da Contribuição'),
     ('49', '49 - Outras Operações de Saída'),
-    ('50', '50 - Operação com Direito a Crédito - Vinc. Exclusivamente a Receita Tributada no Mercado Interno'),
-    ('51', '51 - Operação com Direito a Crédito - Vinc. Exclusivamente a Receita Não-Tributada no Mercado Interno'),
-    ('52', '52 - Operação com Direito a Crédito - Vinc. Exclusivamente a Receita de Exportação'),
-    ('53', '53 - Operação com Direito a Crédito - Vinc. a Receitas Tributadas e Não-Tributadas no Mercado Interno'),
-    ('54', '54 - Operação com Direito a Crédito - Vinc. a Receitas Tributadas no Mercado Interno e de Exportação'),
-    ('55', '55 - Operação com Direito a Crédito - Vinc. a Receitas Não Tributadas no Mercado Interno e de Exportação'),
-    ('56', '56 - Operação com Direito a Crédito - Vinc. a Receitas Tributadas e Não-Tributadas no Mercado Interno e de Exportação'),
-    ('60', '60 - Crédito Presumido - Operação de Aquisição Vinc. Exclusivamente a Receita Tributada no Mercado Interno'),
-    ('61', '61 - Crédito Presumido - Operação de Aquisição Vinc. Exclusivamente a Receita Não-Tributada no Mercado Interno'),
-    ('62', '62 - Crédito Presumido - Operação de Aquisição Vinc. Exclusivamente a Receita de Exportação'),
-    ('63', '63 - Crédito Presumido - Operação de Aquisição Vinc. a Receitas Tributadas e Não-Tributadas no Mercado Interno'),
-    ('64', '64 - Crédito Presumido - Operação de Aquisição Vinc. a Receitas Tributadas no Mercado Interno e de Exportação'),
-    ('65', '65 - Crédito Presumido - Operação de Aquisição Vinc. a Receitas Não Tributadas no Mercado Interno e de Exportação'),
-    ('66', '66 - Crédito Presumido - Operação de Aquisição Vinc. a Receitas Tributadas e Não-Tributadas no Mercado Interno e de Exportação'),
-    ('67', '67 - Crédito Presumido - Outras Operações'),
-    ('70', '70 - Operação de Aquisição sem Direito a Crédito'),
-    ('71', '71 - Operação de Aquisição com Isenção'),
-    ('72', '72 - Operação de Aquisição com Suspensão'),
-    ('73', '73 - Operação de Aquisição a Alíquota Zero'),
-    ('74', '74 - Operação de Aquisição sem Incidência da Contribuição'),
-    ('75', '75 - Operação de Aquisição por Substituição Tributária'),
-    ('98', '98 - Outras Operações de Entrada'),
     ('99', '99 - Outras Operações'),
 ]
 
@@ -131,7 +105,7 @@ class ProductTemplate(models.Model):
         ],
         string="CFOP",
         required=True,
-        default='5101'
+        default='5102'
     )
 
     x_icms = fields.Selection(
@@ -150,11 +124,11 @@ class ProductTemplate(models.Model):
     x_pis = fields.Selection(
         CST_PIS_COFINS,
         string="PIS",
-        default='01'
+        default='07'
     )
 
     x_cofins = fields.Selection(
         CST_PIS_COFINS,
         string="COFINS",
-        default='01'
+        default='07'
     )

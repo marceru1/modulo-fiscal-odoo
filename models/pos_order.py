@@ -41,24 +41,58 @@ class PosOrder(models.Model):
                 })
 
             dados_dos_produtos = []
+            numero_item_contador = 1 # A Focus exige sequencial: 1, 2, 3...
+
             for line in self.lines:
                 product = line.product_id
+                
+                # Prepara o NCM (como você disse que limpa no Laravel, mandamos o raw aqui, 
+                # MAS a chave tem que ser 'codigo_ncm')
+                
                 dados_dos_produtos.append({
-                    'descricao': product.name,
-                    'produto_id': product.id,
+                    # --- OBRIGATÓRIOS DA TABELA FOCUS ---
+                    'numero_item': numero_item_contador,
                     'codigo_produto': product.default_code or str(product.id),
-                    'codigo_barras': product.barcode,
-                    'quantidade': line.qty,
-                    'preco_unitario': line.price_unit,
-                    'total_linha': line.price_subtotal_incl,
-                    'origem':product.x_origem,
-                    'ncm': product.x_ncm_id.code, #todo revisar
+                    'descricao': product.name,
+                    'codigo_ncm': product.x_ncm_id.code, # A API pede "codigo_ncm", não "ncm"
                     'cfop': product.x_cfop,
-                    'icms': product.x_icms, #todo ARRUMAR O ICMS!!!
-                    'pis': product.x_pis,
-                    'cofins': product.x_cofins,
-                    'unidade': line.product_uom_id.name,
+                    
+                    # GTIN (Opcional na tabela mas essencial pra validar sem erro)
+                    # Se não tiver, melhor não mandar ou mandar "SEM GTIN" dependendo da config do Laravel
+                    'codigo_barras': product.barcode or 'SEM GTIN', 
+
+                    # --- QUANTIDADES E UNIDADES (Comercial vs Tributável) ---
+                    # Para varejo, geralmente são iguais
+                    'quantidade_comercial': line.qty,
+                    'quantidade_tributavel': line.qty,
+                    
+                    'unidade_comercial': line.product_uom_id.name,
+                    'unidade_tributavel': line.product_uom_id.name,
+
+                    # --- VALORES ---
+                    'valor_unitario_comercial': line.price_unit,
+                    'valor_unitario_tributavel': line.price_unit,
+                    
+                    # A API pede valor_bruto. 
+                    # Se tiver desconto, o bruto é (unit * qty) e o desconto vai em campo separado.
+                    # Se 'price_subtotal_incl' já tem desconto deduzido, cuidado!
+                    'valor_bruto': line.price_unit * line.qty, 
+                    
+                    # Caso tenha desconto no item, a Focus pede o campo 'valor_desconto'
+                    # 'valor_desconto': (line.price_unit * line.qty) - line.price_subtotal_incl,
+
+                    # --- IMPOSTOS (ICMS/PIS/COFINS) ---
+                    'icms_origem': product.x_origem,
+                    
+                    # Simples Nacional (CSOSN 102 do seu XML)
+                    'icms_situacao_tributaria': product.x_icms, 
+                    
+                    # A documentação Focus para PIS/COFINS segue o padrão do ICMS
+                    'pis_situacao_tributaria': product.x_pis,
+                    'cofins_situacao_tributaria': product.x_cofins,
                 })
+                
+                numero_item_contador += 1
             
             # Cria o payload final
             payload_completo = {
