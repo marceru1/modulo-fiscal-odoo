@@ -112,7 +112,7 @@ class PosOrder(models.Model):
                     'id_odoo': self.name,
                     'data': self.date_order,
                     'total': self.amount_total,
-                    'numero_caixa': self.config_id.name,
+                    'numero_caixa': self.user_id.name, #operador
                     'numero_ordem': self.pos_reference,
                 },
                 'cliente': {
