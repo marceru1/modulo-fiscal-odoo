@@ -57,7 +57,7 @@ patch(PaymentScreen.prototype, {
         const posReference = pedido.pos_reference || pedido.name;
         let status = false;
    
-           for (let i = 0; i < 5; i++) {
+           for (let i = 0; i < 15; i++) {
             const result = await this.env.services.orm.searchRead(
             "pos.order",
             [["pos_reference", "=", posReference]],

@@ -7,8 +7,8 @@ import logging
 _logger = logging.getLogger(__name__)
 
 # url e token de quem vai receber o hook
-# API_LARAVEL_URL = "http://127.0.0.1:8000/api/odoo/webhook"
-API_LARAVEL_URL = "https://silent-thunder-18.webhook.cool"
+API_LARAVEL_URL = "http://127.0.0.1:8000/api/odoo/webhook"
+# API_LARAVEL_URL = "https://silent-thunder-18.webhook.cool"
 API_TOKEN = "123"
 
 
