@@ -6,6 +6,7 @@ import { PaymentScreen } from "@point_of_sale/app/screens/payment_screen/payment
 import { patch } from "@web/core/utils/patch";
 import { SelectionPopup } from "@point_of_sale/app/utils/input_popups/selection_popup";
 import { TextInputPopup } from "@point_of_sale/app/utils/input_popups/text_input_popup";
+
 patch(PaymentScreen.prototype, {
     setup() {
         super.setup();
@@ -17,83 +18,100 @@ patch(PaymentScreen.prototype, {
     async validateOrder(isForceValidate) {
         console.log("Cliquei em validar, aguardando confirmação...");
 
-        //aqui ele vai "parar" de rodar e subir o popup pra confirmar a venda
+        // 1. Popup de Confirmação
         const result = await makeAwaitable(this.dialog, SelectionPopup, {
             title: _t("Confirmar venda?"),
             list: [
-                {
-                    id: 1, label: _t("Sim"),item: true, // Se escolher sim, retorna true     
-                },
-                {
-                    id: 0, label: _t("Não"),  item: false, // Se escolher nao, retorna false
-                },
+                { id: 1, label: _t("Sim"), item: true },
+                { id: 0, label: _t("Não"), item: false },
             ],
         });
 
-        //aqui pega o order que ta em caminho
+        // Atualiza a flag local
         const order = this.pos.get_order();
         order.x_confirmacao_venda = result;
 
-
-        //se 'true' ele abre uma aba pra adicionar o email do cliente
-
+        // 2. Coleta de E-mail (Opcional)
         if (result === true) {
-            // receber o email informado
             const email_cliente = await makeAwaitable(this.dialog, TextInputPopup, {
-            title: "Informe o E-mail",
-            placeholder: "Digite o e-mail do cliente",
-            startingValue: "",
-        });
-            if(email_cliente) {
+                title: "Informe o E-mail",
+                placeholder: "Digite o e-mail do cliente",
+                startingValue: "",
+            });
+            if (email_cliente) {
                 order.x_email_cliente = email_cliente;
             }
-    }
-            
-       
-       await super.validateOrder(isForceValidate);
+        }
 
-       if (result === true) {
+        // 3. Envia para o Backend (Python)
+        await super.validateOrder(isForceValidate);
+
+        // 4. Lógica de Espera (Polling)
+        if (result === true) {
             
-            this.ui.block(); // Bloqueia a tela para o usuário não mexer
+            this.ui.block();
             console.log("🔄 Aguardando retorno fiscal...");
 
-            const pedido = this.pos.get_order();
-            const posReference = pedido.pos_reference || pedido.name;
+            const posReference = order.pos_reference || order.name;
             let status = false;
 
-            // Loop de 15 segundos tentando buscar o status
+            // Loop de 15 segundos
             for (let i = 0; i < 15; i++) {
                 try {
+                    // ✅ CORREÇÃO 1: Buscamos TODOS os campos fiscais, não só o status
                     const searchResult = await this.env.services.orm.searchRead(
                         "pos.order",
                         [["pos_reference", "=", posReference]],
-                        ["x_fiscal_status"]
+                        [
+                            "x_fiscal_status", 
+                            "x_fiscal_mensagem",
+                            "x_fiscal_chave",
+                            "x_fiscal_numero",
+                            "x_fiscal_serie",
+                            "x_fiscal_protocolo",
+                            "x_fiscal_qrcode_url",
+                            "x_fiscal_qrcode_b64", // Importante vir o Base64
+                            "x_fiscal_offline"
+                        ]
                     );
 
                     if (searchResult.length && searchResult[0].x_fiscal_status) {
-                        status = searchResult[0].x_fiscal_status;
+                        const dados = searchResult[0];
+                        status = dados.x_fiscal_status;
+                        
                         console.log("✅ Status fiscal recebido:", status);
                         
-                        // Opcional: Atualizar o objeto local se necessário para o recibo imediato
-                        // order.x_fiscal_status = status; 
-                        
-                        break; // Sai do loop assim que achar
+                        // ✅ CORREÇÃO 2: Atualizamos o objeto ORDER na memória do navegador
+                        // Sem isso, a impressão sai vazia pois o XML lê daqui!
+                        order.x_fiscal_status = dados.x_fiscal_status;
+                        order.x_fiscal_mensagem = dados.x_fiscal_mensagem;
+                        order.x_fiscal_chave = dados.x_fiscal_chave;
+                        order.x_fiscal_numero = dados.x_fiscal_numero;
+                        order.x_fiscal_serie = dados.x_fiscal_serie;
+                        order.x_fiscal_protocolo = dados.x_fiscal_protocolo;
+                        order.x_fiscal_qrcode_url = dados.x_fiscal_qrcode_url;
+                        order.x_fiscal_qrcode_b64 = dados.x_fiscal_qrcode_b64;
+                        order.x_fiscal_offline = dados.x_fiscal_offline;
+
+                        break; // Sai do loop
                     }
                 } catch (error) {
                     console.error("Erro ao consultar status:", error);
                 }
 
-                // Espera 1 segundo antes de tentar de novo
                 await new Promise(r => setTimeout(r, 1000));
             }
 
             if (!status) {
                 console.log("❌ Timeout: Status fiscal não chegou a tempo.");
+                // Opcional: Definir erro no objeto para sair no recibo que falhou
+                order.x_fiscal_status = 'erro';
+                order.x_fiscal_mensagem = 'Tempo limite excedido na comunicação.';
             }
 
-            this.ui.unblock(); // Libera a tela
+            this.ui.unblock();
         } else {
-            console.log("⏩ Venda não fiscal: Pulando verificação de status.");
+            console.log("⏩ Venda não fiscal: Pulando verificação.");
         }
     }
 });
