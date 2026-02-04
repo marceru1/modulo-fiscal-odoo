@@ -193,6 +193,8 @@ class PosOrder(models.Model):
                 'x_fiscal_serie',
                 'x_fiscal_protocolo',
                 'x_fiscal_qrcode_b64',
+                'x_cpf_nota',  
+                'x_email_cliente',  
             ])
             
             return params
