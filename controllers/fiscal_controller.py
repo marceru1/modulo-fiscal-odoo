@@ -1,15 +1,7 @@
 from odoo import http
-from odoo.http import request
+from odoo.http import request, Response
 import logging
 import json
-
-import base64
-from io import BytesIO
-try:
-    import qrcode
-except ImportError:
-    qrcode = None
-
 
 _logger = logging.getLogger(__name__)
 
@@ -17,127 +9,84 @@ class FiscalWebhookController(http.Controller):
 
     @http.route(
         '/api/retorno-fiscal',
-        type='http',
+        type='http',  # <--- VOLTE PARA HTTP
         auth='public',
         methods=['POST'],
         csrf=False
     )
-    def retorno_fiscal(self, **payload):
-
-        # ==============================
-        # 1. Ler JSON recebido
-        # ==============================
+    def retorno_fiscal(self, **kw):
+        """Recebe retorno fiscal do Laravel via Webhook padrão"""
+        
         try:
+            # 1. Ler o JSON Raw do corpo da requisição
+            # request.get_json_data() já faz o decode seguro
             dados = request.get_json_data()
-        except ValueError:
-            dados = {}
+            
+            # Fallback caso venha vazio ou nulo
+            if not dados:
+                dados = {}
+            
+            _logger.info('=== WEBHOOK FISCAL RECEBIDO ===')
+            # _logger.info(json.dumps(dados, indent=2, default=str)) # Debug opcional
 
-        _logger.info('Webhook fiscal recebido: %s', dados)
+            documento_id = dados.get('documento_id')
+            fiscal = dados.get('fiscal', {})
 
-        # ==============================
-        # 2. Extrair dados principais
-        # ==============================
-        resposta_id = dados.get('documento_id')
-        fiscal = dados.get('fiscal', {})
+            # --- Validação Inicial ---
+            if not documento_id:
+                return self._response_json({'status': 'erro', 'mensagem': 'documento_id não informado'}, 400)
 
-        if not resposta_id:
-            return request.make_response(
-                json.dumps({'status': 'erro', 'mensagem': 'documento_id_nao_informado'}),
-                headers=[('Content-Type', 'application/json')],
-                status=400
-            )
+            # --- Busca do Pedido ---
+            pedido = request.env['pos.order'].sudo().search([
+                ('pos_reference', '=', documento_id)
+            ], limit=1)
 
-        # ==============================
-        # 3. Buscar pedido no POS
-        # ==============================
-        pedido = request.env['pos.order'].sudo().search(
-            [('pos_reference', '=', resposta_id)],
-            limit=1
-        )
-
-        if not pedido:
-            _logger.error('Pedido não encontrado: %s', resposta_id)
-            return request.make_response(
-                json.dumps({
-                    'status': 'erro',
+            if not pedido:
+                _logger.error(f'❌ Pedido {documento_id} NÃO ENCONTRADO')
+                return self._response_json({
+                    'status': 'erro', 
                     'mensagem': 'pedido_nao_encontrado',
-                    'documento_id': resposta_id
-                }),
-                headers=[('Content-Type', 'application/json')],
-                status=404
-            )
+                    'documento_id': documento_id
+                }, 404)
 
-        # ==============================
-        # 4. Dados fiscais recebidos
-        # ==============================
+            # --- Processamento ---
+            qrcode_b64 = fiscal.get('qrcode_b64', '')
+            
+            valores = {
+                'x_fiscal_status': fiscal.get('status', 'erro'),
+                'x_fiscal_mensagem': fiscal.get('mensagem', '')[:500],
+                'x_fiscal_chave': fiscal.get('chave_nfe', ''),
+                'x_fiscal_protocolo': fiscal.get('protocolo', ''),
+                'x_fiscal_numero': fiscal.get('numero_nota', ''),
+                'x_fiscal_serie': fiscal.get('serie', '1'),
+                'x_fiscal_url_consulta': fiscal.get('url_consulta', ''),
+                'x_fiscal_qrcode_url': fiscal.get('qrcode_url', ''),
+                'x_fiscal_offline': bool(fiscal.get('is_contingencia', False)),
+                'x_fiscal_qrcode_b64': qrcode_b64, 
+            }
 
+            pedido.write(valores)
+            
+            # Commit manual é útil em rotas HTTP para garantir persistência imediata antes do return
+            request.env.cr.commit()
 
-        
-        # ==============================
-        # 5. Atualizar pedido
-        # ==============================
-        
-        url_qrcode = fiscal.get('qrcode_url')
+            _logger.info(f'✅ Pedido {documento_id} atualizado com sucesso.')
 
-        valores_update = {
-            'x_fiscal_status': fiscal.get('status'),
-            'x_fiscal_mensagem': fiscal.get('mensagem'),
-            'x_fiscal_chave': fiscal.get('chave_nfe'),
-            'x_fiscal_protocolo': fiscal.get('protocolo'),
-            'x_fiscal_numero': fiscal.get('numero_nota'),
-            'x_fiscal_serie': fiscal.get('serie'),
-            'x_fiscal_url_consulta': fiscal.get('url_consulta'),
-            'x_fiscal_offline': fiscal.get('is_contingencia', False),
-            'x_fiscal_qrcode_url': url_qrcode,
-        }
-
-        if url_qrcode:
-            qrcode_b64 = self.gerar_qrcode_base64(url_qrcode)
-            if qrcode_b64:
-                valores_update['x_fiscal_qrcode_b64'] = qrcode_b64
-
-        pedido.write(valores_update)
-
-
-        _logger.info('Pedido %s atualizado com sucesso', resposta_id)
-
-        # ==============================
-        # 6. Retorno para o middleware
-        # ==============================
-        return request.make_response(
-            json.dumps({
-                'status': 'recebido',
-                'documento_id': resposta_id,
-
-            }),
-            headers=[('Content-Type', 'application/json')]
-        )
-    
-    def gerar_qrcode_base64(self, texto):
-
-        if not qrcode:
-            _logger.error("Biblioteca qrcode não instalada")
-            return False
-
-        try:
-            qr = qrcode.QRCode(
-                version=1,
-                error_correction=qrcode.constants.ERROR_CORRECT_L,
-                box_size=4,
-                border=2,
-            )
-
-            qr.add_data(texto)
-            qr.make(fit=True)
-
-            img = qr.make_image(fill_color="black", back_color="white")
-
-            buffer = BytesIO()
-            img.save(buffer, format="PNG")
-
-            # ⚠️ BASE64 PURO — SEM data:image/png;base64
-            return base64.b64encode(buffer.getvalue()).decode()
+            return self._response_json({
+                'status': 'sucesso',
+                'documento_id': documento_id,
+                'fiscal_status': valores['x_fiscal_status']
+            })
 
         except Exception as e:
-            _logger.error("Erro ao gerar QR Code: %s", e)
-            return False
+            _logger.error(f'❌ ERRO CRÍTICO NO WEBHOOK: {str(e)}', exc_info=True)
+            # Retornar erro JSON válido para o Laravel não ficar "pendurado"
+            return self._response_json({'status': 'erro', 'mensagem': str(e)}, 500)
+
+    def _response_json(self, data, status=200):
+        """Helper para responder JSON corretamente em rota type='http'"""
+        return request.make_response(
+            json.dumps(data),
+            headers=[('Content-Type', 'application/json')],
+            status=status
+        )
