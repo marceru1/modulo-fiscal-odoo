@@ -1,117 +1,336 @@
+/* ============================================ */
+/* CUPOM FISCAL NFCe - PADRÃO DANFE BRASILEIRO */
+/* ============================================ */
 
-/* aqui fica o css que define o cupom fiscal */
-
-.danfe-header {
-    width: 100%;
-    text-align: center;
+/* Reset e configuração base */
+.pos-receipt {
+    font-family: 'Inconsolata', 'Courier New', monospace;
     font-size: 11px;
     line-height: 1.3;
-    font-family: 'Inconsolata', 'Courier New', monospace;
-}
-.danfe-emitente {
-    margin-bottom: 3px;
-    border-bottom-style: dotted;
+    width: 80mm; /* Largura padrão de impressora térmica */
+    margin: 0 auto;
+    padding: 5mm;
 }
 
-.danfe-title {
-    margin-bottom: 3px;
-    border-bottom-style: dotted;
-}
-
-.danfe-items {
-    font-family: 'Inconsolata', 'Courier New', monospace;
-    font-size: 11px;
-    margin-top:3px;
-    border-bottom-style: dotted;
-    margin-bottom: 5px;
-}
-
-.danfe-items-header {
-    display: flex;
-    font-weight: bold;
-    border-bottom-style: dotted;
-    justify-content: space-between;
-    align-items: center;
-    margin-bottom: 3px;
-}
-
-.danfe-item-cima {
-    margin-top: 3px;
-    display: flex;
-    align-items: center;
-    text-align: left;
-    gap: 2em;
-}
-
-.danfe-item-baixo {
-    margin-bottom: 1px;
-    display: flex;
-    justify-content: left;
-    align-items: center;
-    justify-content: space-between;
-}
-
-.pagamento {
-    font-size: 11px;
-    font-family: 'Inconsolata', 'Courier New', monospace;
-    width: 100%;
-}
-
-.pagamento > span {
-    display: flex;
-    justify-content: space-between;
-    width: 100%;
-
-}
-
-.pagamento .label {
-    text-align: left;
-
-}
-
-.pagamento .valor {
-    text-align: right;
-}
-/* MANTENHA SEU CSS ANTERIOR AQUI ... */
-
-/* ... ADICIONE ISTO AO FINAL DO ARQUIVO CSS */
-
-.fiscal-data {
-    font-family: 'Inconsolata', 'Courier New', monospace;
-    font-size: 11px;
-    margin-top: 10px;
-    width: 100%;
-}
-
-.fiscal-separador {
-    border-bottom: 1px dashed black; /* Tracejado para separar produtos do fiscal */
-    margin-bottom: 8px;
-    margin-top: 8px;
-}
-
-.fiscal-center {
+/* ============================================ */
+/* CABEÇALHO DO ESTABELECIMENTO */
+/* ============================================ */
+.danfe-header {
     text-align: center;
+    margin-bottom: 8px;
+}
+
+.emitente-nome {
+    font-weight: bold;
+    font-size: 13px;
+    margin-bottom: 3px;
+}
+
+.emitente-dados {
+    font-size: 10px;
+    line-height: 1.2;
+}
+
+.emitente-endereco {
+    font-size: 10px;
+    line-height: 1.3;
+    margin-top: 3px;
+}
+
+.danfe-tipo {
+    text-align: center;
+    font-weight: bold;
+    font-size: 11px;
+    margin: 8px 0;
     line-height: 1.4;
 }
 
-.fiscal-chave {
-    font-size: 10px; 
-    letter-spacing: 0.5px; /* Espaçar um pouco os números */
-    word-wrap: break-word; /* Quebrar linha se for muito grande */
+/* ============================================ */
+/* SEPARADORES */
+/* ============================================ */
+.danfe-separador {
+    border-top: 1px dashed #000;
+    margin: 5px 0;
 }
 
+.danfe-separador-fino {
+    border-top: 1px dotted #000;
+    margin: 4px 0;
+}
+
+/* ============================================ */
+/* ITENS DA NOTA */
+/* ============================================ */
+.danfe-items {
+    margin: 8px 0;
+}
+
+.items-header {
+    display: grid;
+    grid-template-columns: 15% 35% 10% 10% 15% 15%;
+    font-weight: bold;
+    font-size: 9px;
+    text-align: center;
+    margin-bottom: 3px;
+}
+
+.h-codigo { text-align: left; }
+.h-descricao { text-align: left; }
+
+/* Linha 1 do item: Número, Código e Descrição */
+.item-linha1 {
+    display: flex;
+    gap: 5px;
+    margin-top: 4px;
+    font-size: 10px;
+}
+
+.item-num {
+    font-weight: bold;
+    min-width: 20px;
+}
+
+.item-codigo {
+    min-width: 80px;
+}
+
+.item-descricao {
+    flex: 1;
+    font-weight: bold;
+}
+
+/* Linha 2 do item: Qtd, UN, Valores */
+.item-linha2 {
+    display: grid;
+    grid-template-columns: 15% 10% 25% 25% 25%;
+    font-size: 10px;
+    margin-bottom: 4px;
+    padding-left: 25px; /* Alinha com a descrição */
+}
+
+.item-qtd { text-align: left; }
+.item-un { text-align: left; }
+.item-vlr-un { text-align: left; }
+.item-desc { 
+    text-align: left;
+    font-style: italic;
+}
+.item-total { 
+    text-align: right;
+    font-weight: bold;
+}
+
+/* ============================================ */
+/* TOTAIS */
+/* ============================================ */
+.totais-section {
+    margin: 8px 0;
+}
+
+.total-linha {
+    display: flex;
+    justify-content: space-between;
+    margin: 2px 0;
+    font-size: 11px;
+}
+
+.total-destaque {
+    font-weight: bold;
+    font-size: 13px;
+    margin-top: 5px;
+    padding-top: 3px;
+    border-top: 1px solid #000;
+}
+
+.total-label {
+    text-align: left;
+}
+
+.total-valor {
+    text-align: right;
+}
+
+/* ============================================ */
+/* FORMAS DE PAGAMENTO */
+/* ============================================ */
+.pagamento-section {
+    margin: 8px 0;
+}
+
+.pagamento-titulo {
+    font-weight: bold;
+    text-align: center;
+    margin-bottom: 4px;
+}
+
+.pagamento-linha {
+    display: flex;
+    justify-content: space-between;
+    margin: 2px 0;
+}
+
+.pagamento-metodo {
+    text-align: left;
+}
+
+.pagamento-valor {
+    text-align: right;
+    font-weight: bold;
+}
+
+/* ============================================ */
+/* DADOS FISCAIS */
+/* ============================================ */
+.fiscal-section {
+    margin-top: 10px;
+    text-align: center;
+}
+
+.fiscal-numero {
+    font-size: 12px;
+    font-weight: bold;
+    margin-bottom: 3px;
+}
+
+.fiscal-data-emissao {
+    font-size: 10px;
+    margin-bottom: 5px;
+}
+
+.fiscal-consulta {
+    font-size: 9px;
+    line-height: 1.3;
+    margin: 5px 0;
+}
+
+.fiscal-url {
+    font-size: 8px;
+    word-break: break-all;
+}
+
+.fiscal-chave-titulo {
+    font-weight: bold;
+    font-size: 10px;
+    margin-top: 5px;
+}
+
+.fiscal-chave-valor {
+    font-size: 9px;
+    letter-spacing: 0.3px;
+    word-wrap: break-word;
+    margin: 3px 0;
+    line-height: 1.4;
+}
+
+.fiscal-consumidor {
+    font-size: 10px;
+    margin: 5px 0;
+}
+
+.fiscal-protocolo {
+    font-size: 10px;
+    line-height: 1.4;
+    margin: 5px 0;
+}
+
+.fiscal-contingencia {
+    font-size: 10px;
+    font-weight: bold;
+    border: 2px solid #000;
+    padding: 5px;
+    margin: 5px 0;
+    line-height: 1.4;
+}
+
+/* QR CODE */
 .fiscal-qrcode {
     display: flex;
     justify-content: center;
-    margin-top: 10px;
-    margin-bottom: 10px;
+    margin: 10px 0;
 }
 
+.qrcode-img {
+    width: 140px;
+    height: 140px;
+    border: 1px solid #000;
+}
+
+.fiscal-rodape {
+    font-size: 9px;
+    line-height: 1.3;
+    margin: 5px 0;
+}
+
+.fiscal-tributos {
+    font-size: 8px;
+    margin-top: 8px;
+    font-style: italic;
+}
+
+/* Estados de erro */
 .fiscal-erro {
-    text-align: center;
+    border: 2px solid #000;
+    padding: 8px;
     font-weight: bold;
-    color: black; /* Impressora térmica não tem cor, mas ajuda na tela */
-    border: 1px solid black;
-    padding: 5px;
-    margin-top: 5px;
+    margin: 10px 0;
+    line-height: 1.5;
+}
+
+.fiscal-aguardando {
+    font-style: italic;
+    padding: 10px;
+    margin: 10px 0;
+}
+
+/* ============================================ */
+/* IMPRESSÃO */
+/* ============================================ */
+@media print {
+    .pos-receipt {
+        width: 80mm;
+        font-size: 10px;
+    }
+    
+    .qrcode-img {
+        width: 120px;
+        height: 120px;
+    }
+}
+/* Esconde o rodapé do Odoo */
+/* ============================================ */
+/* REMOVE ELEMENTOS PADRÃO DO ODOO */
+/* ============================================ */
+
+/* Remove total padrão */
+.pos-receipt-amount.receipt-total,
+.pos-receipt-amount {
+    display: none !important;
+}
+
+/* Remove pagamentos padrão */
+.paymentlines {
+    display: none !important;
+}
+
+/* Remove footers */
+.before-footer,
+.after-footer {
+    display: none !important;
+}
+
+/* Remove "Desenvolvido por Odoo" */
+.pos-receipt-order-data {
+    display: none !important;
+}
+
+/* Remove qualquer menção ao Odoo */
+.pos-receipt-order-data p,
+.pos-receipt-order-data div {
+    display: none !important;
+}
+
+/* Força remoção de logos */
+.pos-receipt-logo,
+.pos-receipt-contact {
+    display: none !important;
 }
