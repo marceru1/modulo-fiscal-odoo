@@ -51,35 +51,49 @@ patch(PaymentScreen.prototype, {
             
        
        await super.validateOrder(isForceValidate);
-       this.ui.block(); 
 
-        const pedido = this.pos.get_order();
-        const posReference = pedido.pos_reference || pedido.name;
-        let status = false;
-   
-           for (let i = 0; i < 15; i++) {
-            const result = await this.env.services.orm.searchRead(
-            "pos.order",
-            [["pos_reference", "=", posReference]],
-            ["x_fiscal_status"]
-        );
+       if (result === true) {
+            
+            this.ui.block(); // Bloqueia a tela para o usuário não mexer
+            console.log("🔄 Aguardando retorno fiscal...");
 
-            if (result.length && result[0].x_fiscal_status) {
-                status = result[0].x_fiscal_status;
-                console.log("✅ Status recebido:", status);
-                break;
+            const pedido = this.pos.get_order();
+            const posReference = pedido.pos_reference || pedido.name;
+            let status = false;
+
+            // Loop de 15 segundos tentando buscar o status
+            for (let i = 0; i < 15; i++) {
+                try {
+                    const searchResult = await this.env.services.orm.searchRead(
+                        "pos.order",
+                        [["pos_reference", "=", posReference]],
+                        ["x_fiscal_status"]
+                    );
+
+                    if (searchResult.length && searchResult[0].x_fiscal_status) {
+                        status = searchResult[0].x_fiscal_status;
+                        console.log("✅ Status fiscal recebido:", status);
+                        
+                        // Opcional: Atualizar o objeto local se necessário para o recibo imediato
+                        // order.x_fiscal_status = status; 
+                        
+                        break; // Sai do loop assim que achar
+                    }
+                } catch (error) {
+                    console.error("Erro ao consultar status:", error);
+                }
+
+                // Espera 1 segundo antes de tentar de novo
+                await new Promise(r => setTimeout(r, 1000));
             }
 
-    await new Promise(r => setTimeout(r, 1000));
-}
+            if (!status) {
+                console.log("❌ Timeout: Status fiscal não chegou a tempo.");
+            }
 
-if (!status) {
-    console.log("❌ Status fiscal não chegou a tempo");
-}
-        this.ui.unblock();
-
-        console.log("4. Chamando validação original...");
-        
-        
+            this.ui.unblock(); // Libera a tela
+        } else {
+            console.log("⏩ Venda não fiscal: Pulando verificação de status.");
+        }
     }
 });
