@@ -1,8 +1,7 @@
 from odoo import models, fields
 
 class Ncm(models.Model):
-    #basicamente prepara o ncm pra ser um many2one e ter coisas ja pre definidas
-    # pra nao precisar ficar digitando e ter o erro de errar alguma informacao
+    # prepara o ncm pra ser um many2one e ter codigos ja pre definidos
     _name = 'br.ncm'
     _description = 'Tabela de NCM'
     _rec_name = 'code' 
