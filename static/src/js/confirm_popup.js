@@ -18,7 +18,7 @@ patch(PaymentScreen.prototype, {
     async validateOrder(isForceValidate) {
         console.log("Cliquei em validar, aguardando confirmação...");
 
-        // 1. Popup de Confirmação
+        // popup de Confirmação
         const result = await makeAwaitable(this.dialog, SelectionPopup, {
             title: _t("Confirmar venda?"),
             list: [
@@ -27,11 +27,10 @@ patch(PaymentScreen.prototype, {
             ],
         });
 
-        // Atualiza a flag local
         const order = this.pos.get_order();
         order.x_confirmacao_venda = result;
 
-        // 2. Coleta de E-mail (Opcional)
+        // coleta de e-mail
         if (result === true) {
             const email_cliente = await makeAwaitable(this.dialog, TextInputPopup, {
                 title: "Informe o E-mail",
@@ -43,10 +42,10 @@ patch(PaymentScreen.prototype, {
             }
         }
 
-        // 3. Envia para o Backend (Python)
+        // envia para o backend
         await super.validateOrder(isForceValidate);
 
-        // 4. Lógica de Espera (Polling)
+        // aguarda o retorno fiscal caso teanha marcado sim
         if (result === true) {
             
             this.ui.block();
@@ -55,10 +54,10 @@ patch(PaymentScreen.prototype, {
             const posReference = order.pos_reference || order.name;
             let status = false;
 
-            // Loop de 15 segundos
+            // loop de 15 segundos
             for (let i = 0; i < 15; i++) {
                 try {
-                    // ✅ CORREÇÃO 1: Buscamos TODOS os campos fiscais, não só o status
+                
                     const searchResult = await this.env.services.orm.searchRead(
                         "pos.order",
                         [["pos_reference", "=", posReference]],
@@ -81,8 +80,7 @@ patch(PaymentScreen.prototype, {
                         
                         console.log("✅ Status fiscal recebido:", status);
                         
-                        // ✅ CORREÇÃO 2: Atualizamos o objeto ORDER na memória do navegador
-                        // Sem isso, a impressão sai vazia pois o XML lê daqui!
+                        // atualiza o objeto pra impressao
                         order.x_fiscal_status = dados.x_fiscal_status;
                         order.x_fiscal_mensagem = dados.x_fiscal_mensagem;
                         order.x_fiscal_chave = dados.x_fiscal_chave;
@@ -93,7 +91,7 @@ patch(PaymentScreen.prototype, {
                         order.x_fiscal_qrcode_b64 = dados.x_fiscal_qrcode_b64;
                         order.x_fiscal_offline = dados.x_fiscal_offline;
 
-                        break; // Sai do loop
+                        break; // sai do loop
                     }
                 } catch (error) {
                     console.error("Erro ao consultar status:", error);
@@ -104,7 +102,7 @@ patch(PaymentScreen.prototype, {
 
             if (!status) {
                 console.log("❌ Timeout: Status fiscal não chegou a tempo.");
-                // Opcional: Definir erro no objeto para sair no recibo que falhou
+        
                 order.x_fiscal_status = 'erro';
                 order.x_fiscal_mensagem = 'Tempo limite excedido na comunicação.';
             }

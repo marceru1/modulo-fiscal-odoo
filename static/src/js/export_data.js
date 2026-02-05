@@ -5,10 +5,11 @@ import { patch } from "@web/core/utils/patch";
 
 patch(PosOrder.prototype, {
 
-    // 1. CARREGA DO BANCO PARA A MEMÓRIA (Ao abrir o PDV)
+    // carrega os dados do banco para abrir o pdv e sincroniza os campos customizados
     init_from_JSON(json) {
         super.init_from_JSON(...arguments);
 
+        // campos fiscais
         this.x_fiscal_mensagem = json.x_fiscal_mensagem || "";
         this.x_fiscal_status = json.x_fiscal_status || "";
         this.x_fiscal_chave = json.x_fiscal_chave || "";
@@ -20,13 +21,12 @@ patch(PosOrder.prototype, {
         this.x_fiscal_qrcode_b64 = json.x_fiscal_qrcode_b64 || "";
         this.x_fiscal_offline = Boolean(json.x_fiscal_offline);
         
-        // Dados do cliente
+        // dados do cliente
         this.x_confirmacao_venda = json.x_confirmacao_venda;
         this.x_email_cliente = json.x_email_cliente;
         this.x_cpf_nota = json.x_cpf_nota;
     },
 
-    // 2. SALVA DA MEMÓRIA PARA O BANCO (Ao fechar venda)
     export_as_JSON() {
         const json = super.export_as_JSON();
 
@@ -37,11 +37,11 @@ patch(PosOrder.prototype, {
         return json;
     },
 
-    // 3. ENVIA PARA O XML/IMPRESSORA (Ao imprimir ou reimprimir)
+    // prepara os dadaods pra impressao do cupom
     export_for_printing() {
         const result = super.export_for_printing(...arguments);
         
-        // --- LÓGICA DOS ITENS (DANFE) ---
+        // montagem dos itens
         const orderlines = this.get_orderlines();
         let qtd_itens = 0;
 
@@ -75,22 +75,19 @@ patch(PosOrder.prototype, {
             metodos: metodos,
         };
 
-        // --- LÓGICA DO QR CODE ---
-        // Prioridade: Usar o Base64 se existir (mais rápido), senão usa a URL
+        // processa qrCode
         let qrcodeFinal = this.x_fiscal_qrcode_url;
 
         if (this.x_fiscal_qrcode_b64) {
-            // Remove espaços ou quebras de linha que possam vir do banco
             const b64Limpo = this.x_fiscal_qrcode_b64.trim().replace(/\s/g, '');
             qrcodeFinal = `data:image/png;base64,${b64Limpo}`;
         }
 
-        // --- MONTAGEM DO OBJETO FISCAL ---
+        // monta o objeto fiscal
         result.x_fiscal = {
             mensagem: this.x_fiscal_mensagem || "",
             status: this.x_fiscal_status || "",
             chave: this.x_fiscal_chave || "",
-            // Aqui passamos o qrcode_b64 separado para o XML decidir ou a URL montada
             qrcode_b64: this.x_fiscal_qrcode_b64 || "", 
             qrcode_url: qrcodeFinal, 
             url_consulta: this.x_fiscal_url_consulta || "",
@@ -100,12 +97,11 @@ patch(PosOrder.prototype, {
             offline: this.x_fiscal_offline || false,
         };
 
-        // Dados extras
         result.x_cpf_nota = this.x_cpf_nota;
         result.x_confirmacao_venda = this.x_confirmacao_venda;
         
-        // Garante que o operador saia na reimpressão
-        // Se for reimpressão, não temos o user_id fácil aqui, então usamos o cashier atual ou tentamos pegar do backend se você mapeou
+        // operador sai apenas na reimpressão
+      
         result.cashier = result.cashier || (this.pos.get_cashier() ? this.pos.get_cashier().name : null);
 
         return result;

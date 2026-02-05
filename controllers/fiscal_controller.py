@@ -9,7 +9,7 @@ class FiscalWebhookController(http.Controller):
 
     @http.route(
         '/api/retorno-fiscal',
-        type='http',  # <--- VOLTE PARA HTTP
+        type='http',  
         auth='public',
         methods=['POST'],
         csrf=False
@@ -18,25 +18,23 @@ class FiscalWebhookController(http.Controller):
         """Recebe retorno fiscal do Laravel via Webhook padrão"""
         
         try:
-            # 1. Ler o JSON Raw do corpo da requisição
-            # request.get_json_data() já faz o decode seguro
+
             dados = request.get_json_data()
-            
-            # Fallback caso venha vazio ou nulo
+        
             if not dados:
                 dados = {}
             
             _logger.info('=== WEBHOOK FISCAL RECEBIDO ===')
-            # _logger.info(json.dumps(dados, indent=2, default=str)) # Debug opcional
+        
 
             documento_id = dados.get('documento_id')
             fiscal = dados.get('fiscal', {})
 
-            # --- Validação Inicial ---
+            # validação do documento_id
             if not documento_id:
                 return self._response_json({'status': 'erro', 'mensagem': 'documento_id não informado'}, 400)
 
-            # --- Busca do Pedido ---
+            # busca do pedido 
             pedido = request.env['pos.order'].sudo().search([
                 ('pos_reference', '=', documento_id)
             ], limit=1)
@@ -49,7 +47,7 @@ class FiscalWebhookController(http.Controller):
                     'documento_id': documento_id
                 }, 404)
 
-            # --- Processamento ---
+            # processamento dos dados fiscais
             qrcode_b64 = fiscal.get('qrcode_b64', '')
             
             valores = {
@@ -67,7 +65,7 @@ class FiscalWebhookController(http.Controller):
 
             pedido.write(valores)
             
-            # Commit manual é útil em rotas HTTP para garantir persistência imediata antes do return
+            # commit para garantir persistência imediata antes do return
             request.env.cr.commit()
 
             _logger.info(f'✅ Pedido {documento_id} atualizado com sucesso.')
@@ -80,7 +78,7 @@ class FiscalWebhookController(http.Controller):
 
         except Exception as e:
             _logger.error(f'❌ ERRO CRÍTICO NO WEBHOOK: {str(e)}', exc_info=True)
-            # Retornar erro JSON válido para o Laravel não ficar "pendurado"
+            # retornar erro JSON válido para o Laravel
             return self._response_json({'status': 'erro', 'mensagem': str(e)}, 500)
 
     def _response_json(self, data, status=200):

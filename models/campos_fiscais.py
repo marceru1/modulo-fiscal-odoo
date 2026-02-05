@@ -1,11 +1,10 @@
 from odoo import models, fields
-# Adiciona esses itens como colunas no banco de dados
 
 CST_PIS_COFINS = [
-    ('01', '01 - Operação Tributável (Alíquota Básica)'), # Cuidado: Exige alíquota
-    ('04', '04 - Operação Tributável Monofásica (Revenda Alíquota Zero)'), # Bebidas, Autopeças, Perfumaria
+    ('01', '01 - Operação Tributável (Alíquota Básica)'),
+    ('04', '04 - Operação Tributável Monofásica (Revenda Alíquota Zero)'),
     ('06', '06 - Operação Tributável a Alíquota Zero'),
-    ('07', '07 - Operação Isenta da Contribuição'), # SEU PADRÃO (Simples Nacional)
+    ('07', '07 - Operação Isenta da Contribuição'),
     ('08', '08 - Operação sem Incidência da Contribuição'),
     ('49', '49 - Outras Operações de Saída'),
     ('99', '99 - Outras Operações'),
@@ -13,6 +12,8 @@ CST_PIS_COFINS = [
 
 
 class ProductTemplate(models.Model):
+    #campos fiscais obrigatórios.
+    
     _inherit = 'product.template'
 
     x_departamento = fields.Selection(
@@ -53,7 +54,8 @@ class ProductTemplate(models.Model):
             ('99', '99 - Outras'),
         ],
         string="Tipo de Item (SPED)",
-        default='00'
+        default='00',
+        help="Classificação do produto conforme tabela SPED Fiscal"
     )
 
     x_genero = fields.Selection(
@@ -70,7 +72,8 @@ class ProductTemplate(models.Model):
     x_ncm_id = fields.Many2one(
         'br.ncm',
         string='Código NCM',
-        required=True
+        required=True,
+        help="Nomenclatura Comum do Mercosul - obrigatório para emissão de NFCe/NFe"
     )
 
     x_ncm_descricao = fields.Char(
@@ -94,7 +97,8 @@ class ProductTemplate(models.Model):
         ],
         string="Origem (NF-e)",
         required=True,
-        default='0'
+        default='0',
+        help="Origem da mercadoria conforme tabela do SPED"
     )
 
     x_cfop = fields.Selection(
@@ -105,7 +109,8 @@ class ProductTemplate(models.Model):
         ],
         string="CFOP",
         required=True,
-        default='5102'
+        default='5102',
+        help="Código Fiscal de Operações e Prestações"
     )
 
     x_icms = fields.Selection(
@@ -118,19 +123,20 @@ class ProductTemplate(models.Model):
             ('102', '102 - Tributada pelo Simples Nacional sem permissão de crédito'),
         ],
         string="ICMS (CST/CSOSN)",
-        default='00'
+        default='00',
+        help="Código de Situação Tributária do ICMS"
     )
 
     x_pis = fields.Selection(
         CST_PIS_COFINS,
         string="PIS",
-        default='07'
+        default='07',
+        help="Código de Situação Tributária do PIS"
     )
 
     x_cofins = fields.Selection(
         CST_PIS_COFINS,
         string="COFINS",
-        default='07'
+        default='07',
+        help="Código de Situação Tributária do COFINS"
     )
-    
-
