@@ -96,7 +96,7 @@ patch(PosOrder.prototype, {
             protocolo: this.x_fiscal_protocolo || "",
             offline: this.x_fiscal_offline || false,
         };
-
+        console.log("==== CONTINGENCIA?", result.x_fiscal_offline);
         result.x_cpf_nota = this.x_cpf_nota;
         result.x_confirmacao_venda = this.x_confirmacao_venda;
         
