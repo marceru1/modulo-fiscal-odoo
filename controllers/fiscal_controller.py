@@ -73,7 +73,8 @@ class FiscalWebhookController(http.Controller):
             return self._response_json({
                 'status': 'sucesso',
                 'documento_id': documento_id,
-                'fiscal_status': valores['x_fiscal_status']
+                'fiscal_status': valores['x_fiscal_status'],
+                'contingencia?': valores['x_fiscal_offline']
             })
 
         except Exception as e:

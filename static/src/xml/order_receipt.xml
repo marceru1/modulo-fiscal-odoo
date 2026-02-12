@@ -27,10 +27,20 @@
                 <div class="danfe-separador" style="border-bottom: 1px dashed #000; margin: 5px 0;"></div>
 
                 <t t-if="props.data.x_fiscal and (props.data.x_fiscal.status === 'autorizado' or props.data.x_fiscal.status === 'contingencia')">
-                    <div class="danfe-tipo" style="font-weight: bold; font-size: 13px;">
-                        DANFE NFC-e - Documento Auxiliar da Nota<br/>
-                        Fiscal de Consumidor Eletrônica
-                    </div>
+                    
+                    <t t-if="props.data.x_fiscal.offline">
+                        <div class="danfe-tipo" style="font-weight: bold; font-size: 14px; margin-bottom: 5px;">
+                            *** EMITIDA EM CONTINGÊNCIA ***<br/>
+                            Pendente de Autorização
+                        </div>
+                    </t>
+                    <t t-else="">
+                        <div class="danfe-tipo" style="font-weight: bold; font-size: 13px;">
+                            DANFE NFC-e - Documento Auxiliar da Nota<br/>
+                            Fiscal de Consumidor Eletrônica
+                        </div>
+                    </t>
+
                 </t>
                 <t t-else="">
                     <div class="danfe-tipo" style="font-weight: bold; font-size: 14px; margin-bottom: 5px;">
@@ -38,9 +48,6 @@
                     </div>
                     <div style="font-size: 11px; font-weight: bold;">
                         SEM VALOR FISCAL
-                    </div>
-                    <div style="font-size: 11px;">
-                        Venda Nº: <t t-esc="props.data.name"/>
                     </div>
                 </t>
 
@@ -51,68 +58,46 @@
         </xpath>
 
         <xpath expr="//OrderWidget" position="replace">
-            
-            <div class="danfe-items" style="font-family: 'Inconsolata'; font-size: 11px;">
-                
+             <div class="danfe-items" style="font-family: 'Inconsolata'; font-size: 11px;">
                 <div class="items-header" style="display: flex; font-weight: bold; margin-bottom: 5px;">
                     <span style="width: 15%;">CÓD</span>
                     <span style="width: 55%;">DESCRIÇÃO</span>
                     <span style="width: 10%; text-align: right;">QTD</span>
                     <span style="width: 20%; text-align: right;">TOTAL</span>
                 </div>
-
                 <t t-foreach="props.data.danfe_items" t-as="item" t-key="item.index">
                     <div style="margin-bottom: 5px;">
-                        <div>
-                            <span style="font-weight: bold;"><t t-esc="item.code"/></span> - <t t-esc="item.description"/>
-                        </div>
-                        
+                        <div><span style="font-weight: bold;"><t t-esc="item.code"/></span> - <t t-esc="item.description"/></div>
                         <div style="display: flex; justify-content: flex-end; font-size: 11px;">
-                            <span style="margin-right: 15px;">
-                                <t t-esc="item.qntd"/> UN x <t t-esc="props.formatCurrency(item.vlr_unit)"/>
-                            </span>
-                            <span style="font-weight: bold;">
-                                <t t-esc="props.formatCurrency(item.vlr_total)"/>
-                            </span>
+                            <span style="margin-right: 15px;"><t t-esc="item.qntd"/> UN x <t t-esc="props.formatCurrency(item.vlr_unit)"/></span>
+                            <span style="font-weight: bold;"><t t-esc="props.formatCurrency(item.vlr_total)"/></span>
                         </div>
                     </div>
                 </t>
-
             </div>
-
             <div class="danfe-separador" style="border-bottom: 1px dashed #000; margin: 5px 0;"></div>
-
         </xpath>
 
 
         <xpath expr="//div[hasclass('pos-receipt-taxes')]" position="replace">
             
             <div class="totais-section" style="font-family: 'Inconsolata'; font-size: 12px;">
-                
                 <div class="total-linha" style="display: flex; justify-content: space-between;">
                     <span class="total-label">QTD. TOTAL DE ITENS</span>
                     <span class="total-valor"><t t-esc="props.data.danfe_totais.qtd_itens"/></span>
                 </div>
-
                 <div class="total-linha total-destaque" style="display: flex; justify-content: space-between; font-weight: bold; font-size: 14px; margin-top: 5px;">
                     <span class="total-label">VALOR TOTAL R$</span>
-                    <span class="total-valor">
-                        <t t-esc="props.formatCurrency(props.data.danfe_totais.valor_total)"/>
-                    </span>
+                    <span class="total-valor"><t t-esc="props.formatCurrency(props.data.danfe_totais.valor_total)"/></span>
                 </div>
-
                 <div class="danfe-separador" style="border-bottom: 1px dashed #000; margin: 10px 0;"></div>
-
                 <div class="pagamento-titulo" style="font-weight: bold;">FORMA DE PAGAMENTO</div>
                 <t t-foreach="props.data.danfe_totais.metodos" t-as="pgto" t-key="pgto.metodo_nome">
                     <div class="pagamento-linha" style="display: flex; justify-content: space-between;">
                         <span class="pagamento-metodo"><t t-esc="pgto.metodo_nome"/></span>
-                        <span class="pagamento-valor">
-                            <t t-esc="props.formatCurrency(pgto.metodo_valor)"/>
-                        </span>
+                        <span class="pagamento-valor"><t t-esc="props.formatCurrency(pgto.metodo_valor)"/></span>
                     </div>
                 </t>
-
             </div>
 
             <div class="danfe-separador" style="border-bottom: 1px dashed #000; margin: 10px 0;"></div>
@@ -121,11 +106,20 @@
                 
                 <t t-if="props.data.x_fiscal and (props.data.x_fiscal.status === 'autorizado' or props.data.x_fiscal.status === 'contingencia')">
                     
+                    <t t-if="props.data.x_fiscal.offline">
+                        <div style="font-weight: bold; margin-bottom: 10px; border: 1px solid #000; padding: 5px;">
+                            EMITIDA EM CONTINGÊNCIA<br/>
+                            Pendente de Autorização
+                        </div>
+                    </t>
+
                     <div class="fiscal-numero">
                         <strong>NFC-e Nº <t t-esc="props.data.x_fiscal.numero"/></strong> 
                         Série <t t-esc="props.data.x_fiscal.serie"/>
                     </div>
                     <div>Emissão: <t t-esc="props.data.date"/></div>
+                    
+                    <div style="font-weight: bold; margin: 5px 0;">VIA DO CONSUMIDOR</div>
 
                     <div style="margin: 10px 0;">
                         <strong>CHAVE DE ACESSO</strong><br/>
@@ -143,7 +137,7 @@
                         </t>
                     </div>
 
-                    <div class="fiscal-qrcode" style="margin: 10px 0;">
+                    <div class="fiscal-qrcode" style="margin: 10px 0; display: flex; justify-content: center;">
                         <t t-if="props.data.x_fiscal.qrcode_b64">
                              <img t-att-src="'data:image/png;base64,' + props.data.x_fiscal.qrcode_b64" 
                                   style="width: 160px; height: 160px;"/>
@@ -157,31 +151,32 @@
                     <div style="font-size: 10px; margin-top: 5px;">
                         Consulte via Leitor de QR Code
                     </div>
-                     <div style="font-size: 10px; margin-top: 5px;">
-                        Protocolo: <t t-esc="props.data.x_fiscal.protocolo"/>
-                    </div>
+
+                    <t t-if="!props.data.x_fiscal.offline">
+                         <div style="font-size: 10px; margin-top: 5px;">
+                            Protocolo: <t t-esc="props.data.x_fiscal.protocolo"/>
+                        </div>
+                    </t>
+                    <t t-else="">
+                         <div style="font-size: 10px; margin-top: 5px; font-style: italic;">
+                            Protocolo Pendente (Offline)
+                        </div>
+                    </t>
 
                 </t>
                 
                 <t t-else="">
-                    
                     <div style="font-weight: bold; margin-bottom: 5px;">
                         *** NÃO É DOCUMENTO FISCAL ***
                     </div>
-                    
                     <div style="text-align: left; margin-left: 5px; margin-top: 10px;">
                         <div>Data: <t t-esc="props.data.date"/></div>
                         <div>Op.: <t t-esc="props.data.cashier"/></div>
                     </div>
-
                     <div class="danfe-separador" style="border-bottom: 1px solid #000; margin: 10px 0;"></div>
-                    
-
-                    
                     <div style="margin-top: 15px; font-style: italic;">
                         Agradecemos a preferência!
                     </div>
-
                 </t>
 
             </div>

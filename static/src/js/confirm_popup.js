@@ -90,7 +90,7 @@ patch(PaymentScreen.prototype, {
                         order.x_fiscal_qrcode_url = dados.x_fiscal_qrcode_url;
                         order.x_fiscal_qrcode_b64 = dados.x_fiscal_qrcode_b64;
                         order.x_fiscal_offline = dados.x_fiscal_offline;
-
+                         console.log("==== CONTINGENCIA popup?", order.x_fiscal_offline);
                         break; // sai do loop
                     }
                 } catch (error) {
