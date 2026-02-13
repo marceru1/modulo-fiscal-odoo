@@ -1,0 +1,107 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <record id="product_template_form_view_inherit_fiscal" model="ir.ui.view">
+        <field name="name">product.template.form.inherit.fiscal</field>
+        <field name="model">product.template</field>
+        <field name="inherit_id" ref="product.product_template_form_view"/> 
+        <field name="arch" type="xml">
+            
+            <xpath expr="//notebook" position="inside">
+                
+                <page string="Fiscal" name="fiscal_attributes">
+                    
+                    <group>
+                        
+                        <group name="fiscal_left">
+                            
+                            <div class="border border-2 rounded p-2 mb-2" style="min-height: 70px;">
+                                
+                                <separator string="Classificação e Origem" style="margin-top:0px; margin-bottom: 15px;"/>
+
+                                <group>
+                                    <field name="x_origem" required="1" placeholder="Selecione a Origem..."/>
+                                    
+                                    <field name="x_departamento" placeholder="Selecione o Departamento..."/>
+                                    <field name="x_fornecedor" placeholder="Selecione o Fornecedor..."/>
+                                    
+                                    <separator string="Detalhes NCM"/>
+                                    
+                                    <field name="x_ncm_id" required="1" 
+                                           options="{'no_quick_create': True, 'no_create_edit': False}"
+                                           class="border rounded" 
+                                           placeholder="Digite ou pesquise o NCM..."/>
+                                    
+                                    <field name="x_ncm_descricao" placeholder="Descrição do NCM..."/>
+                                    
+                                    <field name="x_tipo" placeholder="Selecione o Tipo de Item..."/>
+                                    <field name="x_genero" placeholder="Selecione o Gênero..."/>
+                                </group>
+
+                            </div>
+                        </group>
+
+                        
+                        <group name="fiscal_right">
+                            
+                            <div class="border border-2 rounded p-2 mb-2" style="min-height: 70px;">
+                                
+                                <separator string="Cupom e Tributos" style="margin-top:0px; margin-bottom: 15px;"/>
+
+                                <div class="border rounded p-1 mb-2" style="min-height: 70px;">
+                                    <group string="CFOP">
+                                        <field name="x_cfop" required="1" nolabel="1" placeholder="Selecione o CFOP..."/>
+                                    </group>
+                                </div>
+
+                                <div class="border rounded p-1 mb-2" style="min-height: 70px;">
+                                    <group string="ICMS">
+                                        <field name="x_icms" nolabel="1" placeholder="Selecione o ICMS..."/>
+                                    </group>
+                                </div>
+
+                                <div class="border rounded p-1 mb-2" style="min-height: 70px;">
+                                    <group string="PIS">
+                                        <field name="x_pis" nolabel="1" placeholder="Selecione o PIS..."/>
+                                    </group>
+                                </div>
+
+                                <div class="border rounded p-1 mb-2" style="min-height: 70px;">
+                                    <group string="COFINS">
+                                        <field name="x_cofins" nolabel="1" placeholder="Selecione o COFINS..."/>
+                                    </group>
+                                </div>
+
+                            </div>
+                        </group>
+
+
+                    </group>
+                </page>
+            </xpath>
+
+
+            <xpath expr="//page[@name='sales']" position="attributes">
+                <attribute name="invisible">1</attribute>
+            </xpath> 
+            
+            <xpath expr="//page[@name='pos']" position="attributes">
+                <attribute name="invisible">1</attribute>
+            </xpath> 
+
+
+        </field>
+    </record>
+
+    <record id="product_template_only_form_view_inherit_no_variants" model="ir.ui.view">
+        <field name="name">product.template.only.form.inherit.no.variants</field>
+        <field name="model">product.template</field>
+        <field name="inherit_id" ref="product.product_template_only_form_view"/>
+        <field name="arch" type="xml">
+            
+            <xpath expr="//page[@name='variants']" position="attributes">
+                <attribute name="invisible">1</attribute>
+            </xpath>
+        </field>
+    </record>
+
+</odoo>
