@@ -12,16 +12,16 @@
         <xpath expr="//ReceiptHeader" position="replace">
             
             <div class="danfe-header">
-                <div class="emitente-nome" style="font-weight: bold; font-size: 16px;">MINHA LOJA TESTE LTDA</div>
+                <div class="emitente-nome" style="font-weight: bold; font-size: 16px;">LOJAS 20+ ROUPAS E ACESSORIOS LTDA</div>
                 
                 <div class="emitente-dados" style="font-size: 12px;">
-                    CNPJ: 12.345.678/0001-99<br/>
-                    IE: 123.456.789.111
+                    CNPJ: 26343314/0001-80<br/>
+                    IE: 053917464
                 </div>
                 
                 <div class="emitente-endereco" style="font-size: 12px; margin-top: 5px;">
-                    Av. Paulista, 1000 - Bela Vista<br/>
-                    São Paulo - SP
+                    Av. 7 DE SETEMBRO, 767<br/>
+                    Centro, Itacoatiara, AM, (92)99999-9999
                 </div>
 
                 <div class="danfe-separador" style="border-bottom: 1px dashed #000; margin: 5px 0;"></div>
