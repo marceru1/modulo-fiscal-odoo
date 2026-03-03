@@ -55,7 +55,7 @@ patch(PaymentScreen.prototype, {
             let status = false;
 
             // loop de 15 segundos
-            for (let i = 0; i < 15; i++) {
+            for (let i = 0; i < 10; i++) {
                 try {
                 
                     const searchResult = await this.env.services.orm.searchRead(
