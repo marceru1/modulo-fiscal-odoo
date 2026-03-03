@@ -1,10 +1,10 @@
 /** @odoo-module */
-import { ControlButtons } from "@point_of_sale/app/screens/product_screen/control_buttons/control_buttons";
+import { PaymentScreen } from "@point_of_sale/app/screens/payment_screen/payment_screen";
 import { patch } from "@web/core/utils/patch";
 import { useService } from "@web/core/utils/hooks";
 import { TextInputPopup } from "@point_of_sale/app/utils/input_popups/text_input_popup";
 
-patch(ControlButtons.prototype, {
+patch(PaymentScreen.prototype, {
     
     setup() {
         super.setup();
@@ -12,7 +12,7 @@ patch(ControlButtons.prototype, {
     },
 
     async clickCpfButton() {
-       
+        
         //abre o popup pra inserir o cpf
         this.dialog.add(TextInputPopup, {
             title: "Informe o CPF",
@@ -22,19 +22,19 @@ patch(ControlButtons.prototype, {
 
             // receber o cpf informado
             getPayload: (cpf) => {
-                console.log("CPF digitado:", cpf);
 
                 const cpf_clean = cpf.replace(/\D/g, "");//regex pra tirar ponto, virgula e zas
-                console.log("CPF digitado:", cpf_clean);
                 
                 const order = this.pos.get_order();
                 order.x_cpf_nota = cpf_clean;
-                console.log("deu certo aparentemente");
-        
+                
+                console.log("nova ordem CPF:", this.pos.get_order().x_cpf_nota);
+console.log("nova ordem canBeValidated:", this.pos.get_order().canBeValidated());
+console.log("nova ordem get_due:", this.pos.get_order().get_due());
+
             },
 
-            // fecha o popup
-            close: () => {},
+
         });
     }
 });
