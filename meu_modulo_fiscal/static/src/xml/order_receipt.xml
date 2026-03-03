@@ -98,6 +98,14 @@
                         <span class="pagamento-valor"><t t-esc="props.formatCurrency(pgto.metodo_valor)"/></span>
                     </div>
                 </t>
+                <!-- Troco -->
+                <t t-set="troco" t-value="props.data.danfe_totais.metodos.reduce((acc, p) => acc + p.metodo_valor, 0) - props.data.danfe_totais.valor_total"/>
+                <t t-if="troco > 0.009">
+                    <div class="pagamento-linha" style="display: flex; justify-content: space-between; font-weight: bold; margin-top: 4px; border-top: 1px dashed #000; padding-top: 4px;">
+                        <span class="pagamento-metodo">TROCO</span>
+                        <span class="pagamento-valor"><t t-esc="props.formatCurrency(troco)"/></span>
+                    </div>
+                </t>
             </div>
 
             <div class="danfe-separador" style="border-bottom: 1px dashed #000; margin: 10px 0;"></div>
@@ -172,6 +180,9 @@
                     <div style="text-align: left; margin-left: 5px; margin-top: 10px;">
                         <div>Data: <t t-esc="props.data.date"/></div>
                         <div>Op.: <t t-esc="props.data.cashier"/></div>
+                        <t t-if="props.data.x_cpf_nota">
+                            <div style="margin-top: 4px;">CPF: <t t-esc="props.data.x_cpf_nota"/></div>
+                        </t>
                     </div>
                     <div class="danfe-separador" style="border-bottom: 1px solid #000; margin: 10px 0;"></div>
                     <div style="margin-top: 15px; font-style: italic;">
@@ -185,4 +196,4 @@
 
     </t>
 
-</templates>
+</templates> 
