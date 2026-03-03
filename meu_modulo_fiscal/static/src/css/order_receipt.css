@@ -329,3 +329,49 @@
 .pos-receipt-contact {
     display: none !important;
 }
+
+
+/* Garante que a área central de pagamento seja visível */
+.payment-summary {
+    justify-content: flex-start !important;
+    padding: 15px !important;
+}
+
+/* Mostra as linhas de pagamento selecionadas */
+.paymentlines {
+    display: flex !important;
+    flex-direction: column !important;
+    gap: 8px !important;
+    width: 100% !important;
+}
+
+/* Cada linha de pagamento */
+.paymentline {
+    display: flex !important;
+    justify-content: space-between !important;
+    align-items: center !important;
+    padding: 15px 20px !important;
+    background: #fff !important;
+    border: 1px solid #ddd !important;
+    border-radius: 8px !important;
+    font-size: 18px !important;
+    cursor: pointer !important;
+}
+
+/* Linha selecionada (ativa) */
+.paymentline.selected {
+    border: 2px solid #017e84 !important;
+    background: #f0fafa !important;
+}
+
+/* Nome do método de pagamento */
+.paymentline .payment-name {
+    font-weight: 500 !important;
+}
+
+/* Valor da linha */
+.paymentline .payment-amount {
+    font-weight: bold !important;
+    font-size: 20px !important;
+    color: #2c3e50 !important;
+}

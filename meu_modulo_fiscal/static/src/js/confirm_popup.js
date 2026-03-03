@@ -15,6 +15,7 @@ patch(PaymentScreen.prototype, {
         this.orm = useService("orm");
     },
 
+    
     async validateOrder(isForceValidate) {
         console.log("Cliquei em validar, aguardando confirmação...");
 
