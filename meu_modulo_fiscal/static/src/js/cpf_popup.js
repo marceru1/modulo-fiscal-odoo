@@ -28,10 +28,6 @@ patch(PaymentScreen.prototype, {
                 const order = this.pos.get_order();
                 order.x_cpf_nota = cpf_clean;
                 
-                console.log("nova ordem CPF:", this.pos.get_order().x_cpf_nota);
-console.log("nova ordem canBeValidated:", this.pos.get_order().canBeValidated());
-console.log("nova ordem get_due:", this.pos.get_order().get_due());
-
             },
 
 
