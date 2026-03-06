@@ -141,9 +141,11 @@ class ProductTemplate(models.Model):
         help="Código de Situação Tributária do COFINS"
     )
 
-    x_variant_badges = fields.Char(
+# Mude de fields.Char para fields.Html
+    x_variant_badges = fields.Html(
         string="Variantes",
         compute='_compute_variant_badges',
+        sanitize=False # Permite renderizar o HTML customizado sem filtros estritos do Odoo
     )
 
     @api.depends('attribute_line_ids', 'attribute_line_ids.value_ids')
@@ -152,5 +154,8 @@ class ProductTemplate(models.Model):
             badges = []
             for line in rec.attribute_line_ids:
                 valores = ', '.join(line.value_ids.mapped('name'))
-                badges.append(f"{line.attribute_id.name}: {valores}")
-            rec.x_variant_badges = ' | '.join(badges)
+                # Fonte menor (0.75rem) e padding reduzido (px-2 py-1)
+                badge_html = f'<span class="badge rounded-pill text-bg-secondary me-1 fw-normal px-2 py-1" style="font-size: 0.75rem;">{line.attribute_id.name}: {valores}</span>'
+                badges.append(badge_html)
+            
+            rec.x_variant_badges = ''.join(badges)
