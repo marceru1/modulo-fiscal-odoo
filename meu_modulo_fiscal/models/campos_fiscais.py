@@ -159,3 +159,23 @@ class ProductTemplate(models.Model):
                 badges.append(badge_html)
             
             rec.x_variant_badges = ''.join(badges)
+
+class ProductProduct(models.Model):
+    _inherit = 'product.product'
+
+    x_variant_badges = fields.Html(
+        string="Valores da Variante",
+        compute='_compute_variant_badges_product',
+        sanitize=False
+    )
+
+    @api.depends('product_template_attribute_value_ids')
+    def _compute_variant_badges_product(self):
+        for rec in self:
+            badges = []
+            # Aqui ele percorre os valores específicos DESTA variante (ex: Cor: Azul, Tamanho: M)
+            for ptav in rec.product_template_attribute_value_ids:
+                badge_html = f'<span class="badge rounded-pill text-bg-secondary me-1 fw-normal px-2 py-1" style="font-size: 0.75rem;">{ptav.attribute_id.name}: {ptav.name}</span>'
+                badges.append(badge_html)
+            
+            rec.x_variant_badges = ''.join(badges)
