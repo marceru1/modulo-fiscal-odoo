@@ -111,4 +111,21 @@
         </field>
     </record>
 
+<record id="product_product_tree_view_inherit_fiscal" model="ir.ui.view">
+        <field name="name">product.product.tree.inherit.fiscal</field>
+        <field name="model">product.product</field>
+        <field name="inherit_id" ref="product.product_product_tree_view"/>
+        <field name="arch" type="xml">
+            
+            <xpath expr="//field[@name='name']" position="after">
+                <field name="x_variant_badges" widget="html" optional="show"/>
+            </xpath>
+
+            <xpath expr="//field[@name='product_template_variant_value_ids']" position="attributes">
+                <attribute name="column_invisible">True</attribute>
+            </xpath>
+
+        </field>
+    </record>
+
 </odoo>
