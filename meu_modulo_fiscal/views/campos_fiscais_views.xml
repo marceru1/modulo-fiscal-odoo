@@ -7,12 +7,11 @@
         <field name="arch" type="xml">
 
    
-<xpath expr="//field[@name='name']" position="after">
-   <div class="mt-1" invisible="not attribute_line_ids"> 
-        <field name="x_variant_badges" readonly="1" nolabel="1" string=""/>
+<xpath expr="//div[hasclass('oe_title')]" position="inside">
+    <div class="mt-2 w-100 d-block" invisible="not attribute_line_ids"> 
+        <field name="x_variant_badges" readonly="1" nolabel="1"/>
     </div>
 </xpath>
-
 
             <xpath expr="//notebook" position="inside">
                 
