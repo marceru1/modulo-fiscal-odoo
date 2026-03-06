@@ -5,7 +5,15 @@
         <field name="model">product.template</field>
         <field name="inherit_id" ref="product.product_template_form_view"/> 
         <field name="arch" type="xml">
-            
+
+   
+<xpath expr="//field[@name='name']" position="after">
+   <div class="mt-1" invisible="not attribute_line_ids"> 
+        <field name="x_variant_badges" readonly="1" nolabel="1" string=""/>
+    </div>
+</xpath>
+
+
             <xpath expr="//notebook" position="inside">
                 
                 <page string="Fiscal" name="fiscal_attributes">
