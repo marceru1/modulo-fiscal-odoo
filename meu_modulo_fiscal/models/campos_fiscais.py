@@ -1,4 +1,4 @@
-from odoo import models, fields
+from odoo import models, fields, api
 
 CST_PIS_COFINS = [
     ('01', '01 - Operação Tributável (Alíquota Básica)'),
@@ -140,3 +140,17 @@ class ProductTemplate(models.Model):
         default='07',
         help="Código de Situação Tributária do COFINS"
     )
+
+    x_variant_badges = fields.Char(
+        string="Variantes",
+        compute='_compute_variant_badges',
+    )
+
+    @api.depends('attribute_line_ids', 'attribute_line_ids.value_ids')
+    def _compute_variant_badges(self):
+        for rec in self:
+            badges = []
+            for line in rec.attribute_line_ids:
+                valores = ', '.join(line.value_ids.mapped('name'))
+                badges.append(f"{line.attribute_id.name}: {valores}")
+            rec.x_variant_badges = ' | '.join(badges)
