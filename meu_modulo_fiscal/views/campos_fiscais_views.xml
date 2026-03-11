@@ -128,4 +128,34 @@
         </field>
     </record>
 
+    <!-- Botão "Gerar Código de Barras" no formulário do Template (1 variante) -->
+    <record id="product_template_form_view_inherit_barcode_btn" model="ir.ui.view">
+        <field name="name">product.template.form.inherit.barcode.btn</field>
+        <field name="model">product.template</field>
+        <field name="inherit_id" ref="product.product_template_only_form_view"/>
+        <field name="arch" type="xml">
+            <xpath expr="//field[@name='barcode']" position="after">
+                <button name="action_generate_barcode" type="object"
+                    string="Gerar Código" icon="fa-barcode"
+                    class="btn-link"
+                    title="Gerar código de barras automático baseado nos atributos"/>
+            </xpath>
+        </field>
+    </record>
+
+    <!-- Botão "Gerar Código de Barras" no formulário da Variante -->
+    <record id="product_variant_form_view_inherit_barcode_btn" model="ir.ui.view">
+        <field name="name">product.variant.form.inherit.barcode.btn</field>
+        <field name="model">product.product</field>
+        <field name="inherit_id" ref="product.product_variant_easy_edit_view"/>
+        <field name="arch" type="xml">
+            <xpath expr="//field[@name='barcode']" position="after">
+                <button name="action_generate_barcode" type="object"
+                    string="Gerar Código" icon="fa-barcode"
+                    class="btn-link"
+                    title="Gerar código de barras automático baseado nos atributos"/>
+            </xpath>
+        </field>
+    </record>
+
 </odoo>
