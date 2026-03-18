@@ -12,18 +12,14 @@ patch(PaymentScreen.prototype, {
     },
 
     async clickCpfButton() {
-        
-        //abre o popup pra inserir o cpf
         this.dialog.add(TextInputPopup, {
             title: "Informe o CPF",
             placeholder: "Digite apenas números",
             startingValue: "",
             rows: 1,
 
-            // receber o cpf informado
             getPayload: (cpf) => {
-
-                const cpf_clean = cpf.replace(/\D/g, "");//regex pra tirar ponto, virgula e zas
+                const cpf_clean = cpf.replace(/\D/g, "");
                 
                 const order = this.pos.get_order();
                 order.x_cpf_nota = cpf_clean;
