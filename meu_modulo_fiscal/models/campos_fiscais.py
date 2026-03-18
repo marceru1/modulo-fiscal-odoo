@@ -15,12 +15,12 @@ class ProductTemplate(models.Model):
 
     # Campos fiscais obrigatórios
     x_departamento = fields.Selection(
-        [('0', '0 - teste00'), ('1', '0 - teste01'), ('2', '0 - teste02'), ('3', '0 - teste03')],
+        [('0', 'Não definido')],
         string="Departamento", default='0'
     )
 
     x_fornecedor = fields.Selection(
-        [('0', '0 - teste00'), ('1', '0 - teste01'), ('2', '0 - teste02'), ('3', '0 - teste03')],
+        [('0', 'Não definido')],
         string="Fornecedor", default='0'
     )
 
@@ -37,7 +37,7 @@ class ProductTemplate(models.Model):
     )
 
     x_genero = fields.Selection(
-        [('0', '0 - teste00'), ('1', '0 - teste01'), ('2', '0 - teste02'), ('3', '0 - teste03')],
+        [('0', 'Não definido')],
         string="Gênero do Item", default='0'
     )
 

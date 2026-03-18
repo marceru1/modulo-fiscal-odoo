@@ -15,7 +15,10 @@ class FiscalWebhookController(http.Controller):
         csrf=False
     )
     def retorno_fiscal(self, **kw):
-        """Recebe retorno fiscal do Laravel via Webhook padrão"""
+        """
+        Recebe o webhook do middleware Laravel com o status da nota na SEFAZ.
+        Esta rota é pública, mas a segurança pode ser estendida futuramente via token.
+        """
         
         try:
 
@@ -30,24 +33,24 @@ class FiscalWebhookController(http.Controller):
             documento_id = dados.get('documento_id')
             fiscal = dados.get('fiscal', {})
 
-            # validação do documento_id
+            # Validar se o middleware enviou a referência do pedido
             if not documento_id:
                 return self._response_json({'status': 'erro', 'mensagem': 'documento_id não informado'}, 400)
 
-            # busca do pedido 
+            # Buscar o pedido correspondente no Odoo usando o pos_reference
             pedido = request.env['pos.order'].sudo().search([
                 ('pos_reference', '=', documento_id)
             ], limit=1)
 
+            # Caso o middleware notifique um pedido que ainda não sincronizou localmente ou não existe
             if not pedido:
-                _logger.error(f'❌ Pedido {documento_id} NÃO ENCONTRADO')
+                _logger.error(f'Pedido {documento_id} não encontrado')
                 return self._response_json({
                     'status': 'erro', 
                     'mensagem': 'pedido_nao_encontrado',
                     'documento_id': documento_id
                 }, 404)
 
-            # processamento dos dados fiscais
             qrcode_b64 = fiscal.get('qrcode_b64', '')
             
             valores = {
@@ -63,12 +66,11 @@ class FiscalWebhookController(http.Controller):
                 'x_fiscal_qrcode_b64': qrcode_b64, 
             }
 
+            # Atualizar os dados fiscais diretamente no pedido do PDV
             pedido.write(valores)
             
-            # commit para garantir persistência imediata antes do return
+            # Garantir a persistência no banco antes de retornar sucesso ao middleware
             request.env.cr.commit()
-
-            _logger.info(f'✅ Pedido {documento_id} atualizado com sucesso.')
 
             return self._response_json({
                 'status': 'sucesso',
@@ -78,8 +80,7 @@ class FiscalWebhookController(http.Controller):
             })
 
         except Exception as e:
-            _logger.error(f'❌ ERRO CRÍTICO NO WEBHOOK: {str(e)}', exc_info=True)
-            # retornar erro JSON válido para o Laravel
+            _logger.error(f'Erro no webhook: {str(e)}', exc_info=True)
             return self._response_json({'status': 'erro', 'mensagem': str(e)}, 500)
 
     def _response_json(self, data, status=200):

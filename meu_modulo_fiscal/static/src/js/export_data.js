@@ -5,7 +5,6 @@ import { patch } from "@web/core/utils/patch";
 
 patch(PosOrder.prototype, {
 
-    // carrega os dados do banco para abrir o pdv e sincroniza os campos customizados
     init_from_JSON(json) {
         super.init_from_JSON(...arguments);
 
@@ -21,7 +20,6 @@ patch(PosOrder.prototype, {
         this.x_fiscal_qrcode_b64 = json.x_fiscal_qrcode_b64 || "";
         this.x_fiscal_offline = Boolean(json.x_fiscal_offline);
         
-        // dados do cliente
         this.x_confirmacao_venda = json.x_confirmacao_venda;
         this.x_email_cliente = json.x_email_cliente;
         this.x_cpf_nota = json.x_cpf_nota;
@@ -37,11 +35,9 @@ patch(PosOrder.prototype, {
         return json;
     },
 
-    // prepara os dadaods pra impressao do cupom
     export_for_printing() {
         const result = super.export_for_printing(...arguments);
         
-        // montagem dos itens
         const orderlines = this.get_orderlines();
         let qtd_itens = 0;
 
@@ -75,7 +71,6 @@ patch(PosOrder.prototype, {
             metodos: metodos,
         };
 
-        // processa qrCode
         let qrcodeFinal = this.x_fiscal_qrcode_url;
 
         if (this.x_fiscal_qrcode_b64) {
@@ -83,7 +78,6 @@ patch(PosOrder.prototype, {
             qrcodeFinal = `data:image/png;base64,${b64Limpo}`;
         }
 
-        // monta o objeto fiscal
         result.x_fiscal = {
             mensagem: this.x_fiscal_mensagem || "",
             status: this.x_fiscal_status || "",
@@ -96,12 +90,9 @@ patch(PosOrder.prototype, {
             protocolo: this.x_fiscal_protocolo || "",
             offline: this.x_fiscal_offline || false,
         };
-        console.log("==== CONTINGENCIA?", result.x_fiscal_offline);
         result.x_cpf_nota = this.x_cpf_nota;
         result.x_confirmacao_venda = this.x_confirmacao_venda;
         
-        // operador sai apenas na reimpressão
-      
         result.cashier = result.cashier || (this.pos.get_cashier() ? this.pos.get_cashier().name : null);
 
         return result;

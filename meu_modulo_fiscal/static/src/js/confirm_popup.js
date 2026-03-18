@@ -17,9 +17,6 @@ patch(PaymentScreen.prototype, {
 
     
     async validateOrder(isForceValidate) {
-        console.log("Cliquei em validar, aguardando confirmação...");
-
-        // popup de Confirmação
         const result = await makeAwaitable(this.dialog, SelectionPopup, {
             title: _t("Confirmar venda?"),
             list: [
@@ -31,7 +28,6 @@ patch(PaymentScreen.prototype, {
         const order = this.pos.get_order();
         order.x_confirmacao_venda = result;
 
-        // coleta de e-mail
         if (result === true) {
             const email_cliente = await makeAwaitable(this.dialog, TextInputPopup, {
                 title: "Informe o E-mail",
@@ -43,19 +39,14 @@ patch(PaymentScreen.prototype, {
             }
         }
 
-        // envia para o backend
         await super.validateOrder(isForceValidate);
 
-        // aguarda o retorno fiscal caso teanha marcado sim
         if (result === true) {
-            
             this.ui.block();
-            console.log("🔄 Aguardando retorno fiscal...");
 
             const posReference = order.pos_reference || order.name;
             let status = false;
 
-            // loop de 15 segundos
             for (let i = 0; i < 10; i++) {
                 try {
                 
@@ -70,7 +61,7 @@ patch(PaymentScreen.prototype, {
                             "x_fiscal_serie",
                             "x_fiscal_protocolo",
                             "x_fiscal_qrcode_url",
-                            "x_fiscal_qrcode_b64", // Importante vir o Base64
+                            "x_fiscal_qrcode_b64",
                             "x_fiscal_offline"
                         ]
                     );
@@ -79,9 +70,6 @@ patch(PaymentScreen.prototype, {
                         const dados = searchResult[0];
                         status = dados.x_fiscal_status;
                         
-                        console.log("✅ Status fiscal recebido:", status);
-                        
-                        // atualiza o objeto pra impressao
                         order.x_fiscal_status = dados.x_fiscal_status;
                         order.x_fiscal_mensagem = dados.x_fiscal_mensagem;
                         order.x_fiscal_chave = dados.x_fiscal_chave;
@@ -91,8 +79,7 @@ patch(PaymentScreen.prototype, {
                         order.x_fiscal_qrcode_url = dados.x_fiscal_qrcode_url;
                         order.x_fiscal_qrcode_b64 = dados.x_fiscal_qrcode_b64;
                         order.x_fiscal_offline = dados.x_fiscal_offline;
-                         console.log("==== CONTINGENCIA popup?", order.x_fiscal_offline);
-                        break; // sai do loop
+                        break;
                     }
                 } catch (error) {
                     console.error("Erro ao consultar status:", error);
@@ -102,15 +89,11 @@ patch(PaymentScreen.prototype, {
             }
 
             if (!status) {
-                console.log("❌ Timeout: Status fiscal não chegou a tempo.");
-        
                 order.x_fiscal_status = 'erro';
                 order.x_fiscal_mensagem = 'Tempo limite excedido na comunicação.';
             }
 
             this.ui.unblock();
-        } else {
-            console.log("⏩ Venda não fiscal: Pulando verificação.");
         }
     }
 });

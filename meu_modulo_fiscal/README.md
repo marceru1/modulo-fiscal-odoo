@@ -1,88 +1,99 @@
-# Módulo Fiscal – Odoo 18
+# Módulo Fiscal — Odoo 18 PDV
 
-Este módulo adiciona funcionalidades fiscais básicas ao **Ponto de Venda (PDV)** do **Odoo 18 Community**.
+Addon para o **Ponto de Venda do Odoo 18 Community** que adiciona toda a camada fiscal necessária pra emitir NFC-e.
 
-Ele está sendo desenvolvido para atuar como o **ponto final de uma loja (caixa)**, concentrando as informações fiscais da venda, coletando dados obrigatórios do consumidor e integrando o Odoo a um **middleware fiscal externo**.
-
----
-
-## Objetivo Geral
-
-- Centralizar informações fiscais no cadastro de produtos
-- Coletar CPF e E-mail do consumidor no momento da venda
-- Estruturar o payload fiscal da venda
-- Enviar os dados da venda para um middleware fiscal
-- Receber o retorno do middleware para exibição/impressão no cupom
+Ele cuida de: cadastrar campos tributários nos produtos, capturar CPF/e-mail do consumidor na hora da venda, montar o payload fiscal, enviar pro middleware e receber o retorno com chave de acesso, QR Code e status da SEFAZ — tudo aparecendo no recibo térmico.
 
 ---
 
-## Funcionalidades
+## O que ele faz
 
-### Campos Fiscais no Produto (`campos_fiscais.py`)
-Inclusão de campos puramente fiscais diretamente no cadastro de produtos para emissão da nota:
+### Campos fiscais no produto
+Cada produto ganha uma aba "Fiscal" com os campos obrigatórios pra nota:
 
-- NCM
-- CFOP
-- Origem da mercadoria
-- ICMS (CST / CSOSN)
-- PIS
-- COFINS
+- **NCM** (busca integrada com tabela do Mercosul)
+- **CFOP** (5101, 5102, 5103)
+- **Origem** da mercadoria
+- **ICMS** (CST/CSOSN)
+- **PIS** e **COFINS**
 
-Esses campos são utilizados na composição do payload fiscal enviado ao middleware.
+Esses dados são enviados junto com cada item da venda pro middleware.
 
-### Geração de Códigos de Barras Automática (`recursos_variantes.py`)
-Adicionamos lógicas dedicadas especificamente à gestão de Variantes de Produto de forma separada (`recursos_variantes.py`). Funcionalidades incluem:
+### Código de barras automático (EAN-13)
+Um botão no cadastro do produto gera um código de barras de 13 dígitos combinando:
+- ID do produto (4 dígitos)
+- Atributos da variante (Tamanho, Setor, Gênero, Tipo)
+- Dígito verificador calculado automaticamente
 
-- **Badges de Atributos**: Exibe de forma visual os atributos (ex: Cor, Tamanho) associados a uma variante tanto na árvore listagem (`tree`) quanto dentro do cabeçalho do formulário.
-- **Botão Inteligente de EAN-13**: Um botão no formulário do produto ("Gerar Código") que avalia de modo inteligente as tags de atributos de um produto (ex: Tamanho, Setor, Gênero e Tipo de Produto) e monta automaticamente um **código de barras EAN-13 de 13 dígitos** combinando:
-  - O código/ID do produto base (4 dígitos)
-  - IDs dos valores respectivos dos atributos 
-  - Cálculo automático do dígito verificador `(check_digit)` EAN-13
-  
-  Essa lógica poupa tempo operacional e diminui a chance de erro humano na codificação das variantes
+Funciona tanto no template quanto na variante individual.
 
----
+### Captura de CPF e E-mail no PDV
+- Botão "CPF / Nota" na tela de pagamento (substitui o botão de fatura)
+- Popup de e-mail aparece ao confirmar a venda
+- Os dois dados ficam salvos no pedido e vão pro middleware
 
-### Ponto de Venda
+### Envio automático pro middleware
+Quando o pagamento é confirmado, o addon monta um JSON com:
+- Dados da venda (total, operador, referência)
+- Itens com impostos (NCM, CFOP, ICMS, PIS, COFINS)
+- Formas de pagamento
+- CPF e e-mail do consumidor
 
-Durante o processo de venda no PDV:
+Esse payload é enviado via HTTP pro middleware Laravel. O envio usa timeout curto (5s) pra nunca travar o caixa.
 
-- Captura de informações adicionais:
-  - CPF do consumidor na nota
-  - Email do cliente para envio da nota fiscal
-- Armazenamento desses dados diretamente na ordem de venda (`pos.order`)
+### Recibo DANFE personalizado
+O recibo térmico foi totalmente customizado pra seguir o padrão DANFE NFC-e:
+- Cabeçalho com dados do emitente
+- Itens com código, descrição, quantidade e valor
+- Totais e formas de pagamento com troco
+- QR Code da nota (base64 renderizado direto na impressão)
+- Chave de acesso e protocolo de autorização
+- Tratamento visual de contingência ("Pendente de Autorização")
+- Fallback pra recibo sem valor fiscal quando a nota não é emitida
 
----
+### Webhook de retorno
+O controller `/api/retorno-fiscal` recebe o callback do middleware com:
+- Status da nota (autorizado, rejeitado, contingência, erro)
+- Chave de acesso, protocolo, QR Code
+- Flag de contingência offline
 
-###Integração com Middleware Fiscal
-
-Ao finalizar o pagamento no PDV:
-
-- Os dados da venda são estruturados em um payload JSON
-- O payload contém:
-  - Dados da venda
-  - Produtos e respectivos impostos
-  - Formas de pagamento
-  - Dados do cliente
-- O JSON é enviado via HTTP (API REST) para um middleware externo
-
-O middleware é responsável por:
-- Processar as regras fiscais
-- Comunicar-se com a API fiscal (ex: NFC-e / NF-e)
-- Retornar o resultado da operação ao Odoo
+Os dados são gravados direto no pedido e o frontend JS faz polling até receber.
 
 ---
 
+## Estrutura
 
-> Este módulo **não realiza a emissão fiscal diretamente**.  
-> Ele apenas prepara, envia e recebe os dados fiscais, delegando a emissão a um middleware especializado.
+```
+meu_modulo_fiscal/
+├── controllers/
+│   └── fiscal_controller.py    # Webhook que recebe retorno do middleware
+├── models/
+│   ├── campos_fiscais.py       # Campos tributários no cadastro de produto
+│   ├── pos_order.py            # Envio da venda pro middleware + loader de campos
+│   └── recursos_variantes.py   # Badges de variante + geração de EAN-13
+├── static/src/
+│   ├── js/
+│   │   ├── confirm_popup.js    # Popup de confirmação + polling de status fiscal
+│   │   ├── cpf_popup.js        # Captura de CPF no pagamento
+│   │   └── export_data.js      # Serialização dos campos fiscais pro recibo
+│   ├── xml/
+│   │   ├── cpf_button.xml      # Botão CPF na tela de pagamento
+│   │   └── order_receipt.xml   # Template DANFE do recibo térmico
+│   └── css/
+│       └── order_receipt.css   # Estilos do recibo fiscal
+├── views/
+│   └── campos_fiscais_views.xml # Formulário fiscal no cadastro de produto
+├── data/
+│   └── br.ncm.csv              # Tabela NCM importada automaticamente
+└── __manifest__.py
+```
 
----
 
-## Contexto de Uso
 
-Este módulo foi projetado para cenários onde:
-- O Odoo é utilizado como **PDV final (caixa)**
-- A emissão fiscal é feita por um **serviço externo**
-- Existe a necessidade de flexibilidade e desacoplamento da lógica fiscal
+## Dependências
 
+- `product` (nativo do Odoo)
+- `point_of_sale` (nativo do Odoo)
+
+> **Importante:** Este módulo não emite nota fiscal sozinho.
+> Ele prepara, envia e recebe os dados fiscais, delegando a emissão a um middleware externo (Laravel + Focus NFe).
