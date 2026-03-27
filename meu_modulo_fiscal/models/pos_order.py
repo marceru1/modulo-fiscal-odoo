@@ -109,7 +109,6 @@ class PosOrder(models.Model):
             
             headers = {
                  'Content-Type': 'application/json',
-                 'Authorization': f'Bearer {API_TOKEN}',
                  'Accept': 'application/json'
             }
 
