@@ -6,6 +6,11 @@ import json
 _logger = logging.getLogger(__name__)
 
 class FiscalWebhookController(http.Controller):
+    """
+    Controller exposto pelo Odoo para atuar no sentido inverso (Inbound) do ecossistema.
+    Se o 'models/pos_order.py' fala com o Laravel, este Controller "ouve" o Laravel.
+    Ele é o Endpoint encarregado de destrinchar o Callback assíncrono que traz a Chave de Acesso e QR Code gerados no Focus.
+    """
 
     @http.route(
         '/api/retorno-fiscal',
@@ -16,43 +21,43 @@ class FiscalWebhookController(http.Controller):
     )
     def retorno_fiscal(self, **kw):
         """
-        Recebe o webhook do middleware Laravel com o status da nota na SEFAZ.
-        Esta rota é pública, mas a segurança pode ser estendida futuramente via token.
+        Recebe o Webhook POST do Middleware contendo o JSON com o status final da emissão Sefaz.
+        Rota exposta publicamente na API do ERP (Requer proteção de IP/Token em produção de fato).
         """
         
         try:
-
+            # Interpreta o Body Payload
             dados = request.get_json_data()
-        
             if not dados:
                 dados = {}
             
-            _logger.info('=== WEBHOOK FISCAL RECEBIDO ===')
-        
+            _logger.info('[API ODOO] Webhook de Retorno Fiscal (Callback) Recebido do Middleware.')
 
             documento_id = dados.get('documento_id')
             fiscal = dados.get('fiscal', {})
 
-            # Validar se o middleware enviou a referência do pedido
+            # Validação primária de rastreio
             if not documento_id:
-                return self._response_json({'status': 'erro', 'mensagem': 'documento_id não informado'}, 400)
+                return self._response_json({'status': 'erro', 'mensagem': 'documento_id não informado no payload'}, 400)
 
-            # Buscar o pedido correspondente no Odoo usando o pos_reference
+            # Busca no Postgres o objeto Pedido original do PDV (pos.order) usando a string do pos_reference
             pedido = request.env['pos.order'].sudo().search([
                 ('pos_reference', '=', documento_id)
             ], limit=1)
 
-            # Caso o middleware notifique um pedido que ainda não sincronizou localmente ou não existe
+            # Se o Webhook do Laravel chegar ANTES do Odoo persistir o fechamento de caixa, dá 404 pro Laravel retentar.
             if not pedido:
-                _logger.error(f'Pedido {documento_id} não encontrado')
+                _logger.error(f'[API ODOO] Pedido {documento_id} não encontrado na Base de Dados. Atraso de Sincronização ou Inexistente.')
                 return self._response_json({
                     'status': 'erro', 
                     'mensagem': 'pedido_nao_encontrado',
                     'documento_id': documento_id
                 }, 404)
 
+            # Se o QR estiver offline (Contingência), ele vem no Payload e precisa atualizar vazio ou Base64  
             qrcode_b64 = fiscal.get('qrcode_b64', '')
             
+            # Mapeamento do Dicionário de Injeção
             valores = {
                 'x_fiscal_status': fiscal.get('status', 'erro'),
                 'x_fiscal_mensagem': fiscal.get('mensagem', '')[:500],
@@ -66,10 +71,10 @@ class FiscalWebhookController(http.Controller):
                 'x_fiscal_qrcode_b64': qrcode_b64, 
             }
 
-            # Atualizar os dados fiscais diretamente no pedido do PDV
+            # Aciona o ORM para escrever os metadados devolvidos direto no Pedido Odoo
             pedido.write(valores)
             
-            # Garantir a persistência no banco antes de retornar sucesso ao middleware
+            # Força o Commit (Flush) no Postgres pra garantir que o `SearchRead` que roda lá Browser (JS) com Polling ache a linha atualizada na mesa do caixa.
             request.env.cr.commit()
 
             return self._response_json({
@@ -80,11 +85,11 @@ class FiscalWebhookController(http.Controller):
             })
 
         except Exception as e:
-            _logger.error(f'Erro no webhook: {str(e)}', exc_info=True)
+            _logger.error(f'[API ODOO] Erro Interno ao absorver webhook do middleware: {str(e)}', exc_info=True)
             return self._response_json({'status': 'erro', 'mensagem': str(e)}, 500)
 
     def _response_json(self, data, status=200):
-        """Helper para responder JSON corretamente em rota type='http'"""
+        """Helper para Odoo fabricar o Objeto Python em formato Response JSON na rota controller."""
         return request.make_response(
             json.dumps(data),
             headers=[('Content-Type', 'application/json')],

@@ -5,10 +5,18 @@ import { patch } from "@web/core/utils/patch";
 
 patch(PosOrder.prototype, {
 
+    /**
+     * @override
+     * Chamado toda vez que o Odoo recarrega os dados do Banco (PostgreSQL) para a Memória (Navegador).
+     * Ocorre principalmente no refresh da página (F5) ou fechamento de caixa, permitindo 
+     * não perder os dados fiscais injetados que são desenhados na UI.
+     * 
+     * @param {Object} json Payload nativo reconstruido pelo env.services.orm
+     */
     init_from_JSON(json) {
         super.init_from_JSON(...arguments);
 
-        // campos fiscais
+        // Resgatando Respostas da Sefaz
         this.x_fiscal_mensagem = json.x_fiscal_mensagem || "";
         this.x_fiscal_status = json.x_fiscal_status || "";
         this.x_fiscal_chave = json.x_fiscal_chave || "";
@@ -20,14 +28,23 @@ patch(PosOrder.prototype, {
         this.x_fiscal_qrcode_b64 = json.x_fiscal_qrcode_b64 || "";
         this.x_fiscal_offline = Boolean(json.x_fiscal_offline);
         
+        // Resgatando Variaveis do Consumidor
         this.x_confirmacao_venda = json.x_confirmacao_venda;
         this.x_email_cliente = json.x_email_cliente;
         this.x_cpf_nota = json.x_cpf_nota;
     },
 
+    /**
+     * @override
+     * Disparado quando a venda finaliza e o Odoo envia os dados do Frontend (UI/Caixa) 
+     * para o Backend Odoo Python (models/pos_order.py).
+     * 
+     * @returns {Object} JSON estruturado com os dados injetáveis nativos + os customizados.
+     */
     export_as_JSON() {
         const json = super.export_as_JSON();
 
+        // Envia as decisões do operador pro Banco de Dados 
         json.x_cpf_nota = this.x_cpf_nota || "";
         json.x_email_cliente = this.x_email_cliente || "";
         json.x_confirmacao_venda = !!this.x_confirmacao_venda;
@@ -35,17 +52,25 @@ patch(PosOrder.prototype, {
         return json;
     },
 
+    /**
+     * @override
+     * Chamado na Tela de Recibo, monta o dicionário que o XML `order_receipt.xml`
+     * consegue ler para imprimir o cupom térmico (DANFE NFC-e).
+     * Aqui tratamos a lógica visual de contagem, mascara de linhas e renderização do QR Code em Base64.
+     */
     export_for_printing() {
         const result = super.export_for_printing(...arguments);
         
         const orderlines = this.get_orderlines();
         let qtd_itens = 0;
 
+        // Limpeza dos métodos de pagamento para o rodape do Danfe
         const metodos = result.paymentlines.map(p => ({
             metodo_nome: p.name,
             metodo_valor: p.amount,
         }));
 
+        // Estruturação tabular padrão da Receita: Código, Descrição, Qtd, UN, Vlr e Subtotal.
         const danfe_items = orderlines.map((line, index) => {
             qtd_itens += line.get_quantity();
             const product = line.get_product();
@@ -71,6 +96,9 @@ patch(PosOrder.prototype, {
             metodos: metodos,
         };
 
+        // Regra de Exibição do QR Code 
+        // Em notas online (100) usa-se a URL, porém em contingência OFFLINE Focus
+        // Usa-se um Code Base64 criptografado internamente
         let qrcodeFinal = this.x_fiscal_qrcode_url;
 
         if (this.x_fiscal_qrcode_b64) {
