@@ -11,9 +11,18 @@ CST_PIS_COFINS = [
 ]
 
 class ProductTemplate(models.Model):
+    """
+    Extensão do cadastro de produtos base do Odoo (product.template).
+    Aqui introduzimos os campos essenciais para emissão de documentos
+    fiscais brasileiros (NF-e, NFC-e) que o sistema padrão não possui,
+    garantindo integração nativa com o módulo de PDV e emissão pelo Middleware.
+    """
     _inherit = 'product.template'
 
-    # Campos fiscais obrigatórios
+    # ==========================================================
+    # CAMPOS DE ORGANIZAÇÃO DE ESTOQUE (SPED)
+    # ==========================================================
+    
     x_departamento = fields.Selection(
         [('0', 'Não definido')],
         string="Departamento", default='0'
@@ -33,7 +42,7 @@ class ProductTemplate(models.Model):
             ('08', '08 - Ativo Imobilizado'), ('09', '09 - Serviços'),
             ('10', '10 - Outros insumos'), ('99', '99 - Outras'),
         ],
-        string="Tipo de Item (SPED)", default='00', help="Classificação do produto conforme tabela SPED Fiscal"
+        string="Tipo de Item (SPED)", default='00', help="Classificação do produto conforme tabela SPED Fiscal Brasileiro"
     )
 
     x_genero = fields.Selection(
@@ -41,9 +50,13 @@ class ProductTemplate(models.Model):
         string="Gênero do Item", default='0'
     )
 
+    # ==========================================================
+    # DADOS TRIBUTÁRIOS (IBPT E RECEITA FEDERAL)
+    # ==========================================================
+
     x_ncm_id = fields.Many2one(
         'br.ncm', string='Código NCM', required=True,
-        help="Nomenclatura Comum do Mercosul - obrigatório para emissão de NFCe/NFe"
+        help="Nomenclatura Comum do Mercosul - Obrigatório e central para calcular tributos da NF-e/NFC-e"
     )
 
     x_ncm_descricao = fields.Char(
@@ -58,7 +71,7 @@ class ProductTemplate(models.Model):
             ('6', '6 - Importação direta sem similar nacional'), ('7', '7 - Estrangeira adquirida sem similar nacional'),
             ('8', '8 - Nacional, conteúdo importado >70%'),
         ],
-        string="Origem (NF-e)", required=True, default='0', help="Origem da mercadoria conforme tabela do SPED"
+        string="Origem (NF-e)", required=True, default='0', help="Origem da mercadoria (Nacional/Importada) que ditará as alíquotas de ICMS."
     )
 
     x_cfop = fields.Selection(
@@ -67,18 +80,18 @@ class ProductTemplate(models.Model):
             ('5102', '5.102 - Venda de mercadoria adquirida ou recebida de terceiros'),
             ('5103', '5.103 - Venda de produção do estabelecimento efetuada fora do estabelecimento'),
         ],
-        string="CFOP", required=True, default='5102', help="Código Fiscal de Operações e Prestações"
+        string="CFOP", required=True, default='5102', help="Código Fiscal de Operações e Prestações (Interno estadual)"
     )
 
     x_icms = fields.Selection(
         [
             ('00', '00 - Tributada integralmente'), ('20', '20 - Com redução de base de cálculo'),
             ('40', '40 - Isenta'), ('41', '41 - Não tributada'),
-            ('60', '60 - ICMS cobrado anteriormente por substituição tributária'),
+            ('60', '60 - ICMS cobrado anteriormente por substituição tributária (ST)'),
             ('102', '102 - Tributada pelo Simples Nacional sem permissão de crédito'),
         ],
-        string="ICMS (CST/CSOSN)", default='00', help="Código de Situação Tributária do ICMS"
+        string="ICMS (CST/CSOSN)", default='00', help="Código de Situação Tributária do ICMS pertinente ao regime da empresa."
     )
 
-    x_pis = fields.Selection(CST_PIS_COFINS, string="PIS", default='07', help="Código de Situação Tributária do PIS")
-    x_cofins = fields.Selection(CST_PIS_COFINS, string="COFINS", default='07', help="Código de Situação Tributária do COFINS")
+    x_pis = fields.Selection(CST_PIS_COFINS, string="PIS (Sefaz)", default='07', help="Código de Situação Tributária do Programa de Integração Social")
+    x_cofins = fields.Selection(CST_PIS_COFINS, string="COFINS (Sefaz)", default='07', help="Código de Situação Tributária da Contribuição p/ o Financiamento da Seguridade Social")
