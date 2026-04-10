@@ -1,0 +1,84 @@
+# ==============================================================================
+# Odoo 18.0 — Docker Compose (Produção / Dokploy)
+# ==============================================================================
+#
+# VARIÁVEIS DE AMBIENTE — configure no painel do Dokploy:
+#   POSTGRES_USER      → usuário do PostgreSQL (ex: odoo)
+#   POSTGRES_PASSWORD  → senha do PostgreSQL (use uma senha forte)
+#   DB_FILTER          → banco visível no Odoo (veja abaixo)
+#
+# TROCA DE AMBIENTE (prod/dev) — mude DB_FILTER no Dokploy e faça redeploy:
+#   Produção:     DB_FILTER=odoo_prod
+#   Homologação:  DB_FILTER=odoo_dev
+#
+# PRÉ-REQUISITO — criar a rede compartilhada UMA VEZ no servidor:
+#   docker network create vps-internal
+# ==============================================================================
+
+services:
+
+  # ----------------------------------------------------------------------------
+  # Odoo 18 — ERP Principal
+  # ----------------------------------------------------------------------------
+  odoo:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: odoo-custom:18.0
+    container_name: odoo-app
+    restart: unless-stopped
+    ports:
+      - "8069:8069"
+    environment:
+      # Lidos pelo entrypoint oficial do Odoo para conectar ao PostgreSQL
+      HOST: postgres
+      PORT: 5432
+      USER: ${POSTGRES_USER}
+      PASSWORD: ${POSTGRES_PASSWORD}
+    # DB_FILTER controla qual banco o Odoo exibe (troque no Dokploy para mudar de ambiente)
+    command: odoo --db-filter=^${DB_FILTER:-odoo_prod}$
+    depends_on:
+      postgres:
+        condition: service_healthy
+    volumes:
+      - odoo_data:/var/lib/odoo
+    networks:
+      - odoo-net       # rede interna (acessa PostgreSQL)
+      - vps-internal   # rede externa (acessível pelo Middleware)
+
+  # ----------------------------------------------------------------------------
+  # PostgreSQL 15 — Banco do Odoo (NÃO exposto externamente)
+  # ----------------------------------------------------------------------------
+  postgres:
+    image: postgres:15-alpine
+    container_name: odoo-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      # Banco de sistema padrão — o Odoo cria seus próprios bancos (odoo_prod, odoo_dev)
+      POSTGRES_DB: postgres
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-odoo}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+    networks:
+      - odoo-net
+
+networks:
+  odoo-net:
+    # Rede isolada: PostgreSQL fica inacessível externamente
+    driver: bridge
+    internal: true
+  vps-internal:
+    # Rede compartilhada com o serviço do Middleware no Dokploy
+    external: true
+    name: vps-internal
+
+volumes:
+  odoo_data:
+  postgres_data:

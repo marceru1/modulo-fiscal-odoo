@@ -1,0 +1,29 @@
+[options]
+; ==============================================================================
+; Odoo 18.0 — Configuração de Produção (usada dentro do container Docker)
+; ==============================================================================
+; Segredos de banco de dados são passados via variáveis de ambiente no
+; docker-compose.yml (HOST, PORT, USER, PASSWORD) e lidos pelo entrypoint
+; oficial do Odoo. Não precisam estar aqui.
+; ==============================================================================
+
+; Addons: customizados primeiro, depois os nativos do Odoo
+addons_path = /mnt/extra-addons,/usr/lib/python3/dist-packages/odoo/addons
+
+; Porta HTTP
+http_port = 8069
+
+; OBRIGATÓRIO quando rodando atrás de proxy reverso (Traefik do Dokploy)
+proxy_mode = True
+
+; Sem dados de demonstração em produção
+without_demo = all
+
+; Log para stdout (aparece no 'docker logs' do Dokploy)
+logfile = False
+log_level = info
+
+; Workers (descomente e ajuste conforme a RAM da VPS)
+; Regra geral: workers = (núcleos * 2) + 1
+; workers = 3
+; max_cron_threads = 1
