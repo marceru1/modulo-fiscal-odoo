@@ -11,18 +11,24 @@ patch(PaymentScreen.prototype, {
     setup() {
         super.setup();
         this.dialog = useService("dialog");
-        this.ui = useService("ui");
         this.orm = useService("orm");
     },
 
     /**
-     * Validação e submissão de Pagamento
-     * Intercepta a finalização padrão do Odoo PDV para capturar 
-     * campos fiscais adicionais (Flag de Emissão e E-mail do Cliente) 
-     * e implementar um Polling assíncrono (Loop de Espera) pelo retorno do Middleware Laravel.
+     * Validação e submissão de Pagamento.
+     * Intercepta a finalização do PDV para capturar campos fiscais adicionais
+     * e iniciar o polling assíncrono pelo retorno do Middleware Laravel.
+     *
+     * IMPORTANTE: Não usamos ui.block()/unblock() pois o Odoo 18 já gerencia
+     * internamente múltiplos block/unblock durante o super.validateOrder(),
+     * e adicionar mais um par desbalanceia o contador interno → tela travada.
+     * 
+     * Solução: Polling em background sem bloquear a UI. O recibo aparece
+     * imediatamente como "SEM VALOR FISCAL" e atualiza o objeto order em
+     * memória quando a NFC-e for autorizada (para reimpressão correta).
      */
     async validateOrder(isForceValidate) {
-        
+
         // 1. Pergunta se deseja emitir a NFC-e ou apenas registrar venda interna
         const result = await makeAwaitable(this.dialog, SelectionPopup, {
             title: _t("Confirmar Venda e Emitir NFC-e?"),
@@ -35,7 +41,7 @@ patch(PaymentScreen.prototype, {
         const order = this.pos.get_order();
         order.x_confirmacao_venda = result;
 
-        // 2. Se for emitir nfce, captura opcionalmente o E-mail para Danfe Eletrônico
+        // 2. Se for emitir NFC-e, captura opcionalmente o E-mail para DANFE Eletrônico
         if (result === true) {
             const email_cliente = await makeAwaitable(this.dialog, TextInputPopup, {
                 title: _t("E-mail do Cliente (Opcional)"),
@@ -47,70 +53,78 @@ patch(PaymentScreen.prototype, {
             }
         }
 
-        // 3. Executa a validação original do Odoo (dispara os Webhooks criados no Python)
+        // 3. Executa a validação original do Odoo (dispara Webhooks Python, navega pro recibo)
         await super.validateOrder(isForceValidate);
 
-        // 4. Mecanismo de Polling Temporário (Max 10 Segundos)
-        // Se escolheu emitir, congela a tela com Block() e fica conferindo no Postgres (ORM SearchRead)
-        // se o Webhook Controller do Laravel já despachou a Chave de Acesso e QR Code de Volta.
+        // 4. Polling em background — SEM bloquear a UI
+        // O recibo já aparece na tela. Este loop atualiza o objeto `order` em memória
+        // para que uma reimpressão mostre os dados fiscais corretos.
         if (result === true) {
-            this.ui.block();
-
             const posReference = order.pos_reference || order.name;
-            let status = false;
+            this._pollFiscalStatus(order, posReference);
+        }
+    },
 
-            // Loop de 10 tentativas com delay de 1 segundo entre elas
-            for (let i = 0; i < 10; i++) {
-                try {
-                    const searchResult = await this.orm.searchRead(
-                        "pos.order",
-                        [["pos_reference", "=", posReference]],
-                        [
-                            "x_fiscal_status", 
-                            "x_fiscal_mensagem",
-                            "x_fiscal_chave",
-                            "x_fiscal_numero",
-                            "x_fiscal_serie",
-                            "x_fiscal_protocolo",
-                            "x_fiscal_qrcode_url",
-                            "x_fiscal_qrcode_b64",
-                            "x_fiscal_offline"
-                        ]
-                    );
+    /**
+     * Polling assíncrono pelo status fiscal no Banco de Dados.
+     * Roda em background sem bloquear a UI do caixa.
+     * Atualiza o objeto order em memória quando a NFC-e for processada.
+     *
+     * @param {Object} order - Objeto do pedido POS local
+     * @param {string} posReference - Referência do pedido para busca no BD
+     */
+    async _pollFiscalStatus(order, posReference) {
+        const MAX_TENTATIVAS = 20;
+        const DELAY_MS = 1500;
 
-                    // Se encontrou dados preenchidos pelo Laravel na Tabela, quebra o loop
-                    if (searchResult.length && searchResult[0].x_fiscal_status) {
-                        const dados = searchResult[0];
-                        status = dados.x_fiscal_status;
-                        
-                        // Atualiza a Order local em memória com os dados do Banco 
-                        // para que a Próxima Tela (Recibo) consiga desenhar o QR Code.
-                        order.x_fiscal_status = dados.x_fiscal_status;
-                        order.x_fiscal_mensagem = dados.x_fiscal_mensagem;
-                        order.x_fiscal_chave = dados.x_fiscal_chave;
-                        order.x_fiscal_numero = dados.x_fiscal_numero;
-                        order.x_fiscal_serie = dados.x_fiscal_serie;
-                        order.x_fiscal_protocolo = dados.x_fiscal_protocolo;
-                        order.x_fiscal_qrcode_url = dados.x_fiscal_qrcode_url;
-                        order.x_fiscal_qrcode_b64 = dados.x_fiscal_qrcode_b64;
-                        order.x_fiscal_offline = dados.x_fiscal_offline;
-                        break;
-                    }
-                } catch (error) {
-                    console.error("[PDV-FISCAL] Erro ao consultar status da nota:", error);
+        for (let i = 0; i < MAX_TENTATIVAS; i++) {
+            await new Promise(r => setTimeout(r, DELAY_MS));
+
+            try {
+                const searchResult = await this.orm.searchRead(
+                    "pos.order",
+                    ["|",
+                        ["pos_reference", "=", posReference],
+                        ["name", "=", posReference]
+                    ],
+                    [
+                        "x_fiscal_status",
+                        "x_fiscal_mensagem",
+                        "x_fiscal_chave",
+                        "x_fiscal_numero",
+                        "x_fiscal_serie",
+                        "x_fiscal_protocolo",
+                        "x_fiscal_qrcode_url",
+                        "x_fiscal_qrcode_b64",
+                        "x_fiscal_offline",
+                    ]
+                );
+
+                if (searchResult.length && searchResult[0].x_fiscal_status) {
+                    const dados = searchResult[0];
+                    // Atualiza o objeto order em memória
+                    order.x_fiscal_status    = dados.x_fiscal_status;
+                    order.x_fiscal_mensagem  = dados.x_fiscal_mensagem;
+                    order.x_fiscal_chave     = dados.x_fiscal_chave;
+                    order.x_fiscal_numero    = dados.x_fiscal_numero;
+                    order.x_fiscal_serie     = dados.x_fiscal_serie;
+                    order.x_fiscal_protocolo = dados.x_fiscal_protocolo;
+                    order.x_fiscal_qrcode_url = dados.x_fiscal_qrcode_url;
+                    order.x_fiscal_qrcode_b64 = dados.x_fiscal_qrcode_b64;
+                    order.x_fiscal_offline   = dados.x_fiscal_offline;
+
+                    console.info(`[PDV-FISCAL] ✅ NFC-e ${dados.x_fiscal_status} para ${posReference}`);
+                    return;
                 }
 
-                await new Promise(r => setTimeout(r, 1000));
+            } catch (error) {
+                console.error("[PDV-FISCAL] Erro ao consultar status fiscal:", error);
             }
-
-            // Timeout (Contingência Visual): O Odoo não vai esperar mais que 10s pra não irritar o cliente
-            if (!status) {
-                order.x_fiscal_status = 'erro';
-                order.x_fiscal_mensagem = 'Tempo de resposta Sefaz/Middleware excedido. Verifique o Backoffice.';
-            }
-
-            // Tela de recibo liberada
-            this.ui.unblock();
         }
+
+        // Timeout após MAX_TENTATIVAS × DELAY_MS ms (30s)
+        console.warn(`[PDV-FISCAL] ⚠️ Timeout aguardando NFC-e para ${posReference}. Verifique o backoffice.`);
+        order.x_fiscal_status = "erro";
+        order.x_fiscal_mensagem = "Tempo esgotado. A NFC-e pode ter sido emitida. Verifique o Backoffice.";
     }
 });
