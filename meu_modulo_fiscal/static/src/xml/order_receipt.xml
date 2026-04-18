@@ -11,132 +11,163 @@
 
         <xpath expr="//ReceiptHeader" position="replace">
             
-            <div class="danfe-header">
-                <div class="emitente-nome" style="font-weight: bold; font-size: 16px;">LOJAS 20+ ROUPAS E ACESSORIOS LTDA</div>
-                
-                <div class="emitente-dados" style="font-size: 12px;">
-                    CNPJ: 26343314/0001-80<br/>
-                    IE: 053917464
+            <div class="danfe-header" style="text-align: center; font-family: 'Inconsolata', monospace; font-size: 11px;">
+                <div class="emitente-nome" style="font-size: 12px; margin-bottom: 2px;">
+                    <t t-esc="props.data.empresa.nome ? props.data.empresa.nome.toUpperCase() : ''"/>
                 </div>
                 
-                <div class="emitente-endereco" style="font-size: 12px; margin-top: 5px;">
-                    Av. 7 DE SETEMBRO, 767<br/>
-                    Centro, Itacoatiara, AM, (92)99999-9999
+                <div class="emitente-dados" style="display: flex; justify-content: center; gap: 15px;">
+                    <span>CNPJ: <t t-esc="props.data.empresa.cnpj"/></span>
+                    <span>IE: <t t-esc="props.data.empresa.ie"/></span>
+                </div>
+                
+                <div class="emitente-endereco">
+                    <t t-esc="props.data.empresa.endereco_linha1 ? props.data.empresa.endereco_linha1.toUpperCase() : ''"/><br/>
+                    <t t-esc="props.data.empresa.endereco_linha2 ? props.data.empresa.endereco_linha2.toUpperCase() : ''"/><t t-if="props.data.empresa.telefone">, <t t-esc="props.data.empresa.telefone"/></t>
                 </div>
 
-                <div class="danfe-separador" style="border-bottom: 1px dashed #000; margin: 5px 0;"></div>
+                <div class="danfe-separador" style="border-bottom: 1px dashed #000; margin: 4px 0;"></div>
 
                 <t t-if="props.data.x_fiscal and (props.data.x_fiscal.status === 'autorizado' or props.data.x_fiscal.status === 'contingencia')">
-                    
-                    <t t-if="props.data.x_fiscal.offline">
-                        <div class="danfe-tipo" style="font-weight: bold; font-size: 14px; margin-bottom: 5px;">
-                            *** EMITIDA EM CONTINGÊNCIA ***<br/>
-                            Pendente de Autorização
-                        </div>
-                    </t>
-                    <t t-else="">
-                        <div class="danfe-tipo" style="font-weight: bold; font-size: 13px;">
-                            DANFE NFC-e - Documento Auxiliar da Nota<br/>
-                            Fiscal de Consumidor Eletrônica
-                        </div>
-                    </t>
-
+                    <div class="danfe-tipo" style="font-size: 11px; margin: 2px 0;">
+                        DOCUMENTO AUXILIAR DA NOTA FISCAL DE CONSUMIDOR<br/>
+                        ELETRÔNICA
+                    </div>
                 </t>
                 <t t-else="">
-                    <div class="danfe-tipo" style="font-weight: bold; font-size: 14px; margin-bottom: 5px;">
-                        *** RECIBO DE VENDA ***
-                    </div>
-                    <div style="font-size: 11px; font-weight: bold;">
+                    <div class="danfe-tipo" style="font-weight: bold; font-size: 12px; margin: 2px 0;">
+                        *** RECIBO DE VENDA ***<br/>
                         SEM VALOR FISCAL
                     </div>
                 </t>
 
-                <div class="danfe-separador" style="border-bottom: 1px dashed #000; margin: 5px 0;"></div>
+                <div class="danfe-separador" style="border-bottom: 1px dashed #000; margin: 4px 0;"></div>
 
             </div>
 
         </xpath>
 
         <xpath expr="//OrderWidget" position="replace">
-             <div class="danfe-items" style="font-family: 'Inconsolata'; font-size: 11px;">
-                <div class="items-header" style="display: flex; font-weight: bold; margin-bottom: 5px;">
-                    <span style="width: 15%;">CÓD</span>
-                    <span style="width: 55%;">DESCRIÇÃO</span>
-                    <span style="width: 10%; text-align: right;">QTD</span>
-                    <span style="width: 20%; text-align: right;">TOTAL</span>
+             <div class="danfe-items" style="font-family: 'Inconsolata', monospace; font-size: 10px;">
+                <div class="items-header" style="display: flex; font-weight: normal; margin-bottom: 4px;">
+                    <span style="width: 10%;">Seq</span>
+                    <span style="width: 25%;">Cód.</span>
+                    <span style="width: 65%;">Descrição</span>
                 </div>
+                <div class="items-header-linha-2" style="display: flex; justify-content: flex-end; padding-left: 20px; font-weight: normal; margin-bottom: 4px; gap: 5px;">
+                    <span style="width: 15%; text-align: center;">Qtde</span>
+                    <span style="width: 10%; text-align: center;">Un</span>
+                    <span style="width: 25%; text-align: right;">VlrUnit</span>
+                    <span style="width: 25%; text-align: right;">Desc</span>
+                    <span style="width: 25%; text-align: right;">VlrTot</span>
+                </div>
+                <div class="danfe-separador" style="border-bottom: 1px dashed #000; margin: 4px 0;"></div>
+
                 <t t-foreach="props.data.danfe_items" t-as="item" t-key="item.index">
-                    <div style="margin-bottom: 5px;">
-                        <div><span style="font-weight: bold;"><t t-esc="item.code"/></span> - <t t-esc="item.description"/></div>
-                        <div style="display: flex; justify-content: flex-end; font-size: 11px;">
-                            <span style="margin-right: 15px;"><t t-esc="item.qntd"/> UN x <t t-esc="props.formatCurrency(item.vlr_unit)"/></span>
-                            <span style="font-weight: bold;"><t t-esc="props.formatCurrency(item.vlr_total)"/></span>
+                    <div style="margin-bottom: 4px;">
+                        <div style="display: flex;">
+                            <span style="width: 10%;"><t t-esc="item.index"/></span>
+                            <span style="width: 28%;"><t t-esc="item.code"/></span>
+                            <span style="width: 62%;"><t t-esc="item.description"/></span>
+                        </div>
+                        <div style="display: flex; justify-content: flex-end; padding-left: 20px; gap: 5px;">
+                            <span style="width: 15%; text-align: center;"><t t-esc="item.qntd"/></span>
+                            <span style="width: 10%; text-align: center;"><t t-esc="item.unit"/></span>
+                            <span style="width: 5%; text-align: center;">X</span>
+                            <span style="width: 20%; text-align: right;"><t t-esc="props.formatCurrency(item.vlr_unit).replace('R$', '').trim()"/></span>
+                            <span style="width: 25%; text-align: right;"><t t-esc="props.formatCurrency(item.desc || 0).replace('R$', '').trim()"/></span>
+                            <span style="width: 25%; text-align: right;"><t t-esc="props.formatCurrency(item.vlr_total).replace('R$', '').trim()"/></span>
                         </div>
                     </div>
                 </t>
             </div>
-            <div class="danfe-separador" style="border-bottom: 1px dashed #000; margin: 5px 0;"></div>
+            <div class="danfe-separador" style="border-bottom: 1px dashed #000; margin: 4px 0;"></div>
         </xpath>
 
 
         <xpath expr="//div[hasclass('pos-receipt-taxes')]" position="replace">
             
-            <div class="totais-section" style="font-family: 'Inconsolata'; font-size: 12px;">
+            <div class="totais-section" style="font-family: 'Inconsolata', monospace; font-size: 11px;">
                 <div class="total-linha" style="display: flex; justify-content: space-between;">
                     <span class="total-label">QTD. TOTAL DE ITENS</span>
                     <span class="total-valor"><t t-esc="props.data.danfe_totais.qtd_itens"/></span>
                 </div>
-                <div class="total-linha total-destaque" style="display: flex; justify-content: space-between; font-weight: bold; font-size: 14px; margin-top: 5px;">
+                <div class="total-linha" style="display: flex; justify-content: space-between;">
                     <span class="total-label">VALOR TOTAL R$</span>
-                    <span class="total-valor"><t t-esc="props.formatCurrency(props.data.danfe_totais.valor_total)"/></span>
+                    <span class="total-valor"><t t-esc="props.formatCurrency(props.data.danfe_totais.valor_total).replace('R$', '').trim()"/></span>
                 </div>
-                <div class="danfe-separador" style="border-bottom: 1px dashed #000; margin: 10px 0;"></div>
-                <div class="pagamento-titulo" style="font-weight: bold;">FORMA DE PAGAMENTO</div>
+                <div class="total-linha" style="display: flex; justify-content: space-between;">
+                    <span class="total-label">ACRÉSCIMO</span>
+                    <span class="total-valor">0,00</span>
+                </div>
+                <div class="total-linha" style="display: flex; justify-content: space-between;">
+                    <span class="total-label">DESCONTO</span>
+                    <span class="total-valor"><t t-esc="props.formatCurrency(props.data.danfe_totais.desconto_total).replace('R$', '').trim()"/></span>
+                </div>
+                <div class="total-linha" style="display: flex; justify-content: space-between;">
+                    <span class="total-label">VALOR A PAGAR R$</span>
+                    <span class="total-valor"><t t-esc="props.formatCurrency(props.data.danfe_totais.valor_total).replace('R$', '').trim()"/></span>
+                </div>
+
                 <t t-foreach="props.data.danfe_totais.metodos" t-as="pgto" t-key="pgto.metodo_nome">
                     <div class="pagamento-linha" style="display: flex; justify-content: space-between;">
-                        <span class="pagamento-metodo"><t t-esc="pgto.metodo_nome"/></span>
-                        <span class="pagamento-valor"><t t-esc="props.formatCurrency(pgto.metodo_valor)"/></span>
+                        <span class="pagamento-metodo"><t t-esc="pgto.metodo_nome ? pgto.metodo_nome.toUpperCase() : ''"/></span>
+                        <span class="pagamento-valor"><t t-esc="props.formatCurrency(pgto.metodo_valor).replace('R$', '').trim()"/></span>
                     </div>
                 </t>
                 <!-- Troco -->
                 <t t-set="troco" t-value="props.data.danfe_totais.metodos.reduce((acc, p) => acc + p.metodo_valor, 0) - props.data.danfe_totais.valor_total"/>
                 <t t-if="troco > 0.009">
-                    <div class="pagamento-linha" style="display: flex; justify-content: space-between; font-weight: bold; margin-top: 4px; border-top: 1px dashed #000; padding-top: 4px;">
+                    <div class="pagamento-linha" style="display: flex; justify-content: space-between;">
                         <span class="pagamento-metodo">TROCO</span>
-                        <span class="pagamento-valor"><t t-esc="props.formatCurrency(troco)"/></span>
+                        <span class="pagamento-valor"><t t-esc="props.formatCurrency(troco).replace('R$', '').trim()"/></span>
                     </div>
                 </t>
+
+                <div class="danfe-separador" style="border-bottom: 1px dashed #000; margin: 4px 0;"></div>
+                
+                <div class="valor-informado" style="display: flex; justify-content: space-between;">
+                    <span>VALOR INFORMADO</span>
+                    <t t-set="total_informado" t-value="props.data.danfe_totais.metodos.reduce((acc, p) => acc + p.metodo_valor, 0)"/>
+                    <span><t t-esc="props.formatCurrency(total_informado).replace('R$', '').trim()"/></span>
+                </div>
+
             </div>
 
-            <div class="danfe-separador" style="border-bottom: 1px dashed #000; margin: 10px 0;"></div>
+            <div class="danfe-separador" style="border-bottom: 1px dashed #000; margin: 4px 0;"></div>
 
-            <div class="fiscal-section" style="text-align: center; font-family: 'Inconsolata'; font-size: 11px;">
+            <div class="fiscal-section" style="text-align: center; font-family: 'Inconsolata', monospace; font-size: 11px;">
                 
                 <t t-if="props.data.x_fiscal and (props.data.x_fiscal.status === 'autorizado' or props.data.x_fiscal.status === 'contingencia')">
                     
                     <t t-if="props.data.x_fiscal.offline">
-                        <div style="font-weight: bold; margin-bottom: 10px; border: 1px solid #000; padding: 5px;">
-                            EMITIDA EM CONTINGÊNCIA<br/>
-                            Pendente de Autorização
+                        <div style="margin-bottom: 2px;">
+                            EMITIDA EM CONTINGÊNCIA
                         </div>
                     </t>
 
                     <div class="fiscal-numero">
-                        <strong>NFC-e Nº <t t-esc="props.data.x_fiscal.numero"/></strong> 
-                        Série <t t-esc="props.data.x_fiscal.serie"/>
+                        Número: <t t-esc="props.data.x_fiscal.numero"/> 
+                        Série: <t t-esc="props.data.x_fiscal.serie"/> 
+                        Emissão: <t t-esc="props.data.date"/> 
                     </div>
-                    <div>Emissão: <t t-esc="props.data.date"/></div>
                     
-                    <div style="font-weight: bold; margin: 5px 0;">VIA DO CONSUMIDOR</div>
+                    <div style="margin: 2px 0;">Via Consumidor</div>
+                    
+                    <div style="margin: 2px 0;">Consulte pela Chave de Acesso em</div>
+                    <div style="margin: 2px 0;">http://www.nfce.sefaz.am.gov.br/consumidor/</div>
 
-                    <div style="margin: 10px 0;">
-                        <strong>CHAVE DE ACESSO</strong><br/>
-                        <span style="font-size: 10px; letter-spacing: 0.5px;">
+                    <div style="margin: 4px 0;">CHAVE DE ACESSO</div>
+                    <div style="margin: 2px 0; letter-spacing: 0.5px;">
+                        <t t-if="props.data.x_fiscal.chave_formatada">
+                            <t t-esc="props.data.x_fiscal.chave_formatada"/>
+                        </t>
+                        <t t-else="">
                             <t t-esc="props.data.x_fiscal.chave"/>
-                        </span>
+                        </t>
                     </div>
 
-                    <div style="margin-bottom: 10px;">
+                    <div style="margin-bottom: 4px;">
                         <t t-if="props.data.x_cpf_nota">
                             CONSUMIDOR CPF: <t t-esc="props.data.x_cpf_nota"/>
                         </t>
@@ -145,31 +176,23 @@
                         </t>
                     </div>
 
-                    <div class="fiscal-qrcode" style="margin: 10px 0; display: flex; justify-content: center;">
+                    <div class="fiscal-qrcode" style="margin: 4px 0; display: flex; justify-content: center;">
                         <t t-if="props.data.x_fiscal.qrcode_b64">
                              <img t-att-src="'data:image/png;base64,' + props.data.x_fiscal.qrcode_b64" 
-                                  style="width: 160px; height: 160px;"/>
+                                  style="width: 140px; height: 140px; display: block;"/>
                         </t>
                         <t t-elif="props.data.x_fiscal.qrcode_url">
                              <img t-att-src="props.data.x_fiscal.qrcode_url" 
-                                  style="width: 140px; height: 140px;"/>
+                                  style="width: 140px; height: 140px; display: block;"/>
                         </t>
                     </div>
 
-                    <div style="font-size: 10px; margin-top: 5px;">
-                        Consulte via Leitor de QR Code
-                    </div>
+                    <div class="danfe-separador" style="border-bottom: 1px dashed #000; margin: 4px 0;"></div>
 
-                    <t t-if="!props.data.x_fiscal.offline">
-                         <div style="font-size: 10px; margin-top: 5px;">
-                            Protocolo: <t t-esc="props.data.x_fiscal.protocolo"/>
-                        </div>
-                    </t>
-                    <t t-else="">
-                         <div style="font-size: 10px; margin-top: 5px; font-style: italic;">
-                            Protocolo Pendente (Offline)
-                        </div>
-                    </t>
+                    <div style="display: flex; justify-content: space-between; font-size: 10px;">
+                        <span>Tributos Totais e Incidentes (Lei Federal 12.741/2012)</span>
+                        <span>(0,14%)</span>
+                    </div>
 
                 </t>
                 
@@ -184,11 +207,24 @@
                             <div style="margin-top: 4px;">CPF: <t t-esc="props.data.x_cpf_nota"/></div>
                         </t>
                     </div>
-                    <div class="danfe-separador" style="border-bottom: 1px solid #000; margin: 10px 0;"></div>
+                    <div class="danfe-separador" style="border-bottom: 1px dashed #000; margin: 10px 0;"></div>
                     <div style="margin-top: 15px; font-style: italic;">
                         Agradecemos a preferência!
                     </div>
                 </t>
+
+                <div class="danfe-separador" style="border-bottom: 1px dashed #000; margin: 4px 0;"></div>
+
+                <div style="text-align: center; font-size: 10px;">
+                    Desenvolvido por Divisão de Tecnologia Lojas 20+
+                </div>
+
+                <div class="danfe-separador" style="border-bottom: 1px dashed #000; margin: 4px 0;"></div>
+
+                <div style="display: flex; justify-content: space-between; font-size: 10px; margin-top: 4px;">
+                    <span>Op.: <t t-esc="props.data.cashier"/></span>
+                    <span>Vend.: <t t-esc="props.data.cashier"/></span>
+                </div>
 
             </div>
 
@@ -196,4 +232,4 @@
 
     </t>
 
-</templates> 
+</templates>

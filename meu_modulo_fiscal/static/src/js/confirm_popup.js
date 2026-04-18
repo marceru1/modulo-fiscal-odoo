@@ -6,6 +6,7 @@ import { PaymentScreen } from "@point_of_sale/app/screens/payment_screen/payment
 import { patch } from "@web/core/utils/patch";
 import { SelectionPopup } from "@point_of_sale/app/utils/input_popups/selection_popup";
 import { TextInputPopup } from "@point_of_sale/app/utils/input_popups/text_input_popup";
+import { emitirContingencia } from "./fiscal_contingencia";
 
 patch(PaymentScreen.prototype, {
     setup() {
@@ -15,11 +16,68 @@ patch(PaymentScreen.prototype, {
         this.orm = useService("orm");
     },
 
-    
+    async _awaitFiscalReturn(order) {
+        this.ui.block();
+        console.log("🔄 Aguardando retorno fiscal...");
+
+        const posReference = order.pos_reference || order.name;
+        let statusAcquired = false;
+
+        // Loop de tentativas (aumentado para lidar com latência VPS)
+        for (let i = 0; i < 15; i++) {
+            try {
+                // CORREÇÃO CRÍTICA: Usar this.env.services.orm em vez de this.orm
+                // Pois após o super.validateOrder a tela muda e destrói a referência local do orm.
+                const searchResult = await this.env.services.orm.searchRead(
+                    "pos.order",
+                    [["pos_reference", "=", posReference]],
+                    [
+                        "x_fiscal_status", "x_fiscal_mensagem", "x_fiscal_chave",
+                        "x_fiscal_numero", "x_fiscal_serie", "x_fiscal_protocolo",
+                        "x_fiscal_qrcode_url", "x_fiscal_qrcode_b64", "x_fiscal_offline"
+                    ]
+                );
+
+                if (searchResult.length && searchResult[0].x_fiscal_status) {
+                    const dados = searchResult[0];
+                    statusAcquired = true;
+                    
+                    console.log("✅ Status fiscal recebido:", dados.x_fiscal_status);
+                    
+                    // Otimização: Object.assign substitui a repetição manual e é reativo para o Odoo 18
+                    Object.assign(order, {
+                        x_fiscal_status: dados.x_fiscal_status,
+                        x_fiscal_mensagem: dados.x_fiscal_mensagem,
+                        x_fiscal_chave: dados.x_fiscal_chave,
+                        x_fiscal_numero: dados.x_fiscal_numero,
+                        x_fiscal_serie: dados.x_fiscal_serie,
+                        x_fiscal_protocolo: dados.x_fiscal_protocolo,
+                        x_fiscal_qrcode_url: dados.x_fiscal_qrcode_url,
+                        x_fiscal_qrcode_b64: dados.x_fiscal_qrcode_b64,
+                        x_fiscal_offline: dados.x_fiscal_offline,
+                    });
+                    break;
+                }
+            } catch (error) {
+                console.error("Erro ao consultar status:", error);
+            }
+            await new Promise(r => setTimeout(r, 1000));
+        }
+
+        if (!statusAcquired) {
+            console.log("❌ Timeout: Status fiscal não chegou a tempo.");
+            Object.assign(order, {
+                x_fiscal_status: 'erro',
+                x_fiscal_mensagem: 'Tempo limite excedido na comunicação.'
+            });
+        }
+        this.ui.unblock();
+    },
+
     async validateOrder(isForceValidate) {
         console.log("Cliquei em validar, aguardando confirmação...");
 
-        // popup de Confirmação
+        // Popup de Confirmação
         const result = await makeAwaitable(this.dialog, SelectionPopup, {
             title: _t("Confirmar venda?"),
             list: [
@@ -31,7 +89,7 @@ patch(PaymentScreen.prototype, {
         const order = this.pos.get_order();
         order.x_confirmacao_venda = result;
 
-        // coleta de e-mail
+        // Coleta de E-mail
         if (result === true) {
             const email_cliente = await makeAwaitable(this.dialog, TextInputPopup, {
                 title: "Informe o E-mail",
@@ -43,72 +101,46 @@ patch(PaymentScreen.prototype, {
             }
         }
 
-        // envia para o backend
+        // ============================================
+        // CONTINGÊNCIA IMEDIATA (Offline)
+        // ============================================
+        if (result === true && !navigator.onLine) {
+            console.log("Detectado modo offline! Emitindo em contingência.");
+            const dados = await emitirContingencia(order, this.pos.company, this.pos.config.id);
+            
+            Object.assign(order, {
+                x_fiscal_offline: true,
+                x_fiscal_status: 'contingencia',
+                x_fiscal_mensagem: 'EMITIDA EM CONTINGÊNCIA - Pendente Autorização',
+                x_fiscal_chave: dados.chaveAcesso,
+                x_fiscal_numero: dados.numero,
+                x_fiscal_serie: dados.serie,
+                x_fiscal_qrcode_url: dados.qrcodeUrl,
+                x_fiscal_qrcode_b64: dados.qrcodeB64,
+                x_contingencia_payload: JSON.stringify({
+                    numero: dados.numero,
+                    serie: dados.serie,
+                    codigo_unico: dados.codigoUnico,
+                    data_emissao: dados.dataEmissao,
+                    chave_acesso: dados.chaveAcesso,
+                })
+            });
+            
+            // Envio nativo e avança de tela
+            await super.validateOrder(isForceValidate);
+            return;
+        }
+
+        // ============================================
+        // FLUXO NORMAL (Online)
+        // ============================================
+        
+        // Envio nativo pro Python (dispara webhook no backend e avança pra tela de recibo)
         await super.validateOrder(isForceValidate);
 
-        // aguarda o retorno fiscal caso teanha marcado sim
+        // Aguarda resposta do backend/middleware via polling 
         if (result === true) {
-            
-            this.ui.block();
-            console.log("🔄 Aguardando retorno fiscal...");
-
-            const posReference = order.pos_reference || order.name;
-            let status = false;
-
-            // loop de 15 tentativas (aumentado de 10 para lidar com latência VPS)
-            for (let i = 0; i < 15; i++) {
-                try {
-                
-                    const searchResult = await this.env.services.orm.searchRead(
-                        "pos.order",
-                        [["pos_reference", "=", posReference]],
-                        [
-                            "x_fiscal_status", 
-                            "x_fiscal_mensagem",
-                            "x_fiscal_chave",
-                            "x_fiscal_numero",
-                            "x_fiscal_serie",
-                            "x_fiscal_protocolo",
-                            "x_fiscal_qrcode_url",
-                            "x_fiscal_qrcode_b64",
-                            "x_fiscal_offline"
-                        ]
-                    );
-
-                    if (searchResult.length && searchResult[0].x_fiscal_status) {
-                        const dados = searchResult[0];
-                        status = dados.x_fiscal_status;
-                        
-                        console.log("✅ Status fiscal recebido:", status);
-                        
-                        // atualiza o objeto pra impressao
-                        order.x_fiscal_status = dados.x_fiscal_status;
-                        order.x_fiscal_mensagem = dados.x_fiscal_mensagem;
-                        order.x_fiscal_chave = dados.x_fiscal_chave;
-                        order.x_fiscal_numero = dados.x_fiscal_numero;
-                        order.x_fiscal_serie = dados.x_fiscal_serie;
-                        order.x_fiscal_protocolo = dados.x_fiscal_protocolo;
-                        order.x_fiscal_qrcode_url = dados.x_fiscal_qrcode_url;
-                        order.x_fiscal_qrcode_b64 = dados.x_fiscal_qrcode_b64;
-                        order.x_fiscal_offline = dados.x_fiscal_offline;
-                        console.log("==== CONTINGENCIA popup?", order.x_fiscal_offline);
-                        break; // sai do loop
-                    }
-                } catch (error) {
-                    console.error("Erro ao consultar status:", error);
-                }
-
-                await new Promise(r => setTimeout(r, 1000));
-            }
-
-            if (!status) {
-                console.log("❌ Timeout: Status fiscal não chegou a tempo.");
-        
-                order.x_fiscal_status = 'erro';
-                order.x_fiscal_mensagem = 'Tempo limite excedido na comunicação.';
-            }
-
-            this.ui.unblock();
+            await this._awaitFiscalReturn(order);
         } else {
             console.log("⏩ Venda não fiscal: Pulando verificação.");
         }
