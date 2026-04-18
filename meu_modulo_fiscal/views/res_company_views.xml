@@ -1,0 +1,33 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <record id="view_company_form_inherit_instagram" model="ir.ui.view">
+        <field name="name">res.company.form.inherit.instagram</field>
+        <field name="model">res.company</field>
+        <field name="inherit_id" ref="base.view_company_form"/>
+        <field name="arch" type="xml">
+            <xpath expr="//field[@name='website']" position="after">
+                <field name="instagram_username" placeholder="ex: @sua_empresa" widget="char"/>
+            </xpath>
+            <xpath expr="//notebook" position="inside">
+                <page string="Fiscal NFC-e" name="fiscal_nfce">
+                    <group string="Identificação Fiscal">
+                        <field name="x_cnpj" placeholder="14 dígitos sem pontuação"/>
+                        <field name="x_ie" placeholder="Apenas números"/>
+                        <field name="x_endereco_linha1" placeholder="Rua, Número, Bairro"/>
+                        <field name="x_endereco_linha2" placeholder="Cidade, Estado"/>
+                        <field name="x_uf_codigo"/>
+                        <field name="x_ambiente_fiscal"/>
+                    </group>
+                    <group string="CSC — Código de Segurança do Contribuinte">
+                        <field name="x_csc_id" placeholder="Ex: 000001 (preencher após obter na Sefaz)"/>
+                        <field name="x_csc_token" password="True" placeholder="Token obtido junto à Sefaz estadual"/>
+                    </group>
+                    <group string="URLs QR Code (Sefaz)">
+                        <field name="x_url_qrcode_homolog" />
+                        <field name="x_url_qrcode_producao" />
+                    </group>
+                </page>
+            </xpath>
+        </field>
+    </record>
+</odoo>

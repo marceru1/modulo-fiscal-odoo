@@ -16,22 +16,22 @@ patch(PosOrder.prototype, {
     init_from_JSON(json) {
         super.init_from_JSON(...arguments);
 
-        // Resgatando Respostas da Sefaz
-        this.x_fiscal_mensagem = json.x_fiscal_mensagem || "";
-        this.x_fiscal_status = json.x_fiscal_status || "";
-        this.x_fiscal_chave = json.x_fiscal_chave || "";
-        this.x_fiscal_qrcode_url = json.x_fiscal_qrcode_url || "";
-        this.x_fiscal_url_consulta = json.x_fiscal_url_consulta || "";
-        this.x_fiscal_numero = json.x_fiscal_numero || "";
-        this.x_fiscal_serie = json.x_fiscal_serie || "";
-        this.x_fiscal_protocolo = json.x_fiscal_protocolo || "";
-        this.x_fiscal_qrcode_b64 = json.x_fiscal_qrcode_b64 || "";
-        this.x_fiscal_offline = Boolean(json.x_fiscal_offline);
-        
-        // Resgatando Variaveis do Consumidor
-        this.x_confirmacao_venda = json.x_confirmacao_venda;
-        this.x_email_cliente = json.x_email_cliente;
-        this.x_cpf_nota = json.x_cpf_nota;
+        Object.assign(this, {
+            x_fiscal_mensagem: json.x_fiscal_mensagem || "",
+            x_fiscal_status: json.x_fiscal_status || "",
+            x_fiscal_chave: json.x_fiscal_chave || "",
+            x_fiscal_qrcode_url: json.x_fiscal_qrcode_url || "",
+            x_fiscal_url_consulta: json.x_fiscal_url_consulta || "",
+            x_fiscal_numero: json.x_fiscal_numero || "",
+            x_fiscal_serie: json.x_fiscal_serie || "",
+            x_fiscal_protocolo: json.x_fiscal_protocolo || "",
+            x_fiscal_qrcode_b64: json.x_fiscal_qrcode_b64 || "",
+            x_fiscal_offline: Boolean(json.x_fiscal_offline),
+            x_confirmacao_venda: json.x_confirmacao_venda,
+            x_email_cliente: json.x_email_cliente,
+            x_cpf_nota: json.x_cpf_nota,
+            x_contingencia_payload: json.x_contingencia_payload || "",
+        });
     },
 
     /**
@@ -48,6 +48,7 @@ patch(PosOrder.prototype, {
         json.x_cpf_nota = this.x_cpf_nota || "";
         json.x_email_cliente = this.x_email_cliente || "";
         json.x_confirmacao_venda = !!this.x_confirmacao_venda;
+        json.x_contingencia_payload = this.x_contingencia_payload || "";
 
         return json;
     },
@@ -106,10 +107,17 @@ patch(PosOrder.prototype, {
             qrcodeFinal = `data:image/png;base64,${b64Limpo}`;
         }
 
+        let chaveFinal = this.x_fiscal_chave || "";
+        let chaveFormatada = chaveFinal;
+        if (chaveFinal.length === 44) {
+             chaveFormatada = chaveFinal.match(/.{1,4}/g).join(' ');
+        }
+
         result.x_fiscal = {
             mensagem: this.x_fiscal_mensagem || "",
             status: this.x_fiscal_status || "",
-            chave: this.x_fiscal_chave || "",
+            chave: chaveFinal,
+            chave_formatada: chaveFormatada,
             qrcode_b64: this.x_fiscal_qrcode_b64 || "", 
             qrcode_url: qrcodeFinal, 
             url_consulta: this.x_fiscal_url_consulta || "",
@@ -121,7 +129,17 @@ patch(PosOrder.prototype, {
         result.x_cpf_nota = this.x_cpf_nota;
         result.x_confirmacao_venda = this.x_confirmacao_venda;
         
-        result.cashier = result.cashier || (this.pos.get_cashier() ? this.pos.get_cashier().name : null);
+        result.cashier = result.cashier || (this.cashier ? this.cashier.name : null);
+        
+        const my_company = this.company;
+        result.empresa = {
+            nome: my_company.name || "",
+            cnpj: my_company.x_cnpj || "",
+            ie: my_company.x_ie || "",
+            endereco_linha1: my_company.x_endereco_linha1 || "",
+            endereco_linha2: my_company.x_endereco_linha2 || "",
+            telefone: my_company.phone || "",
+        };
 
         return result;
     }
