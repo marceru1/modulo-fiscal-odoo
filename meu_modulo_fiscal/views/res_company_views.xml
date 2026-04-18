@@ -5,9 +5,6 @@
         <field name="model">res.company</field>
         <field name="inherit_id" ref="base.view_company_form"/>
         <field name="arch" type="xml">
-            <xpath expr="//field[@name='website']" position="after">
-                <field name="instagram_username" placeholder="ex: @sua_empresa" widget="char"/>
-            </xpath>
             <xpath expr="//notebook" position="inside">
                 <page string="Fiscal NFC-e" name="fiscal_nfce">
                     <group string="Identificação Fiscal">

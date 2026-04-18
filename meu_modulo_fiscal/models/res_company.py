@@ -3,8 +3,6 @@ from odoo import fields, models, api
 class ResCompany(models.Model):
     _inherit = 'res.company'
 
-    instagram_username = fields.Char(string='Instagram', help="Perfil do Instagram (ex: @sua_empresa)")
-
     # =========================================================
     # Dados Fiscais — NFC-e Contingência Offline
     # =========================================================
