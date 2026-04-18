@@ -17,3 +17,6 @@ COPY --chown=odoo:odoo . /mnt/extra-addons/meu_modulo_fiscal/
 COPY --chown=odoo:odoo odoo.conf.docker /etc/odoo/odoo.conf
 
 USER odoo
+
+# Força a atualização do módulo toda vez que o container iniciar (Autodeploy)
+CMD ["odoo", "-u", "meu_modulo_fiscal"]
