@@ -1,1 +1,0 @@
-Fixed QR code generation using QRious
