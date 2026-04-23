@@ -60,60 +60,42 @@
     margin: 8px 0;
 }
 
-.items-header {
+/* 
+ * Cabeçalho e Linha 2 compartilham a mesma grade (7 colunas).
+ * A 1ª coluna (38%) serve como espaço na Linha 2, e aloja 'Seq Cód. Descrição' no Cabeçalho.
+ * Total: 38 + 10 + 9 + 4 + 14 + 10 + 15 = 100%
+ */
+.receipt-header-grid, .item-linha2 {
     display: grid;
-    grid-template-columns: 15% 35% 10% 10% 15% 15%;
-    font-weight: bold;
-    font-size: 9px;
-    text-align: center;
-    margin-bottom: 3px;
+    grid-template-columns: 38% 10% 9% 4% 14% 10% 15%;
+    width: 100%;
 }
 
-.h-codigo { text-align: left; }
-.h-descricao { text-align: left; }
-
-/* Linha 1 do item: Número, Código e Descrição */
-.item-linha1 {
-    display: flex;
-    gap: 5px;
-    margin-top: 4px;
-    font-size: 10px;
-}
-
-.item-num {
-    font-weight: bold;
-    min-width: 20px;
-}
-
-.item-codigo {
-    min-width: 80px;
-}
-
-.item-descricao {
-    flex: 1;
-    font-weight: bold;
-}
-
-/* Linha 2 do item: Qtd, UN, Valores */
-.item-linha2 {
-    display: grid;
-    grid-template-columns: 15% 10% 25% 25% 25%;
-    font-size: 10px;
+.receipt-header-grid {
+    font-weight: normal;
+    padding: 4px 0;
     margin-bottom: 4px;
-    padding-left: 25px; /* Alinha com a descrição */
 }
 
-.item-qtd { text-align: left; }
-.item-un { text-align: left; }
-.item-vlr-un { text-align: left; }
-.item-desc { 
-    text-align: left;
-    font-style: italic;
+.item-linha2 {
+    margin-bottom: 4px;
 }
-.item-total { 
-    text-align: right;
-    font-weight: bold;
+
+/* 
+ * Linha 1 do item usa grade simples de 3 colunas.
+ * 10% (Seq) + 30% (Cód) + 60% (Desc) = 100%
+ */
+.item-linha1 {
+    display: grid;
+    grid-template-columns: 10% 30% 60%;
+    width: 100%;
+    margin-top: 4px;
 }
+
+/* Utilitários de Alinhamento para o Grid */
+.col-left { text-align: left; }
+.col-center { text-align: center; }
+.col-right { text-align: right; }
 
 /* ============================================ */
 /* TOTAIS */
