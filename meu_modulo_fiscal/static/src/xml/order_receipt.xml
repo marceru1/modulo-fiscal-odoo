@@ -49,34 +49,35 @@
 
         <xpath expr="//OrderWidget" position="replace">
              <div class="danfe-items" style="font-family: 'Inconsolata', monospace; font-size: 10px;">
-                <div class="items-header" style="display: flex; font-weight: normal; margin-bottom: 4px;">
-                    <span style="width: 10%;">Seq</span>
-                    <span style="width: 25%;">Cód.</span>
-                    <span style="width: 65%;">Descrição</span>
-                </div>
-                <div class="items-header-linha-2" style="display: flex; justify-content: flex-end; padding-left: 20px; font-weight: normal; margin-bottom: 4px; gap: 5px;">
-                    <span style="width: 15%; text-align: center;">Qtde</span>
-                    <span style="width: 10%; text-align: center;">Un</span>
-                    <span style="width: 25%; text-align: right;">VlrUnit</span>
-                    <span style="width: 25%; text-align: right;">Desc</span>
-                    <span style="width: 25%; text-align: right;">VlrTot</span>
+                <div class="receipt-header-grid">
+                    <span class="col-left">Seq Cód. Descrição</span>
+                    <span class="col-center">Qtde</span>
+                    <span class="col-center">Un</span>
+                    <span class="col-center"></span>
+                    <span class="col-right">VlrUnit</span>
+                    <span class="col-right">Desc</span>
+                    <span class="col-right">VlrTot</span>
                 </div>
                 <div class="danfe-separador" style="border-bottom: 1px dashed #000; margin: 4px 0;"></div>
 
                 <t t-foreach="props.data.danfe_items" t-as="item" t-key="item.index">
                     <div style="margin-bottom: 4px;">
-                        <div style="display: flex;">
-                            <span style="width: 10%;"><t t-esc="item.index"/></span>
-                            <span style="width: 28%;"><t t-esc="item.code"/></span>
-                            <span style="width: 62%;"><t t-esc="item.description"/></span>
+                        <div class="item-linha1">
+                            <span class="col-left"><t t-esc="item.index"/></span>
+                            <span class="col-left"><t t-esc="item.code"/></span>
+                            <span class="col-left"><t t-esc="item.description"/></span>
                         </div>
-                        <div style="display: flex; justify-content: flex-end; padding-left: 20px; gap: 5px;">
-                            <span style="width: 15%; text-align: center;"><t t-esc="item.qntd"/></span>
-                            <span style="width: 10%; text-align: center;"><t t-esc="item.unit"/></span>
-                            <span style="width: 5%; text-align: center;">X</span>
-                            <span style="width: 20%; text-align: right;"><t t-esc="props.formatCurrency(item.vlr_unit).replace('R$', '').trim()"/></span>
-                            <span style="width: 25%; text-align: right;"><t t-esc="props.formatCurrency(item.desc || 0).replace('R$', '').trim()"/></span>
-                            <span style="width: 25%; text-align: right;"><t t-esc="props.formatCurrency(item.vlr_total).replace('R$', '').trim()"/></span>
+                        <div class="item-linha2">
+                            <span></span>
+                            <span class="col-center"><t t-esc="item.qntd"/></span>
+                            <span class="col-center">
+                                <t t-if="item.unit.includes('Unidad')">UN</t>
+                                <t t-else=""><t t-esc="item.unit.substring(0, 3).toUpperCase()"/></t>
+                            </span>
+                            <span class="col-center">X</span>
+                            <span class="col-right"><t t-esc="props.formatCurrency(item.vlr_unit).replace('R$', '').trim()"/></span>
+                            <span class="col-right"><t t-esc="props.formatCurrency(item.desc || 0).replace('R$', '').trim()"/></span>
+                            <span class="col-right"><t t-esc="props.formatCurrency(item.vlr_total).replace('R$', '').trim()"/></span>
                         </div>
                     </div>
                 </t>
