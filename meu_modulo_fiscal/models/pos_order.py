@@ -119,8 +119,8 @@ class PosOrder(models.Model):
             },
             'cliente': {
                 'nome': 'CONSUMIDOR FINAL',
-                'cpf': self.x_cpf_nota,
-                'email': self.x_email_cliente,
+                'cpf': self.x_cpf_nota or None,
+                'email': self.x_email_cliente or None,
             },
             'produtos': dados_dos_produtos,
             'pagamentos': pagamentos,
