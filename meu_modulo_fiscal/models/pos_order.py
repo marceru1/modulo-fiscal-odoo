@@ -158,7 +158,10 @@ class PosOrder(models.Model):
             if 200 <= response.status_code < 300:
                 _logger.info(f"[MIDDLEWARE-WEBHOOK] Sucesso. Pedido despachado: {self.name}.")
             else:
-                _logger.warning(f"[MIDDLEWARE-WEBHOOK] Erro ({response.status_code}) ao despachar pedido {self.name}.")
+                _logger.warning(
+                    f"[MIDDLEWARE-WEBHOOK] Erro ({response.status_code}) ao despachar pedido {self.name}. "
+                    f"Resposta: {response.text[:2000]}"
+                )
                 
         except requests.exceptions.Timeout:
             _logger.error(f"[MIDDLEWARE-WEBHOOK] Timeout (5s) excedido para {self.name}.")
