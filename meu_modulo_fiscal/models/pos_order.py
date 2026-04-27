@@ -125,7 +125,8 @@ class PosOrder(models.Model):
             'produtos': dados_dos_produtos,
             'pagamentos': pagamentos,
             'fiscal': {
-                'estado': 'AM',
+                'estado': self.company_id.state_id.code or 'AM',
+                'cnpj_emitente': self.company_id.vat or '',
                 'modelo': '65',
             },
             'confirmacao_venda': bool(self.x_confirmacao_venda), 
