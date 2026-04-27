@@ -86,8 +86,8 @@ export async function emitirContingencia(order, config, posConfigId) {
     const modelo = '65';
     const tpEmis = '9'; // 9 = Contingência offline da NFC-e
 
-    // cUF(2) + AAMM(4) + CNPJ(14) + Mod(2) + Serie(3) + Nro(8) + tpEmis(1) + cNF(8)
-    const chaveSemDV = uf + aamm + cnpj + modelo + serie.padStart(3, '0') + numero.toString().padStart(8, '0') + tpEmis + codigoUnico;
+    // cUF(2) + AAMM(4) + CNPJ(14) + Mod(2) + Serie(3) + Nro(9) + tpEmis(1) + cNF(8) = 43 chars + DV(1) = 44
+    const chaveSemDV = uf + aamm + cnpj + modelo + serie.padStart(3, '0') + numero.toString().padStart(9, '0') + tpEmis + codigoUnico;
     const dv = calcularDigitoVerificador(chaveSemDV);
     const chaveAcesso = chaveSemDV + dv;
 
