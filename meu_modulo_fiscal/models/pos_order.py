@@ -8,7 +8,10 @@ _logger = logging.getLogger(__name__)
 
 BASE_URL = os.environ.get('MIDDLEWARE_URL', 'http://127.0.0.1:8000')
 API_LARAVEL_URL = f"{BASE_URL}/api/odoo/webhook"
-API_TOKEN = os.environ.get('MIDDLEWARE_API_TOKEN', '')
+# Shared secret sent in X-Webhook-Token for the middleware security layer.
+# Must match ODOO_WEBHOOK_SECRET set in the middleware .env.
+# Leave empty if the middleware is on an internal-only network (no public domain).
+WEBHOOK_SECRET = os.environ.get('MIDDLEWARE_WEBHOOK_SECRET', '')
 
 class PosOrder(models.Model):
     """
@@ -143,9 +146,12 @@ class PosOrder(models.Model):
             json_payload = json.dumps(payload, default=str)
             
             headers = {
-                 'Content-Type': 'application/json',
-                 'Accept': 'application/json'
+                'Content-Type': 'application/json',
+                'Accept': 'application/json',
             }
+
+            if WEBHOOK_SECRET:
+                headers['X-Webhook-Token'] = WEBHOOK_SECRET
 
             response = requests.post(API_LARAVEL_URL, data=json_payload, headers=headers, timeout=5)
 
