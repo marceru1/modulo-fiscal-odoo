@@ -11,8 +11,8 @@
 
         <xpath expr="//ReceiptHeader" position="replace">
             
-            <div class="danfe-header" style="text-align: center; font-family: 'Inconsolata', monospace; font-size: 11px;">
-                <div class="emitente-nome" style="font-size: 12px; margin-bottom: 2px;">
+            <div class="danfe-header" style="text-align: center; font-family: 'Inconsolata', monospace; font-size: 12px;">
+                <div class="emitente-nome" style="font-size: 14px; margin-bottom: 2px;">
                     <t t-esc="props.data.empresa.nome ? props.data.empresa.nome.toUpperCase() : ''"/>
                 </div>
                 
@@ -29,13 +29,13 @@
                 <div class="danfe-separador" style="border-bottom: 1px dashed #000; margin: 4px 0;"></div>
 
                 <t t-if="props.data.x_fiscal and (props.data.x_fiscal.status === 'autorizado' or props.data.x_fiscal.status === 'contingencia')">
-                    <div class="danfe-tipo" style="font-size: 11px; margin: 2px 0;">
+                    <div class="danfe-tipo" style="font-size: 12px; margin: 2px 0;">
                         DOCUMENTO AUXILIAR DA NOTA FISCAL DE CONSUMIDOR<br/>
                         ELETRÔNICA
                     </div>
                 </t>
                 <t t-else="">
-                    <div class="danfe-tipo" style="font-weight: bold; font-size: 12px; margin: 2px 0;">
+                    <div class="danfe-tipo" style="font-weight: bold; font-size: 13px; margin: 2px 0;">
                         *** RECIBO DE VENDA ***<br/>
                         SEM VALOR FISCAL
                     </div>
@@ -48,7 +48,7 @@
         </xpath>
 
         <xpath expr="//OrderWidget" position="replace">
-             <div class="danfe-items" style="font-family: 'Inconsolata', monospace; font-size: 10px;">
+             <div class="danfe-items" style="font-family: 'Inconsolata', monospace; font-size: 11px;">
                 <div class="receipt-header-grid">
                     <span class="col-left">Seq Cód. Descrição</span>
                     <span class="col-center">Qtde</span>
@@ -88,7 +88,7 @@
 
         <xpath expr="//div[hasclass('pos-receipt-taxes')]" position="replace">
             
-            <div class="totais-section" style="font-family: 'Inconsolata', monospace; font-size: 11px;">
+            <div class="totais-section" style="font-family: 'Inconsolata', monospace; font-size: 12px;">
                 <div class="total-linha" style="display: flex; justify-content: space-between;">
                     <span class="total-label">QTD. TOTAL DE ITENS</span>
                     <span class="total-valor"><t t-esc="props.data.danfe_totais.qtd_itens"/></span>
@@ -137,7 +137,7 @@
 
             <div class="danfe-separador" style="border-bottom: 1px dashed #000; margin: 4px 0;"></div>
 
-            <div class="fiscal-section" style="text-align: center; font-family: 'Inconsolata', monospace; font-size: 11px;">
+            <div class="fiscal-section" style="text-align: center; font-family: 'Inconsolata', monospace; font-size: 12px;">
                 
                 <t t-if="props.data.x_fiscal and (props.data.x_fiscal.status === 'autorizado' or props.data.x_fiscal.status === 'contingencia')">
                     
@@ -190,7 +190,7 @@
 
                     <div class="danfe-separador" style="border-bottom: 1px dashed #000; margin: 4px 0;"></div>
 
-                    <div style="display: flex; justify-content: space-between; font-size: 10px;">
+                    <div style="display: flex; justify-content: space-between; font-size: 11px;">
                         <span>Tributos Totais e Incidentes (Lei Federal 12.741/2012)</span>
                         <span>(0,14%)</span>
                     </div>
@@ -216,13 +216,13 @@
 
                 <div class="danfe-separador" style="border-bottom: 1px dashed #000; margin: 4px 0;"></div>
 
-                <div style="text-align: center; font-size: 10px;">
+                <div style="text-align: center; font-size: 11px;">
                     Desenvolvido por Divisão de Tecnologia Lojas 20+
                 </div>
 
                 <div class="danfe-separador" style="border-bottom: 1px dashed #000; margin: 4px 0;"></div>
 
-                <div style="display: flex; justify-content: space-between; font-size: 10px; margin-top: 4px;">
+                <div style="display: flex; justify-content: space-between; font-size: 11px; margin-top: 4px;">
                     <span>Op.: <t t-esc="props.data.cashier"/></span>
                     <span>Vend.: <t t-esc="props.data.cashier"/></span>
                 </div>
