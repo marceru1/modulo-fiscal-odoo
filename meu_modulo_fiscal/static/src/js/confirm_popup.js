@@ -14,6 +14,35 @@ patch(PaymentScreen.prototype, {
         this.dialog = useService("dialog");
         this.ui = useService("ui");
         this.orm = useService("orm");
+        this._sincronizarSeedContingencia();
+    },
+
+    /**
+     * Sincroniza o localStorage com o seed do backend na abertura do caixa.
+     * Garante que o contador local nunca fique atrás do histórico do banco,
+     * mesmo que o caixa opere em modo online por semanas sem contingenciar.
+     */
+    _sincronizarSeedContingencia() {
+        try {
+            const session = this.pos.session;
+            const seedBackend = session._ultimo_numero_contingencia || 0;
+            const serieSeed = session._serie_contingencia;
+            const cnpj = (this.pos.company.x_cnpj || '').replace(/\D/g, '').padEnd(14, '0');
+
+            if (!serieSeed || !cnpj) return;
+
+            const STORAGE_KEY = `nfce_seq_${cnpj}_s${serieSeed}`;
+            const state = JSON.parse(localStorage.getItem(STORAGE_KEY) || '{"ultimo": 0}');
+
+            if (seedBackend > state.ultimo) {
+                localStorage.setItem(STORAGE_KEY, JSON.stringify({ ultimo: seedBackend }));
+                console.log(`✅ [CONTINGENCIA-SEED] localStorage atualizado: ${state.ultimo} → ${seedBackend} (Série ${serieSeed})`);
+            } else {
+                console.log(`ℹ️ [CONTINGENCIA-SEED] localStorage já atualizado (local=${state.ultimo} ≥ backend=${seedBackend}). Nenhuma ação.`);
+            }
+        } catch (e) {
+            console.warn('[CONTINGENCIA-SEED] Falha ao sincronizar seed:', e);
+        }
     },
 
     async _awaitFiscalReturn(order) {
@@ -106,7 +135,11 @@ patch(PaymentScreen.prototype, {
         // ============================================
         if (result === true && !navigator.onLine) {
             console.log("Detectado modo offline! Emitindo em contingência.");
-            const dados = await emitirContingencia(order, this.pos.company, this.pos.config.id);
+
+            // Lê o seed do backend (injetado pelo Python no _load_pos_data da sessão)
+            const seedFromSession = this.pos.session._ultimo_numero_contingencia || 0;
+
+            const dados = await emitirContingencia(order, this.pos.company, this.pos.config.id, seedFromSession);
             
             Object.assign(order, {
                 x_fiscal_offline: true,
