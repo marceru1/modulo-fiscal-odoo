@@ -41,8 +41,10 @@ function calcularDigitoVerificador(chaveSemDV) {
  * @param {object} order - Objeto do pedido do Odoo POS
  * @param {object} config - Configurações fiscais da empresa (pos.company)
  * @param {number} posConfigId - ID do pos.config do terminal atual
+ * @param {number} seedFromSession - Último número emitido vindo do backend (abertura de sessão).
+ *   Protege contra troca de PC ou localStorage limpo. Use 0 como fallback.
  */
-export async function emitirContingencia(order, config, posConfigId) {
+export async function emitirContingencia(order, config, posConfigId, seedFromSession = 0) {
     const cnpj = (config.x_cnpj || '').replace(/\D/g, '').padEnd(14, '0');
     const uf = config.x_uf_codigo || '13';
     const cscId = (config.x_csc_id || '').trim();
@@ -59,7 +61,12 @@ export async function emitirContingencia(order, config, posConfigId) {
     const serie = (600 + (posConfigId || 1)).toString();
     const STORAGE_KEY = `nfce_seq_${cnpj}_s${serie}`;
     const state = JSON.parse(localStorage.getItem(STORAGE_KEY) || '{"ultimo": 0}');
-    const numero = state.ultimo + 1;
+
+    // Seed resiliente: pega o maior entre o localStorage local e o seed do backend.
+    // - Se o PC é novo (localStorage=0) e o backend retorna 47: base = 47 → próxima: 48 ✅
+    // - Se o localStorage tem 55 (gerou offline) e backend ainda tem 47: base = 55 → próxima: 56 ✅
+    const base = Math.max(state.ultimo, seedFromSession);
+    const numero = base + 1;
     localStorage.setItem(STORAGE_KEY, JSON.stringify({ ultimo: numero }));
     // ─────────────────────────────────────────────────────────────────────────
 
