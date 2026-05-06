@@ -194,3 +194,49 @@ class PosSession(models.Model):
             'x_contingencia_payload',
         ])
         return params
+
+    def _load_pos_data(self, data):
+        """
+        Injeta o 'seed' de numeração de contingência no payload de abertura da sessão.
+
+        Problema resolvido: o localStorage zera ao trocar de PC, fazendo o PDV
+        emitir nota número 1 novamente na mesma série (SEFAZ Erro 539).
+
+        Solução: na abertura do caixa (sempre online), o backend consulta o maior
+        número já emitido para a série e envia ao JS. O JS usa Math.max(localStorage, seed)
+        como piso, garantindo que a próxima nota nunca seja inferior ao histórico.
+
+        DEC-010 | ERROR-008
+        """
+        result = super()._load_pos_data(data)
+
+        # Série de contingência exclusiva deste caixa: 600 + ID do pos.config (DEC-001)
+        config_id = self.config_id.id
+        serie_contingencia = str(600 + config_id)
+
+        # Busca os 50 pedidos mais recentes da série e filtra o maior número em Python.
+        # Evita ordenação lexicográfica no SQL ('9' > '10' seria errado).
+        ultimos_pedidos = self.env['pos.order'].sudo().search(
+            [('x_fiscal_serie', '=', serie_contingencia)],
+            order='id desc',
+            limit=50
+        )
+
+        ultimo_numero = 0
+        for pedido in ultimos_pedidos:
+            try:
+                n = int(pedido.x_fiscal_numero or 0)
+                if n > ultimo_numero:
+                    ultimo_numero = n
+            except (ValueError, TypeError):
+                continue
+
+        result['data'][0]['_ultimo_numero_contingencia'] = ultimo_numero
+        result['data'][0]['_serie_contingencia'] = serie_contingencia
+
+        _logger.info(
+            '[CONTINGENCIA-SEED] Caixa ID=%d | Série=%s | Último número no banco: %d',
+            config_id, serie_contingencia, ultimo_numero
+        )
+
+        return result

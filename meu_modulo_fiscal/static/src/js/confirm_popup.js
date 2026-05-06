@@ -14,6 +14,37 @@ patch(PaymentScreen.prototype, {
         this.dialog = useService("dialog");
         this.ui = useService("ui");
         this.orm = useService("orm");
+        // Sincroniza o localStorage com o seed do banco logo na abertura do caixa.
+        // Garante que PC novo ou cache limpo nunca recomece do número 1. (DEC-010)
+        this._sincronizarSeedContingencia();
+    },
+
+    /**
+     * Calibra o localStorage com o último número emitido registrado no backend.
+     * Executado uma vez na abertura de cada sessão POS (evento sempre online).
+     * Se o localStorage já está à frente (caixa gerou notas offline), não faz nada.
+     */
+    _sincronizarSeedContingencia() {
+        try {
+            const session = this.pos.session;
+            const seedBackend = session._ultimo_numero_contingencia || 0;
+            const serieSeed = session._serie_contingencia;
+            const cnpj = (this.pos.company.x_cnpj || '').replace(/\D/g, '').padEnd(14, '0');
+
+            if (!serieSeed || !cnpj) return;
+
+            const STORAGE_KEY = `nfce_seq_${cnpj}_s${serieSeed}`;
+            const state = JSON.parse(localStorage.getItem(STORAGE_KEY) || '{"ultimo": 0}');
+
+            if (seedBackend > state.ultimo) {
+                localStorage.setItem(STORAGE_KEY, JSON.stringify({ ultimo: seedBackend }));
+                console.log(`✅ [CONTINGENCIA-SEED] Calibrado: ${state.ultimo} → ${seedBackend} (série ${serieSeed})`);
+            } else {
+                console.log(`ℹ️ [CONTINGENCIA-SEED] localStorage OK (local=${state.ultimo} ≥ banco=${seedBackend})`);
+            }
+        } catch (e) {
+            console.warn('[CONTINGENCIA-SEED] Falha ao sincronizar seed:', e);
+        }
     },
 
     async _awaitFiscalReturn(order) {
@@ -106,7 +137,10 @@ patch(PaymentScreen.prototype, {
         // ============================================
         if (result === true && !navigator.onLine) {
             console.log("Detectado modo offline! Emitindo em contingência.");
-            const dados = await emitirContingencia(order, this.pos.company, this.pos.config.id);
+            // Usa o seed do banco (injetado pelo Python na abertura da sessão) como piso.
+            const seedFromSession = this.pos.session._ultimo_numero_contingencia || 0;
+            const dados = await emitirContingencia(order, this.pos.company, this.pos.config.id, seedFromSession);
+
             
             Object.assign(order, {
                 x_fiscal_offline: true,

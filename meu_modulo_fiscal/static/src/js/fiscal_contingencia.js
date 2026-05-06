@@ -41,8 +41,11 @@ function calcularDigitoVerificador(chaveSemDV) {
  * @param {object} order - Objeto do pedido do Odoo POS
  * @param {object} config - Configurações fiscais da empresa (pos.company)
  * @param {number} posConfigId - ID do pos.config do terminal atual
+ * @param {number} seedFromSession - Maior número já emitido para esta série, vindo do
+ *   backend no momento de abertura do caixa. Protege contra PC novo ou localStorage
+ *   limpo. Use 0 como fallback seguro.
  */
-export async function emitirContingencia(order, config, posConfigId) {
+export async function emitirContingencia(order, config, posConfigId, seedFromSession = 0) {
     const cnpj = (config.x_cnpj || '').replace(/\D/g, '').padEnd(14, '0');
     const uf = config.x_uf_codigo || '13';
     const cscId = (config.x_csc_id || '').trim();
@@ -59,7 +62,12 @@ export async function emitirContingencia(order, config, posConfigId) {
     const serie = (600 + (posConfigId || 1)).toString();
     const STORAGE_KEY = `nfce_seq_${cnpj}_s${serie}`;
     const state = JSON.parse(localStorage.getItem(STORAGE_KEY) || '{"ultimo": 0}');
-    const numero = state.ultimo + 1;
+
+    // Piso resiliente: nunca emite um número abaixo do que já foi autorizado no banco.
+    // localStorage=0 (PC novo) + seed=47 → base=47 → próxima nota: 48 ✅
+    // localStorage=55 (offline longo) + seed=47 → base=55 → próxima nota: 56 ✅
+    const base = Math.max(state.ultimo, seedFromSession);
+    const numero = base + 1;
     localStorage.setItem(STORAGE_KEY, JSON.stringify({ ultimo: numero }));
     // ─────────────────────────────────────────────────────────────────────────
 
