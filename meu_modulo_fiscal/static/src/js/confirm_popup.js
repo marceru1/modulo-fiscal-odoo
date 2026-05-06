@@ -169,14 +169,28 @@ patch(PaymentScreen.prototype, {
         // FLUXO NORMAL (Online)
         // ============================================
         
-        // Envio nativo pro Python (dispara webhook no backend e avança pra tela de recibo)
+        // Envio nativo pro Python (dispara webhook no backend).
+        // A lógica de esperar a SEFAZ agora roda dentro de `afterOrderValidation`
+        // para garantir que trava a impressão automática até a resposta chegar.
         await super.validateOrder(isForceValidate);
+    },
 
-        // Aguarda resposta do backend/middleware via polling 
-        if (result === true) {
+    /**
+     * Intercepta o pós-validação (momento em que o Odoo decide mudar de tela e imprimir).
+     * Ao aguardar a resposta aqui, garantimos que a nota impressa já tem a chave da SEFAZ,
+     * mesmo que a opção "Imprimir Recibo Automaticamente" esteja ativa.
+     */
+    async afterOrderValidation() {
+        const order = this.pos.get_order();
+        
+        // Se foi confirmado e estamos online, segura o fluxo até a SEFAZ responder
+        if (order && order.x_confirmacao_venda === true && navigator.onLine) {
             await this._awaitFiscalReturn(order);
-        } else {
+        } else if (order && order.x_confirmacao_venda === false) {
             console.log("⏩ Venda não fiscal: Pulando verificação.");
         }
+
+        // Agora sim libera o Odoo para ir pra ReceiptScreen e imprimir
+        await super.afterOrderValidation(...arguments);
     }
 });
