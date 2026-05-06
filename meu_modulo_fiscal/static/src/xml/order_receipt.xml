@@ -34,12 +34,6 @@
                         ELETRÔNICA
                     </div>
                 </t>
-                <t t-else="">
-                    <div class="danfe-tipo" style="font-weight: bold; font-size: 13px; margin: 2px 0;">
-                        *** RECIBO DE VENDA ***<br/>
-                        SEM VALOR FISCAL
-                    </div>
-                </t>
 
                 <div class="danfe-separador" style="border-bottom: 1px dashed #000; margin: 4px 0;"></div>
 
@@ -198,9 +192,6 @@
                 </t>
                 
                 <t t-else="">
-                    <div style="font-weight: bold; margin-bottom: 5px;">
-                        *** NÃO É DOCUMENTO FISCAL ***
-                    </div>
                     <div style="text-align: left; margin-left: 5px; margin-top: 10px;">
                         <div>Data: <t t-esc="props.data.date"/></div>
                         <div>Op.: <t t-esc="props.data.cashier"/></div>
