@@ -33,9 +33,8 @@
                         DOCUMENTO AUXILIAR DA NOTA FISCAL DE CONSUMIDOR<br/>
                         ELETRÔNICA
                     </div>
+                    <div class="danfe-separador" style="border-bottom: 1px dashed #000; margin: 4px 0;"></div>
                 </t>
-
-                <div class="danfe-separador" style="border-bottom: 1px dashed #000; margin: 4px 0;"></div>
 
             </div>
 
@@ -43,21 +42,23 @@
 
         <xpath expr="//OrderWidget" position="replace">
              <div class="danfe-items" style="font-family: 'Inconsolata', monospace; font-size: 11px;">
-                <div class="receipt-header-grid">
-                    <span class="col-left">Seq Cód. Descrição</span>
-                    <span class="col-center">Qtde</span>
-                    <span class="col-center">Un</span>
-                    <span class="col-center"></span>
-                    <span class="col-right">VlrUnit</span>
-                    <span class="col-right">Desc</span>
-                    <span class="col-right">VlrTot</span>
+                <div class="receipt-header-row1">
+                    <span class="col-left">CÓDIGO</span>
+                    <span class="col-left">DESCRIÇÃO</span>
+                </div>
+                <div class="receipt-header-row2">
+                    <span></span>
+                    <span class="col-center">QTD</span>
+                    <span class="col-center">UN</span>
+                    <span class="col-right">VL UN</span>
+                    <span class="col-right">DESC</span>
+                    <span class="col-right">VL TOT</span>
                 </div>
                 <div class="danfe-separador" style="border-bottom: 1px dashed #000; margin: 4px 0;"></div>
 
                 <t t-foreach="props.data.danfe_items" t-as="item" t-key="item.index">
                     <div style="margin-bottom: 4px;">
                         <div class="item-linha1">
-                            <span class="col-left"><t t-esc="item.index"/></span>
                             <span class="col-left"><t t-esc="item.code"/></span>
                             <span class="col-left"><t t-esc="item.description"/></span>
                         </div>
@@ -68,7 +69,6 @@
                                 <t t-if="item.unit.includes('Unidad')">UN</t>
                                 <t t-else=""><t t-esc="item.unit.substring(0, 3).toUpperCase()"/></t>
                             </span>
-                            <span class="col-center">X</span>
                             <span class="col-right"><t t-esc="props.formatCurrency(item.vlr_unit).replace('R$', '').trim()"/></span>
                             <span class="col-right"><t t-esc="props.formatCurrency(item.desc || 0).replace('R$', '').trim()"/></span>
                             <span class="col-right"><t t-esc="props.formatCurrency(item.vlr_total).replace('R$', '').trim()"/></span>
@@ -199,8 +199,10 @@
                             <div style="margin-top: 4px;">CPF: <t t-esc="props.data.x_cpf_nota"/></div>
                         </t>
                     </div>
-                    <div class="danfe-separador" style="border-bottom: 1px dashed #000; margin: 10px 0;"></div>
-                    <div style="margin-top: 15px; font-style: italic;">
+                      
+                      <div class="danfe-separador" style="border-bottom: 1px dashed #000; margin: 4px 0;"></div>
+
+                    <div style="margin-top: 15px; margin-bottom: 15px; font-style: italic; text-align: center;">
                         Agradecemos a preferência!
                     </div>
                 </t>
@@ -208,7 +210,7 @@
                 <div class="danfe-separador" style="border-bottom: 1px dashed #000; margin: 4px 0;"></div>
 
                 <div style="text-align: center; font-size: 11px;">
-                    Desenvolvido por Divisão de Tecnologia Lojas 20+
+                    Desenvolvido por Divisão de Tecnologia <strong>Grupo 20+</strong>
                 </div>
 
                 <div class="danfe-separador" style="border-bottom: 1px dashed #000; margin: 4px 0;"></div>
@@ -217,7 +219,6 @@
                     <span>Op.: <t t-esc="props.data.cashier"/></span>
                     <span>Vend.: <t t-esc="props.data.cashier"/></span>
                 </div>
-
             </div>
 
         </xpath>

@@ -2,9 +2,9 @@
     font-family: 'Inconsolata', 'Courier New', monospace;
     font-size: 12px;
     line-height: 1.3;
-    width: 74mm; /* Largura ajustada para evitar redução (shrink-to-fit) da impressora */
-    margin: 0 auto;
-    padding: 2mm;
+    width: 72mm; /* Compensação da margem física de hardware (~4mm) das impressoras térmicas */
+    margin: 0;
+    padding: 1mm 2mm;
 }
 
 /* ============================================ */
@@ -61,19 +61,31 @@
 }
 
 /* 
- * Cabeçalho e Linha 2 compartilham a mesma grade (7 colunas).
- * A 1ª coluna (38%) serve como espaço na Linha 2, e aloja 'Seq Cód. Descrição' no Cabeçalho.
- * Total: 38 + 10 + 9 + 4 + 14 + 10 + 15 = 100%
+ * Cabeçalho linha 1: alinha com item-linha1 (Cód | Descrição)
+ * Total: 38 + 62 = 100%
  */
-.receipt-header-grid, .item-linha2 {
+.receipt-header-row1 {
     display: grid;
-    grid-template-columns: 38% 10% 9% 4% 14% 10% 15%;
+    grid-template-columns: 38% 62%;
+    width: 100%;
+    font-weight: bold;
+    padding-top: 4px;
+}
+
+/* 
+ * Cabeçalho linha 2 e item-linha2 compartilham a mesma grade (6 colunas).
+ * A 1ª coluna (15%) serve como espaço para recuo sob a descrição.
+ * Total: 15 + 15 + 10 + 20 + 15 + 25 = 100%
+ */
+.receipt-header-row2, .item-linha2 {
+    display: grid;
+    grid-template-columns: 15% 15% 10% 20% 15% 25%;
     width: 100%;
 }
 
-.receipt-header-grid {
-    font-weight: normal;
-    padding: 4px 0;
+.receipt-header-row2 {
+    font-weight: bold;
+    padding-bottom: 4px;
     margin-bottom: 4px;
 }
 
@@ -82,12 +94,12 @@
 }
 
 /* 
- * Linha 1 do item usa grade simples de 3 colunas.
- * 10% (Seq) + 30% (Cód) + 60% (Desc) = 100%
+ * Linha 1 do item usa grade simples de 2 colunas.
+ * 38% (Cód) + 62% (Desc) = 100%
  */
 .item-linha1 {
     display: grid;
-    grid-template-columns: 10% 30% 60%;
+    grid-template-columns: 38% 62%;
     width: 100%;
     margin-top: 4px;
 }
@@ -262,16 +274,36 @@
 /* ============================================ */
 /* IMPRESSÃO */
 /* ============================================ */
+/*
+ * Estratégia: declaramos o papel como 72mm em vez de 80mm.
+ * Isso compensa a margem física de hardware (~4-6mm) das impressoras térmicas,
+ * permitindo que qualquer impressora térmica funcione sem configuração adicional.
+ */
+@page {
+    size: 72mm auto; /* menor que 80mm real para absorver margem de hardware */
+    margin: 0;
+}
+
 @media print {
+    .render-container .pos-receipt,
     .pos-receipt {
-        width: 74mm;
-        font-size: 12px;
-        padding: 0;
+        width: 70mm !important;
+        max-width: 70mm !important;
+        font-size: 12px !important;
+        padding: 0 1mm !important;
+        margin: 0 !important;
+    }
+    
+    .render-container {
+        left: 0 !important;
+        top: 0 !important;
+        margin: 0 !important;
+        padding: 0 !important;
     }
     
     .qrcode-img {
-        width: 130px;
-        height: 130px;
+        width: 120px;
+        height: 120px;
     }
 }
 /* Esconde o rodapé do Odoo */
