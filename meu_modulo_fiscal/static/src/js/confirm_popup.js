@@ -139,7 +139,7 @@ patch(PaymentScreen.prototype, {
             console.log("Detectado modo offline! Emitindo em contingência.");
             // Usa o seed do banco (injetado pelo Python na abertura da sessão) como piso.
             const seedFromSession = this.pos.session._ultimo_numero_contingencia || 0;
-            const dados = await emitirContingencia(order, this.pos.company, this.pos.config.id, seedFromSession);
+            const dados = await emitirContingencia(order, this.pos.company, this.pos.config.id, seedFromSession, this.env.services.orm);
 
             
             Object.assign(order, {

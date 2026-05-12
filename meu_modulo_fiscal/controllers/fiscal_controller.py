@@ -73,6 +73,23 @@ class FiscalWebhookController(http.Controller):
 
             # Aciona o ORM para escrever os metadados devolvidos direto no Pedido Odoo
             pedido.write(valores)
+
+            # Atualiza o high-water mark no pos.config (DEC-011 / ERROR-010)
+            # Garante que o contador de contingência reflete orders autorizadas pelo middleware.
+            numero_str = valores.get('x_fiscal_numero', '')
+            serie_str = valores.get('x_fiscal_serie', '')
+            if numero_str and serie_str and pedido.session_id:
+                try:
+                    numero_int = int(numero_str)
+                    config = pedido.session_id.config_id
+                    if config and numero_int > (config.x_contingencia_ultimo_numero or 0):
+                        config.sudo().write({'x_contingencia_ultimo_numero': numero_int})
+                        _logger.info(
+                            '[CONTINGENCIA-HWM-CALLBACK] pos.config %d | série %s | HWM → %d',
+                            config.id, serie_str, numero_int
+                        )
+                except (ValueError, TypeError):
+                    pass
             
             # Força o Commit (Flush) no Postgres pra garantir que o `SearchRead` que roda lá Browser (JS) com Polling ache a linha atualizada na mesa do caixa.
             request.env.cr.commit()
