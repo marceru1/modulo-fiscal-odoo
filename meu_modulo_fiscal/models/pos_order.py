@@ -56,10 +56,19 @@ class PosOrder(models.Model):
         """
         Interpreta e intercepta os dados disparados do Browser pelo Odoo JS (Owl) 
         antes que o Odoo os salve no Python/Postgres.
+
+        IMPORTANTE: Todos os campos fiscais da contingência offline precisam ser
+        sincronizados aqui. Sem isso, x_fiscal_numero fica NULL no banco e o seed
+        de numeração retorna 0 ao abrir novo browser (causa raiz do ERROR-010).
         """
         vals = super(PosOrder, self)._order_fields(ui_order)
         
-        campos_para_sincronizar = ['x_cpf_nota', 'x_email_cliente', 'x_contingencia_payload']
+        campos_para_sincronizar = [
+            'x_cpf_nota', 'x_email_cliente', 'x_contingencia_payload',
+            'x_fiscal_numero', 'x_fiscal_serie', 'x_fiscal_status',
+            'x_fiscal_chave', 'x_fiscal_mensagem',
+            'x_fiscal_qrcode_url', 'x_fiscal_qrcode_b64',
+        ]
         for campo in campos_para_sincronizar:
             if campo in ui_order:
                 vals[campo] = ui_order.get(campo)
@@ -67,7 +76,39 @@ class PosOrder(models.Model):
         if 'x_confirmacao_venda' in ui_order:
             vals['x_confirmacao_venda'] = bool(ui_order.get('x_confirmacao_venda'))
 
+        if 'x_fiscal_offline' in ui_order:
+            vals['x_fiscal_offline'] = bool(ui_order.get('x_fiscal_offline'))
+
         return vals
+
+    @api.model_create_multi
+    def create(self, vals_list):
+        """
+        Após criar o(s) pedido(s), atualiza o high-water mark de contingência
+        no pos.config correspondente. Garante que o seed nunca fique atrás
+        do último número realmente emitido, mesmo se o localStorage for limpo.
+
+        DEC-011 | ERROR-010
+        """
+        orders = super().create(vals_list)
+
+        for order in orders:
+            if not order.x_fiscal_offline or not order.x_fiscal_numero:
+                continue
+            try:
+                numero = int(order.x_fiscal_numero)
+            except (ValueError, TypeError):
+                continue
+
+            config = order.session_id.config_id
+            if config and numero > (config.x_contingencia_ultimo_numero or 0):
+                config.sudo().write({'x_contingencia_ultimo_numero': numero})
+                _logger.info(
+                    '[CONTINGENCIA-HWM] pos.config %d | Série %s | High-water mark → %d',
+                    config.id, order.x_fiscal_serie, numero
+                )
+
+        return orders
 
     def _prepare_nfce_payload(self):
         """
@@ -173,6 +214,62 @@ class PosOrder(models.Model):
         
         return res
 
+class PosConfig(models.Model):
+    """Extensão do pos.config para persistir o contador de contingência (DEC-011)."""
+    _inherit = 'pos.config'
+
+    x_contingencia_ultimo_numero = fields.Integer(
+        string='Último Nº Contingência',
+        default=0,
+        help='High-water mark: maior número de NFC-e emitido em contingência '
+             'nesta série. Atualizado automaticamente a cada sync de venda offline. '
+             'Nunca decrementar manualmente.'
+    )
+
+    def get_ultimo_numero_contingencia(self):
+        """
+        RPC público para o JS consultar o contador atualizado em tempo real.
+        Chamado antes de cada emissão offline como última linha de defesa
+        contra duplicidade de numeração.
+
+        Returns:
+            int: Maior número já emitido para a série deste caixa.
+        """
+        self.ensure_one()
+        # Série de contingência OFFLINE: 700 + ID do caixa (separada da série online 600+ID)
+        # DEC-012: séries online (6xx) e offline (7xx) são namespaces distintos
+        serie = str(700 + self.id)
+
+        # Dupla verificação: high-water mark do config + scan de segurança no pos.order
+        hwm = self.x_contingencia_ultimo_numero or 0
+
+        ultimo_do_banco = 0
+        pedidos = self.env['pos.order'].sudo().search(
+            [('x_fiscal_serie', '=', serie)],
+            order='id desc',
+            limit=50
+        )
+        for pedido in pedidos:
+            try:
+                n = int(pedido.x_fiscal_numero or 0)
+                if n > ultimo_do_banco:
+                    ultimo_do_banco = n
+            except (ValueError, TypeError):
+                continue
+
+        resultado = max(hwm, ultimo_do_banco)
+
+        # Se o scan achou um número maior, corrige o high-water mark
+        if resultado > hwm:
+            self.sudo().write({'x_contingencia_ultimo_numero': resultado})
+
+        _logger.info(
+            '[CONTINGENCIA-RPC] config_id=%d | série=%s | hwm=%d | scan=%d | resultado=%d',
+            self.id, serie, hwm, ultimo_do_banco, resultado
+        )
+        return resultado
+
+
 class PosSession(models.Model):
     _inherit = 'pos.session'
 
@@ -199,44 +296,52 @@ class PosSession(models.Model):
         """
         Injeta o 'seed' de numeração de contingência no payload de abertura da sessão.
 
-        Problema resolvido: o localStorage zera ao trocar de PC, fazendo o PDV
-        emitir nota número 1 novamente na mesma série (SEFAZ Erro 539).
+        Usa o high-water mark persistido no pos.config (DEC-011) como fonte primária,
+        com scan de segurança no pos.order como fallback. Isso garante que mesmo
+        orders cujo x_fiscal_numero foi escrito pelo callback do middleware (e não
+        pelo _order_fields) sejam contabilizadas.
 
-        Solução: na abertura do caixa (sempre online), o backend consulta o maior
-        número já emitido para a série e envia ao JS. O JS usa Math.max(localStorage, seed)
-        como piso, garantindo que a próxima nota nunca seja inferior ao histórico.
-
-        DEC-010 | ERROR-008
+        DEC-010 | DEC-011 | ERROR-008 | ERROR-010
         """
         result = super()._load_pos_data(data)
 
-        # Série de contingência exclusiva deste caixa: 600 + ID do pos.config (DEC-001)
-        config_id = self.config_id.id
-        serie_contingencia = str(600 + config_id)
+        config = self.config_id
+        # Série de contingência OFFLINE: 700 + ID do caixa (separada da série online 600+ID)
+        # DEC-012: séries online (6xx) e offline (7xx) são namespaces distintos
+        serie_contingencia = str(700 + config.id)
 
-        # Busca os 50 pedidos mais recentes da série e filtra o maior número em Python.
-        # Evita ordenação lexicográfica no SQL ('9' > '10' seria errado).
+        # Fonte primária: high-water mark do pos.config (atualizado a cada sync)
+        hwm = config.x_contingencia_ultimo_numero or 0
+
+        # Fonte secundária: scan do pos.order (captura updates feitos pelo callback
+        # do middleware que não passam pelo create/write do POS)
         ultimos_pedidos = self.env['pos.order'].sudo().search(
             [('x_fiscal_serie', '=', serie_contingencia)],
             order='id desc',
             limit=50
         )
 
-        ultimo_numero = 0
+        ultimo_do_scan = 0
         for pedido in ultimos_pedidos:
             try:
                 n = int(pedido.x_fiscal_numero or 0)
-                if n > ultimo_numero:
-                    ultimo_numero = n
+                if n > ultimo_do_scan:
+                    ultimo_do_scan = n
             except (ValueError, TypeError):
                 continue
+
+        ultimo_numero = max(hwm, ultimo_do_scan)
+
+        # Corrige drift se o scan achou número maior que o high-water mark
+        if ultimo_numero > hwm:
+            config.sudo().write({'x_contingencia_ultimo_numero': ultimo_numero})
 
         result['data'][0]['_ultimo_numero_contingencia'] = ultimo_numero
         result['data'][0]['_serie_contingencia'] = serie_contingencia
 
         _logger.info(
-            '[CONTINGENCIA-SEED] Caixa ID=%d | Série=%s | Último número no banco: %d',
-            config_id, serie_contingencia, ultimo_numero
+            '[CONTINGENCIA-SEED] Caixa ID=%d | Série=%s | HWM=%d | Scan=%d | Seed final=%d',
+            config.id, serie_contingencia, hwm, ultimo_do_scan, ultimo_numero
         )
 
         return result

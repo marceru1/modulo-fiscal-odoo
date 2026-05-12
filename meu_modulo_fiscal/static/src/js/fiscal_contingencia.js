@@ -8,21 +8,27 @@ export async function sha1(message) {
 }
 
 /**
- * Calcula o Dígito Verificador da chave de acesso NF-e/NFC-e.
- * Padrão oficial SEFAZ: multiplicadores fixos da ESQUERDA para DIREITA,
- * com a sequência 2..9 repetida (começando pelo dígito mais à esquerda).
+ * Calcula o Dígito Verificador (cDV) da chave de acesso NF-e/NFC-e.
  *
- * ⚠️ NÃO confundir com Módulo 11 genérico (que vai da direita pra esquerda).
+ * Padrão oficial SEFAZ (MOC - Manual de Orientação ao Contribuinte):
+ *   - Módulo 11 com pesos 2..9 repetidos
+ *   - Leitura da DIREITA para a ESQUERDA (dígito mais à direita recebe peso 2)
+ *   - Se remainder < 2 → DV = 0
+ *   - Caso contrário    → DV = 11 - remainder
+ *
+ * ⚠️  Bug anterior: o código percorria da ESQUERDA para DIREITA, produzindo
+ *     um DV diferente do que a SEFAZ/Focus NFe calcula. O cupom impresso ficava
+ *     com chave diferente da autorizada. (ERROR-011 / 2026-05-12)
  */
 function calcularDigitoVerificador(chaveSemDV) {
-    const multiplicadores = [2,3,4,5,6,7,8,9,2,3,4,5,6,7,8,9,2,3,4,5,6,7,8,9,2,3,4,5,6,7,8,9,2,3,4,5,6,7,8,9,2,3,4];
+    const pesos = [2, 3, 4, 5, 6, 7, 8, 9];
     let soma = 0;
     for (let i = 0; i < 43; i++) {
-        soma += parseInt(chaveSemDV.charAt(i)) * multiplicadores[i];
+        // Percorre da direita para a esquerda: charAt(42) → charAt(0)
+        soma += parseInt(chaveSemDV.charAt(42 - i)) * pesos[i % 8];
     }
     const resto = soma % 11;
-    const dv = 11 - resto;
-    return (dv >= 10 ? 0 : dv).toString();
+    return (resto < 2 ? 0 : 11 - resto).toString();
 }
 
 /**
@@ -38,14 +44,22 @@ function calcularDigitoVerificador(chaveSemDV) {
  * Vantagem: numeração 100% sequencial por caixa, zero buracos,
  * zero inutilizações necessárias no fim do mês.
  *
+ * 3 Camadas de Proteção contra Duplicidade (ERROR-010 / DEC-011):
+ *   Camada 1: localStorage (rápido, mas volátil — pode ser limpo)
+ *   Camada 2: seedFromSession (injetado na abertura do caixa, mas pode ficar stale)
+ *   Camada 3: RPC em tempo real ao pos.config (fonte mais confiável, mas precisa de rede)
+ *   Resultado final: Math.max(localStorage, seed, rpc) como piso.
+ *
  * @param {object} order - Objeto do pedido do Odoo POS
  * @param {object} config - Configurações fiscais da empresa (pos.company)
  * @param {number} posConfigId - ID do pos.config do terminal atual
  * @param {number} seedFromSession - Maior número já emitido para esta série, vindo do
  *   backend no momento de abertura do caixa. Protege contra PC novo ou localStorage
  *   limpo. Use 0 como fallback seguro.
+ * @param {object|null} orm - Serviço ORM do Odoo (env.services.orm). Se fornecido,
+ *   tenta uma consulta em tempo real ao banco antes de emitir.
  */
-export async function emitirContingencia(order, config, posConfigId, seedFromSession = 0) {
+export async function emitirContingencia(order, config, posConfigId, seedFromSession = 0, orm = null) {
     const cnpj = (config.x_cnpj || '').replace(/\D/g, '').padEnd(14, '0');
     const uf = config.x_uf_codigo || '13';
     const cscId = (config.x_csc_id || '').trim();
@@ -55,18 +69,35 @@ export async function emitirContingencia(order, config, posConfigId, seedFromSes
     const tpAmb = ambiente === 'homologacao' ? '2' : '1';
 
     // ── Série por Caixa ──────────────────────────────────────────────────────
-    // Cada terminal tem sua série exclusiva (600 + ID do POS).
-    // O contador local é vinculado ao CNPJ + série, garantindo que mesmo que
-    // o localStorage seja limpo, o próximo bloco de série não colide com outro
-    // terminal.
-    const serie = (600 + (posConfigId || 1)).toString();
+    // OFFLINE usa série 7xx (700 + ID), ONLINE usa série 6xx (600 + ID).
+    // Namespaces completamente separados → zero colisão entre fluxos. (DEC-012)
+    const serie = (700 + (posConfigId || 1)).toString();
     const STORAGE_KEY = `nfce_seq_${cnpj}_s${serie}`;
     const state = JSON.parse(localStorage.getItem(STORAGE_KEY) || '{"ultimo": 0}');
 
-    // Piso resiliente: nunca emite um número abaixo do que já foi autorizado no banco.
-    // localStorage=0 (PC novo) + seed=47 → base=47 → próxima nota: 48 ✅
-    // localStorage=55 (offline longo) + seed=47 → base=55 → próxima nota: 56 ✅
-    const base = Math.max(state.ultimo, seedFromSession);
+    // ── Camada 3: RPC em tempo real (última linha de defesa) ──────────────────
+    // Mesmo que navigator.onLine diga "offline", o servidor Odoo pode estar
+    // acessível na rede local. Tentamos uma consulta rápida ao banco para pegar
+    // o contador real. Se falhar, caímos silenciosamente no localStorage + seed.
+    let rpcUltimoNumero = 0;
+    if (orm) {
+        try {
+            rpcUltimoNumero = await orm.call(
+                "pos.config",
+                "get_ultimo_numero_contingencia",
+                [[posConfigId]]
+            );
+            console.log(`✅ [CONTINGENCIA-RPC] Contador em tempo real do banco: ${rpcUltimoNumero}`);
+        } catch (e) {
+            console.warn(`⚠️ [CONTINGENCIA-RPC] Sem acesso ao banco (offline real). Fallback: localStorage+seed.`, e.message);
+        }
+    }
+
+    // Piso resiliente: o maior entre as 3 fontes vence.
+    // localStorage=0 (PC novo) + seed=10 + rpc=15 → base=15 → próxima nota: 16 ✅
+    // localStorage=20 (offline longo) + seed=10 + rpc=15 → base=20 → próxima nota: 21 ✅
+    // localStorage=0 + seed=0 + rpc=0 (primeira vez) → base=0 → próxima nota: 1 ✅
+    const base = Math.max(state.ultimo, seedFromSession, rpcUltimoNumero);
     const numero = base + 1;
     localStorage.setItem(STORAGE_KEY, JSON.stringify({ ultimo: numero }));
     // ─────────────────────────────────────────────────────────────────────────
