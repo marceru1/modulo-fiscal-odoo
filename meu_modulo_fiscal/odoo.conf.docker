@@ -6,9 +6,9 @@
 ;   HOST, PORT, USER, PASSWORD → lidos pelo entrypoint oficial do Odoo
 ; ==============================================================================
 
-; Filtro de banco: só mostra "odoo_prod" no seletor
-; Para trocar de ambiente: mude aqui, commite e faça Rebuild no Dokploy
-db_filter = ^odoo_prod$
+; Filtro de banco: controlado pela variável de ambiente DB_FILTER no Dokploy
+; Não defina db_filter aqui — use a env var DB_FILTER em cada container
+; Prod: DB_FILTER=grupo20mais | Testes: DB_FILTER=testes
 
 ; Addons: customizados primeiro, depois os nativos do Odoo
 addons_path = /mnt/extra-addons,/usr/lib/python3/dist-packages/odoo/addons
