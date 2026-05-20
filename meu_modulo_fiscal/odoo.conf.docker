@@ -6,9 +6,10 @@
 ;   HOST, PORT, USER, PASSWORD → lidos pelo entrypoint oficial do Odoo
 ; ==============================================================================
 
-; Filtro de banco: controlado pela variável de ambiente DB_FILTER no Dokploy
-; Não defina db_filter aqui — use a env var DB_FILTER em cada container
-; Prod: DB_FILTER=grupo20mais | Testes: DB_FILTER=testes
+; Filtro de banco: restringe este container ao banco 'testes'
+; Qualquer request sem cookie de sessão usará este banco automaticamente
+; (necessário para callbacks do middleware que chegam sem cookie)
+db_filter = testes
 
 ; Addons: customizados primeiro, depois os nativos do Odoo
 addons_path = /mnt/extra-addons,/usr/lib/python3/dist-packages/odoo/addons
