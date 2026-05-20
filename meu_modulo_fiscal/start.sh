@@ -16,15 +16,11 @@ set -e
 CONF=/etc/odoo/odoo.conf
 
 if [ -n "$DB_FILTER" ]; then
-    # sed -i nao funciona pois precisa criar temp file no /etc/odoo/ (sem permissao)
-    # solucao: filtra para /tmp e sobrescreve o arquivo com cp (so precisa de permissao no arquivo)
-    grep -v '^db_filter' "$CONF" > /tmp/odoo.conf.tmp
-    echo "db_filter = ^${DB_FILTER}$" >> /tmp/odoo.conf.tmp
-    cp /tmp/odoo.conf.tmp "$CONF"
-    echo "INFO [start.sh]: db_filter configurado para ^${DB_FILTER}$"
-else
-    echo "WARN [start.sh]: DB_FILTER não definido. Odoo vai enxergar todos os bancos."
+    echo "WARN [start.sh]: DB_FILTER definido mas ignorado — use ?db= na URL do callback."
+    echo "INFO [start.sh]: db_filter nao aplicado (causa conflito com callbacks via Docker bridge)."
 fi
+
+echo "INFO [start.sh]: Iniciando Odoo sem db_filter. Use ?db=NOME nas URLs de callback."
 
 # Repassa o controle para o entrypoint oficial do Odoo com todos os argumentos
 exec /entrypoint.sh "$@"
