@@ -16,7 +16,13 @@ COPY --chown=odoo:odoo . /mnt/extra-addons/meu_modulo_fiscal/
 # Copia a configuração de produção (substitui a padrão do container)
 COPY --chown=odoo:odoo odoo.conf.docker /etc/odoo/odoo.conf
 
+# Script wrapper: injeta DB_FILTER no conf antes de chamar o entrypoint oficial
+# Permite que cada container (prod / testes) use seu próprio db_filter via env var
+COPY start.sh /start.sh
+RUN chmod +x /start.sh
+
 USER odoo
 
-# Força a atualização do módulo toda vez que o container iniciar (Autodeploy)
+# Entrypoint customizado injeta DB_FILTER → chama entrypoint oficial do Odoo → sobe
+ENTRYPOINT ["/start.sh"]
 CMD ["odoo", "-u", "meu_modulo_fiscal"]
