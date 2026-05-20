@@ -19,5 +19,4 @@ COPY --chown=odoo:odoo odoo.conf.docker /etc/odoo/odoo.conf
 USER odoo
 
 # Força a atualização do módulo toda vez que o container iniciar (Autodeploy)
-# Lê a variável DB_FILTER (se existir) para forçar o roteamento correto no Traefik/Dokploy
-CMD odoo -u meu_modulo_fiscal ${DB_FILTER:+--db-filter=^${DB_FILTER}$}
+CMD ["odoo", "-u", "meu_modulo_fiscal"]
