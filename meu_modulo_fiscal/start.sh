@@ -4,23 +4,19 @@ set -e
 # ==============================================================================
 # Odoo 18.0 — Custom Entrypoint Wrapper
 # ==============================================================================
-# Injeta DB_FILTER no odoo.conf ANTES de chamar o entrypoint oficial do Odoo.
-# O entrypoint oficial (/entrypoint.sh) cuida da conexão com o Postgres
-# (lendo HOST, PORT, USER, PASSWORD das env vars). Não bypassamos ele.
+# Se DB_NAME estiver definido, inicia Odoo em modo single-database.
+# Nesse modo, TODAS as requests usam o banco especificado automaticamente,
+# sem precisar de cookie de sessão — resolve o 404 em callbacks do middleware.
 #
 # Uso no Dokploy:
-#   - Container Prod:   DB_FILTER=grupo20mais
-#   - Container Testes: DB_FILTER=testes
+#   - Container Testes: DB_NAME=testes
+#   - Container Prod:   DB_NAME=grupo20mais
 # ==============================================================================
 
-CONF=/etc/odoo/odoo.conf
-
-if [ -n "$DB_FILTER" ]; then
-    echo "WARN [start.sh]: DB_FILTER definido mas ignorado — use ?db= na URL do callback."
-    echo "INFO [start.sh]: db_filter nao aplicado (causa conflito com callbacks via Docker bridge)."
+if [ -n "$DB_NAME" ]; then
+    echo "INFO [start.sh]: Iniciando Odoo em modo single-database: $DB_NAME"
+    exec /entrypoint.sh odoo --database "$DB_NAME" -u meu_modulo_fiscal
+else
+    echo "WARN [start.sh]: DB_NAME não definido. Iniciando em modo multi-database."
+    exec /entrypoint.sh "$@"
 fi
-
-echo "INFO [start.sh]: Iniciando Odoo sem db_filter. Use ?db=NOME nas URLs de callback."
-
-# Repassa o controle para o entrypoint oficial do Odoo com todos os argumentos
-exec /entrypoint.sh "$@"
