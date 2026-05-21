@@ -6,10 +6,9 @@
 ;   HOST, PORT, USER, PASSWORD → lidos pelo entrypoint oficial do Odoo
 ; ==============================================================================
 
-; Filtro de banco: restringe este container ao banco 'testes'
-; Qualquer request sem cookie de sessão usará este banco automaticamente
-; (necessário para callbacks do middleware que chegam sem cookie)
-db_filter = testes
+; O banco de dados a ser usado é definido pela variável de ambiente DB_NAME
+; configurada no Dokploy (ex: DB_NAME=grupo20mais ou DB_NAME=testes).
+; O script start.sh usa essa variável para iniciar o Odoo isolado.
 
 ; Addons: customizados primeiro, depois os nativos do Odoo
 addons_path = /mnt/extra-addons,/usr/lib/python3/dist-packages/odoo/addons
