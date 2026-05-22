@@ -153,7 +153,7 @@
                     <div style="margin: 2px 0;">http://www.nfce.sefaz.am.gov.br/consumidor/</div>
 
                     <div style="margin: 4px 0;">CHAVE DE ACESSO</div>
-                    <div style="margin: 2px 0; letter-spacing: 0.5px;">
+                    <div style="margin: 2px 0; letter-spacing: 0.5px; word-break: break-all; line-height: 1.2;">
                         <t t-if="props.data.x_fiscal.chave_formatada">
                             <t t-esc="props.data.x_fiscal.chave_formatada"/>
                         </t>
