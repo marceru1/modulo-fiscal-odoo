@@ -5,7 +5,7 @@ import { _t } from "@web/core/l10n/translation";
 import { PaymentScreen } from "@point_of_sale/app/screens/payment_screen/payment_screen";
 import { patch } from "@web/core/utils/patch";
 import { SelectionPopup } from "@point_of_sale/app/utils/input_popups/selection_popup";
-import { TextInputPopup } from "@point_of_sale/app/utils/input_popups/text_input_popup";
+// import { TextInputPopup } from "@point_of_sale/app/utils/input_popups/text_input_popup";  // REMOVIDO: Email dialog removido do fluxo PDV
 import { emitirContingencia } from "./fiscal_contingencia";
 
 patch(PaymentScreen.prototype, {
@@ -120,17 +120,17 @@ patch(PaymentScreen.prototype, {
         const order = this.pos.get_order();
         order.x_confirmacao_venda = result;
 
-        // Coleta de E-mail
-        if (result === true) {
-            const email_cliente = await makeAwaitable(this.dialog, TextInputPopup, {
-                title: "Informe o E-mail",
-                placeholder: "Digite o e-mail do cliente",
-                startingValue: "",
-            });
-            if (email_cliente) {
-                order.x_email_cliente = email_cliente;
-            }
-        }
+        // REMOVIDO: Email dialog removido do fluxo PDV
+        // if (result === true) {
+        //     const email_cliente = await makeAwaitable(this.dialog, TextInputPopup, {
+        //         title: "Informe o E-mail",
+        //         placeholder: "Digite o e-mail do cliente",
+        //         startingValue: "",
+        //     });
+        //     if (email_cliente) {
+        //         order.x_email_cliente = email_cliente;
+        //     }
+        // }
 
         // ============================================
         // CONTINGÊNCIA IMEDIATA (Offline)

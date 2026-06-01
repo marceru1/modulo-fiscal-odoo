@@ -28,7 +28,7 @@ patch(PosOrder.prototype, {
             x_fiscal_qrcode_b64: json.x_fiscal_qrcode_b64 || "",
             x_fiscal_offline: Boolean(json.x_fiscal_offline),
             x_confirmacao_venda: json.x_confirmacao_venda,
-            x_email_cliente: json.x_email_cliente,
+            // x_email_cliente: json.x_email_cliente,  // REMOVIDO: Email não é mais coletado no PDV
             x_cpf_nota: json.x_cpf_nota,
             x_contingencia_payload: json.x_contingencia_payload || "",
         });
@@ -46,7 +46,7 @@ patch(PosOrder.prototype, {
 
         // Envia as decisões do operador pro Banco de Dados 
         json.x_cpf_nota = this.x_cpf_nota || "";
-        json.x_email_cliente = this.x_email_cliente || "";
+        // json.x_email_cliente = this.x_email_cliente || "";  // REMOVIDO: Email não é mais coletado no PDV
         json.x_confirmacao_venda = !!this.x_confirmacao_venda;
         json.x_contingencia_payload = this.x_contingencia_payload || "";
 
