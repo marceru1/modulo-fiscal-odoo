@@ -14,6 +14,7 @@
         'security/ir.model.access.csv',
         'views/campos_fiscais_views.xml',
         'views/res_company_views.xml',
+        'views/res_config_settings_views.xml',
     ],
     'assets': {
         'point_of_sale._assets_pos': [
