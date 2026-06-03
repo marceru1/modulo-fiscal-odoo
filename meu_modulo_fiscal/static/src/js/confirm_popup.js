@@ -1,6 +1,6 @@
 /** @odoo-module */
 import { useService } from "@web/core/utils/hooks";
-import { makeAwaitable } from "@point_of_sale/app/store/make_awaitable_dialog";
+import { makeAwaitable, ask } from "@point_of_sale/app/store/make_awaitable_dialog";
 import { _t } from "@web/core/l10n/translation";
 import { PaymentScreen } from "@point_of_sale/app/screens/payment_screen/payment_screen";
 import { patch } from "@web/core/utils/patch";
@@ -48,7 +48,7 @@ patch(PaymentScreen.prototype, {
     },
 
     async _awaitFiscalReturn(order) {
-        this.ui.block();
+        this.ui.block({ message: _t("Aguardando SEFAZ...") });
         console.log("🔄 Aguardando retorno fiscal...");
 
         const posReference = order.pos_reference || order.name;
@@ -106,42 +106,70 @@ patch(PaymentScreen.prototype, {
     },
 
     async validateOrder(isForceValidate) {
-        console.log("Cliquei em validar, aguardando confirmação...");
-
-        // Popup de Confirmação
-        const result = await makeAwaitable(this.dialog, SelectionPopup, {
-            title: _t("Confirmar venda?"),
-            list: [
-                { id: 1, label: _t("Sim"), item: true },
-                { id: 0, label: _t("Não"), item: false },
-            ],
-        });
+        console.log("Validando venda... Verificando formas de pagamento fiscais.");
 
         const order = this.pos.get_order();
-        order.x_confirmacao_venda = result;
+        
+        // IDs de formas de pagamento configuradas como fiscais para este caixa.
+        const fiscalMethods = this.pos.session._fiscal_payment_method_ids;
+        let hasFiscalPayment;
 
-        // REMOVIDO: Email dialog removido do fluxo PDV
-        // if (result === true) {
-        //     const email_cliente = await makeAwaitable(this.dialog, TextInputPopup, {
-        //         title: "Informe o E-mail",
-        //         placeholder: "Digite o e-mail do cliente",
-        //         startingValue: "",
-        //     });
-        //     if (email_cliente) {
-        //         order.x_email_cliente = email_cliente;
-        //     }
-        // }
+        if (!fiscalMethods || fiscalMethods.length === 0) {
+            // Nenhuma checkbox configurada: fallback (sempre oferece NFC-e)
+            console.log("⚠️ [FISCAL] _fiscal_payment_method_ids vazio — usando fallback.");
+            hasFiscalPayment = true;
+        } else {
+            hasFiscalPayment = false;
+
+            const paymentlines = this.paymentLines
+                ?? order.payment_ids
+                ?? order.get_paymentlines?.()
+                ?? order.paymentlines?.models
+                ?? [];
+
+            const payArray = Array.isArray(paymentlines) ? paymentlines : Array.from(paymentlines || []);
+
+            for (const line of payArray) {
+                const methodId = line.payment_method_id?.id ?? line.payment_method?.id ?? line.payment_method_id;
+                if (fiscalMethods.includes(methodId)) {
+                    hasFiscalPayment = true;
+                    break;
+                }
+            }
+        }
+
+        // ============================================
+        // DECISÃO (com fallback para popup)
+        // ============================================
+        if (hasFiscalPayment) {
+            console.log("✅ Venda FISCAL detectada — NFC-e será emitida.");
+            order.x_confirmacao_venda = true;
+        } else {
+            const confirmed = await ask(this.dialog, {
+                title: _t("Emitir NFC-e?"),
+                body: _t("Os métodos de pagamento desta venda não estão configurados para emissão automática. Deseja enviar esta venda para a SEFAZ?"),
+                confirmLabel: _t("Sim"),
+                cancelLabel: _t("Não"),
+            });
+
+            if (confirmed) {
+                console.log("✅ Usuário confirmou emissão de NFC-e.");
+                hasFiscalPayment = true;
+                order.x_confirmacao_venda = true;
+            } else {
+                console.log("⏩ Venda NÃO FISCAL — pulando emissão de NFC-e.");
+                order.x_confirmacao_venda = false;
+            }
+        }
 
         // ============================================
         // CONTINGÊNCIA IMEDIATA (Offline)
         // ============================================
-        if (result === true && !navigator.onLine) {
+        if (hasFiscalPayment && !navigator.onLine) {
             console.log("Detectado modo offline! Emitindo em contingência.");
-            // Usa o seed do banco (injetado pelo Python na abertura da sessão) como piso.
             const seedFromSession = this.pos.session._ultimo_numero_contingencia || 0;
             const dados = await emitirContingencia(order, this.pos.company, this.pos.config.id, seedFromSession, this.env.services.orm);
 
-            
             Object.assign(order, {
                 x_fiscal_offline: true,
                 x_fiscal_status: 'contingencia',
@@ -159,8 +187,7 @@ patch(PaymentScreen.prototype, {
                     chave_acesso: dados.chaveAcesso,
                 })
             });
-            
-            // Envio nativo e avança de tela
+
             await super.validateOrder(isForceValidate);
             return;
         }
@@ -168,12 +195,9 @@ patch(PaymentScreen.prototype, {
         // ============================================
         // FLUXO NORMAL (Online)
         // ============================================
-        
-        // Envio nativo pro Python (dispara webhook no backend).
-        // A lógica de esperar a SEFAZ agora roda dentro de `afterOrderValidation`
-        // para garantir que trava a impressão automática até a resposta chegar.
         await super.validateOrder(isForceValidate);
     },
+
 
     /**
      * Intercepta o pós-validação (momento em que o Odoo decide mudar de tela e imprimir).
