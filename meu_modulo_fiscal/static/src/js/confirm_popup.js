@@ -205,11 +205,36 @@ patch(PaymentScreen.prototype, {
      * mesmo que a opção "Imprimir Recibo Automaticamente" esteja ativa.
      */
     async afterOrderValidation() {
-        const order = this.pos.get_order();
+        const order = this.currentOrder || this.pos.get_order();
         
-        // Se foi confirmado e estamos online, segura o fluxo até a SEFAZ responder
-        if (order && order.x_confirmacao_venda === true && navigator.onLine) {
-            await this._awaitFiscalReturn(order);
+        if (order && order.x_confirmacao_venda === true) {
+            // Se o ID for string, significa que o sync falhou (está na fila offline)
+            if (typeof order.id === "string" && !order.x_fiscal_offline) {
+                console.log("⚠️ Fallback Contingência: Pedido na fila offline (Falha de sync).");
+                const seedFromSession = this.pos.session._ultimo_numero_contingencia || 0;
+                const dados = await emitirContingencia(order, this.pos.company, this.pos.config.id, seedFromSession, this.env.services.orm);
+
+                Object.assign(order, {
+                    x_fiscal_offline: true,
+                    x_fiscal_status: 'contingencia',
+                    x_fiscal_mensagem: 'EMITIDA EM CONTINGÊNCIA (Fallback)',
+                    x_fiscal_chave: dados.chaveAcesso,
+                    x_fiscal_numero: dados.numero,
+                    x_fiscal_serie: dados.serie,
+                    x_fiscal_qrcode_url: dados.qrcodeUrl,
+                    x_fiscal_qrcode_b64: dados.qrcodeB64,
+                    x_contingencia_payload: JSON.stringify({
+                        numero: dados.numero,
+                        serie: dados.serie,
+                        codigo_unico: dados.codigoUnico,
+                        data_emissao: dados.dataEmissao,
+                        chave_acesso: dados.chaveAcesso,
+                    })
+                });
+            } else if (typeof order.id === "number") {
+                // Sincronizou com o backend online, então aguarda a resposta da SEFAZ
+                await this._awaitFiscalReturn(order);
+            }
         } else if (order && order.x_confirmacao_venda === false) {
             console.log("⏩ Venda não fiscal: Pulando verificação.");
         }
