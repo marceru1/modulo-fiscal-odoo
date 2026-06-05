@@ -1,6 +1,6 @@
 /** @odoo-module */
 import { useService } from "@web/core/utils/hooks";
-import { makeAwaitable, ask } from "@point_of_sale/app/store/make_awaitable_dialog";
+import { makeAwaitable } from "@point_of_sale/app/store/make_awaitable_dialog";
 import { _t } from "@web/core/l10n/translation";
 import { PaymentScreen } from "@point_of_sale/app/screens/payment_screen/payment_screen";
 import { patch } from "@web/core/utils/patch";
@@ -139,28 +139,16 @@ patch(PaymentScreen.prototype, {
         }
 
         // ============================================
-        // DECISÃO (com fallback para popup)
+        // DECISÃO AUTOMÁTICA (baseada nas checkboxes)
         // ============================================
+        order.x_confirmacao_venda = hasFiscalPayment;
+
         if (hasFiscalPayment) {
             console.log("✅ Venda FISCAL detectada — NFC-e será emitida.");
-            order.x_confirmacao_venda = true;
         } else {
-            const confirmed = await ask(this.dialog, {
-                title: _t("Emitir NFC-e?"),
-                body: _t("Os métodos de pagamento desta venda não estão configurados para emissão automática. Deseja enviar esta venda para a SEFAZ?"),
-                confirmLabel: _t("Sim"),
-                cancelLabel: _t("Não"),
-            });
-
-            if (confirmed) {
-                console.log("✅ Usuário confirmou emissão de NFC-e.");
-                hasFiscalPayment = true;
-                order.x_confirmacao_venda = true;
-            } else {
-                console.log("⏩ Venda NÃO FISCAL — pulando emissão de NFC-e.");
-                order.x_confirmacao_venda = false;
-            }
+            console.log("⏩ Venda NÃO FISCAL — pulando emissão de NFC-e.");
         }
+
 
         // ============================================
         // CONTINGÊNCIA IMEDIATA (Offline)
