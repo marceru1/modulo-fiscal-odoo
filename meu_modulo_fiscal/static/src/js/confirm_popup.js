@@ -115,9 +115,9 @@ patch(PaymentScreen.prototype, {
         let hasFiscalPayment;
 
         if (!fiscalMethods || fiscalMethods.length === 0) {
-            // Nenhuma checkbox configurada: fallback (sempre oferece NFC-e)
-            console.log("⚠️ [FISCAL] _fiscal_payment_method_ids vazio — usando fallback.");
-            hasFiscalPayment = true;
+            // Nenhuma checkbox configurada: não emite NFC-e
+            console.log("⚠️ [FISCAL] Nenhuma forma de pagamento fiscal detectada/marcada nas configurações. Pulando NFC-e.");
+            hasFiscalPayment = false;
         } else {
             hasFiscalPayment = false;
 
@@ -199,27 +199,8 @@ patch(PaymentScreen.prototype, {
         if (order && order.x_confirmacao_venda === true) {
             // Se o ID for string, significa que o sync falhou (está na fila offline)
             if (typeof order.id === "string" && !order.x_fiscal_offline) {
-                console.log("⚠️ Fallback Contingência: Pedido na fila offline (Falha de sync).");
-                const seedFromSession = this.pos.session._ultimo_numero_contingencia || 0;
-                const dados = await emitirContingencia(order, this.pos.company, this.pos.config.id, seedFromSession, this.env.services.orm);
-
-                Object.assign(order, {
-                    x_fiscal_offline: true,
-                    x_fiscal_status: 'contingencia',
-                    x_fiscal_mensagem: 'EMITIDA EM CONTINGÊNCIA (Fallback)',
-                    x_fiscal_chave: dados.chaveAcesso,
-                    x_fiscal_numero: dados.numero,
-                    x_fiscal_serie: dados.serie,
-                    x_fiscal_qrcode_url: dados.qrcodeUrl,
-                    x_fiscal_qrcode_b64: dados.qrcodeB64,
-                    x_contingencia_payload: JSON.stringify({
-                        numero: dados.numero,
-                        serie: dados.serie,
-                        codigo_unico: dados.codigoUnico,
-                        data_emissao: dados.dataEmissao,
-                        chave_acesso: dados.chaveAcesso,
-                    })
-                });
+                console.log("⚠️ Fallback Contingência desativado a pedido: Pedido na fila offline (Falha de sync). A nota será processada ao restabelecer conexão.");
+                // Retirado o emitirContingencia daqui. A nota será sincronizada normalmente pelo Odoo quando a rede voltar.
             } else if (typeof order.id === "number") {
                 // Sincronizou com o backend online, então aguarda a resposta da SEFAZ
                 await this._awaitFiscalReturn(order);
