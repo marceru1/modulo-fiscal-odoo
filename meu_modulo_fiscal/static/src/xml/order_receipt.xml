@@ -3,11 +3,21 @@
 
     <t t-name="meu_modulo.OrderReceipt" t-inherit="point_of_sale.OrderReceipt" t-inherit-mode="extension">
         
-        <xpath expr="//div[hasclass('pos-receipt-amount')]" position="replace"/>
-        <xpath expr="//div[hasclass('paymentlines')]" position="replace"/>
-        <xpath expr="//div[hasclass('before-footer')]" position="replace"/>
-        <xpath expr="//div[hasclass('after-footer')]" position="replace"/>
-        <xpath expr="//div[hasclass('pos-receipt-order-data')]" position="replace"/>
+        <xpath expr="//div[hasclass('pos-receipt-amount')]" position="attributes">
+            <attribute name="style">display: none !important;</attribute>
+        </xpath>
+        <xpath expr="//div[hasclass('paymentlines')]" position="attributes">
+            <attribute name="style">display: none !important;</attribute>
+        </xpath>
+        <xpath expr="//div[hasclass('before-footer')]" position="attributes">
+            <attribute name="style">display: none !important;</attribute>
+        </xpath>
+        <xpath expr="//div[hasclass('after-footer')]" position="attributes">
+            <attribute name="style">display: none !important;</attribute>
+        </xpath>
+        <xpath expr="//div[hasclass('pos-receipt-order-data')]" position="attributes">
+            <attribute name="style">display: none !important;</attribute>
+        </xpath>
 
         <xpath expr="//ReceiptHeader" position="replace">
             
