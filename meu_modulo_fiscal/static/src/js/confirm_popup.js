@@ -122,14 +122,15 @@ patch(PaymentScreen.prototype, {
             hasFiscalPayment = false;
 
             const paymentlines = this.paymentLines
-                ?? order.payment_ids
                 ?? order.get_paymentlines?.()
                 ?? order.paymentlines?.models
+                ?? order.paymentlines
                 ?? [];
 
             const payArray = Array.isArray(paymentlines) ? paymentlines : Array.from(paymentlines || []);
 
             for (const line of payArray) {
+                if (typeof line === 'number') continue; // Previne erro caso ainda caia em IDs puros
                 const methodId = line.payment_method_id?.id ?? line.payment_method?.id ?? line.payment_method_id;
                 if (fiscalMethods.includes(methodId)) {
                     hasFiscalPayment = true;
