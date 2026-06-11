@@ -161,7 +161,7 @@ class PosOrder(models.Model):
             'cliente': {
                 'nome': 'CONSUMIDOR FINAL',
                 'cpf': self.x_cpf_nota or None,
-                'email': self.x_email_cliente or None,
+                # 'email': self.x_email_cliente or None,  # REMOVIDO: Email não é mais coletado no PDV
             },
             'produtos': dados_dos_produtos,
             'pagamentos': pagamentos,
@@ -183,40 +183,55 @@ class PosOrder(models.Model):
         """
         res = super(PosOrder, self).action_pos_order_paid()
 
-        try:
-            payload = self._prepare_nfce_payload()
-            json_payload = json.dumps(payload, default=str)
+        for order in self:
+            if not order.x_confirmacao_venda:
+                _logger.info(f'[ODOO -> MIDDLEWARE] Venda {order.pos_reference} finalizada sem NFC-e (não fiscal).')
+                continue
+
+            try:
+                payload = order._prepare_nfce_payload()
+                json_payload = json.dumps(payload, default=str)
             
-            headers = {
-                'Content-Type': 'application/json',
-                'Accept': 'application/json',
-            }
+                headers = {
+                    'Content-Type': 'application/json',
+                    'Accept': 'application/json',
+                }
 
-            if WEBHOOK_SECRET:
-                headers['X-Webhook-Token'] = WEBHOOK_SECRET
+                if WEBHOOK_SECRET:
+                    headers['X-Webhook-Token'] = WEBHOOK_SECRET
 
-            response = requests.post(API_LARAVEL_URL, data=json_payload, headers=headers, timeout=5)
+                response = requests.post(API_LARAVEL_URL, data=json_payload, headers=headers, timeout=5)
 
-            if 200 <= response.status_code < 300:
-                _logger.info(f"[MIDDLEWARE-WEBHOOK] Sucesso. Pedido despachado: {self.name}.")
-            else:
-                _logger.warning(
-                    f"[MIDDLEWARE-WEBHOOK] Erro ({response.status_code}) ao despachar pedido {self.name}. "
-                    f"Resposta: {response.text[:2000]}"
-                )
-                
-        except requests.exceptions.Timeout:
-            _logger.error(f"[MIDDLEWARE-WEBHOOK] Timeout (5s) excedido para {self.name}.")
-        except requests.exceptions.RequestException as e:
-            _logger.error(f"[MIDDLEWARE-WEBHOOK] Falha crítica de conexão para {self.name}: {e}.")
-        except Exception as e:
-            _logger.error(f"[MIDDLEWARE-WEBHOOK] Erro interno ao empacotar {self.name}: {e}.")
+                if 200 <= response.status_code < 300:
+                    _logger.info(f"[MIDDLEWARE-WEBHOOK] Sucesso. Pedido despachado: {order.name}.")
+                else:
+                    _logger.warning(
+                        f"[MIDDLEWARE-WEBHOOK] Erro ({response.status_code}) ao despachar pedido {order.name}. "
+                        f"Resposta: {response.text[:2000]}"
+                    )
+                    
+            except requests.exceptions.Timeout:
+                _logger.error(f"[MIDDLEWARE-WEBHOOK] Timeout (5s) excedido para {order.name}.")
+            except requests.exceptions.RequestException as e:
+                _logger.error(f"[MIDDLEWARE-WEBHOOK] Falha crítica de conexão para {order.name}: {e}.")
+            except Exception as e:
+                _logger.error(f"[MIDDLEWARE-WEBHOOK] Erro interno ao empacotar {order.name}: {e}.")
         
         return res
 
 class PosConfig(models.Model):
     """Extensão do pos.config para persistir o contador de contingência (DEC-011)."""
     _inherit = 'pos.config'
+
+
+    x_fiscal_payment_method_ids = fields.Many2many(
+        'pos.payment.method',
+        'pos_config_fiscal_payment_rel',
+        'config_id',
+        'payment_method_id',
+        string='Formas de pagamento fiscais',
+        help='Formas de pagamento que vao disparar emissao de nfce'
+    )
 
     x_contingencia_ultimo_numero = fields.Integer(
         string='Último Nº Contingência',
@@ -343,5 +358,9 @@ class PosSession(models.Model):
             '[CONTINGENCIA-SEED] Caixa ID=%d | Série=%s | HWM=%d | Scan=%d | Seed final=%d',
             config.id, serie_contingencia, hwm, ultimo_do_scan, ultimo_numero
         )
+
+        for session in result['data']:
+            if session['id'] == self.id:
+                session['_fiscal_payment_method_ids'] = self.config_id.x_fiscal_payment_method_ids.ids
 
         return result
