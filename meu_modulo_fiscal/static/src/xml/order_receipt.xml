@@ -3,11 +3,21 @@
 
     <t t-name="meu_modulo.OrderReceipt" t-inherit="point_of_sale.OrderReceipt" t-inherit-mode="extension">
         
-        <xpath expr="//div[hasclass('pos-receipt-amount')]" position="replace"/>
-        <xpath expr="//div[hasclass('paymentlines')]" position="replace"/>
-        <xpath expr="//div[hasclass('before-footer')]" position="replace"/>
-        <xpath expr="//div[hasclass('after-footer')]" position="replace"/>
-        <xpath expr="//div[hasclass('pos-receipt-order-data')]" position="replace"/>
+        <xpath expr="//div[hasclass('pos-receipt-amount')]" position="attributes">
+            <attribute name="style">display: none !important;</attribute>
+        </xpath>
+        <xpath expr="//div[hasclass('paymentlines')]" position="attributes">
+            <attribute name="style">display: none !important;</attribute>
+        </xpath>
+        <xpath expr="//div[hasclass('before-footer')]" position="attributes">
+            <attribute name="style">display: none !important;</attribute>
+        </xpath>
+        <xpath expr="//div[hasclass('after-footer')]" position="attributes">
+            <attribute name="style">display: none !important;</attribute>
+        </xpath>
+        <xpath expr="//div[hasclass('pos-receipt-order-data')]" position="attributes">
+            <attribute name="style">display: none !important;</attribute>
+        </xpath>
 
         <xpath expr="//ReceiptHeader" position="replace">
             
@@ -153,7 +163,7 @@
                     <div style="margin: 2px 0;">http://www.nfce.sefaz.am.gov.br/consumidor/</div>
 
                     <div style="margin: 4px 0;">CHAVE DE ACESSO</div>
-                    <div style="margin: 2px 0; letter-spacing: 0.5px;">
+                    <div style="margin: 2px 0; letter-spacing: 0.5px; word-break: break-all; line-height: 1.2;">
                         <t t-if="props.data.x_fiscal.chave_formatada">
                             <t t-esc="props.data.x_fiscal.chave_formatada"/>
                         </t>

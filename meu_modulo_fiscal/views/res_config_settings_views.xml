@@ -1,0 +1,17 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <record id="res_config_settings_view_form_fiscal" model="ir.ui.view">
+        <field name="name">res.config.settings.view.form.inherit.meu_modulo_fiscal</field>
+        <field name="model">res.config.settings</field>
+        <field name="inherit_id" ref="point_of_sale.res_config_settings_view_form"/>
+        <field name="arch" type="xml">
+            <xpath expr="//block[@id='pos_payment_section']" position="after">
+                <block title="Configuração Fiscal NFC-e" id="pos_fiscal_test_section">
+                    <setting string="Formas de Pagamento Fiscais" help="Selecione as formas de pagamento que devem disparar a emissão automática de NFC-e via Middleware.">
+                        <field name="pos_x_fiscal_payment_method_ids" widget="many2many_checkboxes" domain="[('id', 'in', pos_payment_method_ids)]" readonly="pos_has_active_session"/>
+                    </setting>
+                </block>
+            </xpath>
+        </field>
+    </record>
+</odoo>

@@ -21,3 +21,6 @@ __pycache__/
 # So
 .DS_Store
 
+# OpenCode
+.omo/
+

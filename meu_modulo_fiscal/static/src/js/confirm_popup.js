@@ -5,7 +5,7 @@ import { _t } from "@web/core/l10n/translation";
 import { PaymentScreen } from "@point_of_sale/app/screens/payment_screen/payment_screen";
 import { patch } from "@web/core/utils/patch";
 import { SelectionPopup } from "@point_of_sale/app/utils/input_popups/selection_popup";
-import { TextInputPopup } from "@point_of_sale/app/utils/input_popups/text_input_popup";
+// import { TextInputPopup } from "@point_of_sale/app/utils/input_popups/text_input_popup";  // REMOVIDO: Email dialog removido do fluxo PDV
 import { emitirContingencia } from "./fiscal_contingencia";
 
 patch(PaymentScreen.prototype, {
@@ -48,7 +48,7 @@ patch(PaymentScreen.prototype, {
     },
 
     async _awaitFiscalReturn(order) {
-        this.ui.block();
+        this.ui.block({ message: _t("Aguardando SEFAZ...") });
         console.log("🔄 Aguardando retorno fiscal...");
 
         const posReference = order.pos_reference || order.name;
@@ -106,42 +106,59 @@ patch(PaymentScreen.prototype, {
     },
 
     async validateOrder(isForceValidate) {
-        console.log("Cliquei em validar, aguardando confirmação...");
-
-        // Popup de Confirmação
-        const result = await makeAwaitable(this.dialog, SelectionPopup, {
-            title: _t("Confirmar venda?"),
-            list: [
-                { id: 1, label: _t("Sim"), item: true },
-                { id: 0, label: _t("Não"), item: false },
-            ],
-        });
+        console.log("Validando venda... Verificando formas de pagamento fiscais.");
 
         const order = this.pos.get_order();
-        order.x_confirmacao_venda = result;
+        
+        // IDs de formas de pagamento configuradas como fiscais para este caixa.
+        const fiscalMethods = this.pos.session._fiscal_payment_method_ids;
+        let hasFiscalPayment;
 
-        // Coleta de E-mail
-        if (result === true) {
-            const email_cliente = await makeAwaitable(this.dialog, TextInputPopup, {
-                title: "Informe o E-mail",
-                placeholder: "Digite o e-mail do cliente",
-                startingValue: "",
-            });
-            if (email_cliente) {
-                order.x_email_cliente = email_cliente;
+        if (!fiscalMethods || fiscalMethods.length === 0) {
+            // Nenhuma checkbox configurada: não emite NFC-e
+            console.log("⚠️ [FISCAL] Nenhuma forma de pagamento fiscal detectada/marcada nas configurações. Pulando NFC-e.");
+            hasFiscalPayment = false;
+        } else {
+            hasFiscalPayment = false;
+
+            const paymentlines = this.paymentLines
+                ?? order.get_paymentlines?.()
+                ?? order.paymentlines?.models
+                ?? order.paymentlines
+                ?? [];
+
+            const payArray = Array.isArray(paymentlines) ? paymentlines : Array.from(paymentlines || []);
+
+            for (const line of payArray) {
+                if (typeof line === 'number') continue; // Previne erro caso ainda caia em IDs puros
+                const methodId = line.payment_method_id?.id ?? line.payment_method?.id ?? line.payment_method_id;
+                if (fiscalMethods.includes(methodId)) {
+                    hasFiscalPayment = true;
+                    break;
+                }
             }
         }
 
         // ============================================
+        // DECISÃO AUTOMÁTICA (baseada nas checkboxes)
+        // ============================================
+        order.x_confirmacao_venda = hasFiscalPayment;
+
+        if (hasFiscalPayment) {
+            console.log("✅ Venda FISCAL detectada — NFC-e será emitida.");
+        } else {
+            console.log("⏩ Venda NÃO FISCAL — pulando emissão de NFC-e.");
+        }
+
+
+        // ============================================
         // CONTINGÊNCIA IMEDIATA (Offline)
         // ============================================
-        if (result === true && !navigator.onLine) {
+        if (hasFiscalPayment && !navigator.onLine) {
             console.log("Detectado modo offline! Emitindo em contingência.");
-            // Usa o seed do banco (injetado pelo Python na abertura da sessão) como piso.
             const seedFromSession = this.pos.session._ultimo_numero_contingencia || 0;
             const dados = await emitirContingencia(order, this.pos.company, this.pos.config.id, seedFromSession, this.env.services.orm);
 
-            
             Object.assign(order, {
                 x_fiscal_offline: true,
                 x_fiscal_status: 'contingencia',
@@ -159,8 +176,7 @@ patch(PaymentScreen.prototype, {
                     chave_acesso: dados.chaveAcesso,
                 })
             });
-            
-            // Envio nativo e avança de tela
+
             await super.validateOrder(isForceValidate);
             return;
         }
@@ -168,12 +184,9 @@ patch(PaymentScreen.prototype, {
         // ============================================
         // FLUXO NORMAL (Online)
         // ============================================
-        
-        // Envio nativo pro Python (dispara webhook no backend).
-        // A lógica de esperar a SEFAZ agora roda dentro de `afterOrderValidation`
-        // para garantir que trava a impressão automática até a resposta chegar.
         await super.validateOrder(isForceValidate);
     },
+
 
     /**
      * Intercepta o pós-validação (momento em que o Odoo decide mudar de tela e imprimir).
@@ -181,11 +194,17 @@ patch(PaymentScreen.prototype, {
      * mesmo que a opção "Imprimir Recibo Automaticamente" esteja ativa.
      */
     async afterOrderValidation() {
-        const order = this.pos.get_order();
+        const order = this.currentOrder || this.pos.get_order();
         
-        // Se foi confirmado e estamos online, segura o fluxo até a SEFAZ responder
-        if (order && order.x_confirmacao_venda === true && navigator.onLine) {
-            await this._awaitFiscalReturn(order);
+        if (order && order.x_confirmacao_venda === true) {
+            // Se o ID for string, significa que o sync falhou (está na fila offline)
+            if (typeof order.id === "string" && !order.x_fiscal_offline) {
+                console.log("⚠️ Fallback Contingência desativado a pedido: Pedido na fila offline (Falha de sync). A nota será processada ao restabelecer conexão.");
+                // Retirado o emitirContingencia daqui. A nota será sincronizada normalmente pelo Odoo quando a rede voltar.
+            } else if (typeof order.id === "number") {
+                // Sincronizou com o backend online, então aguarda a resposta da SEFAZ
+                await this._awaitFiscalReturn(order);
+            }
         } else if (order && order.x_confirmacao_venda === false) {
             console.log("⏩ Venda não fiscal: Pulando verificação.");
         }
