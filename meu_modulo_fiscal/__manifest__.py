@@ -24,6 +24,7 @@
             'meu_modulo_fiscal/static/src/js/export_data.js',
             'meu_modulo_fiscal/static/src/js/cpf_popup.js', 
             'meu_modulo_fiscal/static/src/js/order_receipt.js', 
+            'meu_modulo_fiscal/static/src/js/pos_menu_cleanup.js',
             'meu_modulo_fiscal/static/src/xml/cpf_button.xml',
             'meu_modulo_fiscal/static/src/xml/order_receipt.xml',
             'meu_modulo_fiscal/static/src/css/order_receipt.css',
