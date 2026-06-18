@@ -55,7 +55,7 @@ class ProductTemplate(models.Model):
     # ==========================================================
 
     x_ncm_id = fields.Many2one(
-        'br.ncm', string='Código NCM', required=True,
+        'br.ncm', string='Código NCM',
         help="Nomenclatura Comum do Mercosul - Obrigatório e central para calcular tributos da NF-e/NFC-e"
     )
 
