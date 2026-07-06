@@ -27,6 +27,11 @@ class PosOrder(models.Model):
     x_cpf_nota = fields.Char(string="CPF na nota", help="CPF informado pelo cliente para a via do consumidor.")
     x_email_cliente = fields.Char(string="E-mail do cliente", help="Para envio do XML/Danfe contigenciado.")
     x_confirmacao_venda = fields.Boolean(string="Venda enviada?", help="Flag que dita se o PDV já sincronizou a criação offline dessa venda.")
+    x_amount_other_value = fields.Float(
+        string="Outras Despesas (vOutro)",
+        digits=(16, 2),
+        help="Outras despesas acessórias cobradas na venda — mapeia para vOutro do XML SEFAZ.",
+    )
 
     # ==========================================================
     # RETORNO FISCAL DO MIDDLEWARE (FOCUS NFE)
@@ -68,6 +73,7 @@ class PosOrder(models.Model):
             'x_fiscal_numero', 'x_fiscal_serie', 'x_fiscal_status',
             'x_fiscal_chave', 'x_fiscal_mensagem',
             'x_fiscal_qrcode_url', 'x_fiscal_qrcode_b64',
+            'x_amount_other_value',
         ]
         for campo in campos_para_sincronizar:
             if campo in ui_order:
@@ -80,6 +86,16 @@ class PosOrder(models.Model):
             vals['x_fiscal_offline'] = bool(ui_order.get('x_fiscal_offline'))
 
         return vals
+
+    def _compute_prices(self):
+        """
+        Sobrescreve o cálculo de preços para embutir o acréscimo
+        no amount_total e atualizar a diferença de pagamento.
+        """
+        super()._compute_prices()
+        for order in self:
+            if order.x_amount_other_value:
+                order.amount_total += order.x_amount_other_value
 
     @api.model_create_multi
     def create(self, vals_list):
@@ -119,20 +135,32 @@ class PosOrder(models.Model):
             'valor': p.amount,
         } for p in self.payment_ids]
 
+        # Identifica o produto de desconto global (pos_discount) para filtrar do payload.
+        # No padrão SEFAZ, desconto é vDesc (campo de total), não item fiscal.
+        discount_product_id = self.config_id.discount_product_id.id if self.config_id.discount_product_id else None
         dados_dos_produtos = []
-        for i, line in enumerate(self.lines, start=1):
+        desconto_global = 0.0
+        item_num = 0
+        for line in self.lines:
             product = line.product_id
+
+            # Filtra linha de desconto global — não é item fiscal (vDesc, não item)
+            if discount_product_id and product.id == discount_product_id:
+                desconto_global += abs(line.price_subtotal_incl)
+                continue
+
+            item_num += 1
             valor_bruto = line.price_unit * line.qty
-            valor_liq = line.price_subtotal_incl 
+            valor_liq = line.price_subtotal_incl
             desconto = max(0.0, valor_bruto - valor_liq)
 
             item = {
-                'numero_item': i,
+                'numero_item': item_num,
                 'codigo_produto': product.default_code or str(product.id),
                 'descricao': product.name,
                 'codigo_barras': product.barcode or 'SEM GTIN',
-                'codigo_ncm': product.x_ncm_id.code if product.x_ncm_id else '', 
-                'cfop': product.x_cfop, 
+                'codigo_ncm': product.x_ncm_id.code if product.x_ncm_id else '',
+                'cfop': product.x_cfop,
                 'quantidade_comercial': line.qty,
                 'quantidade_tributavel': line.qty,
                 'unidade_comercial': line.product_uom_id.name,
@@ -157,6 +185,8 @@ class PosOrder(models.Model):
                 'total': self.amount_total,
                 'numero_caixa': self.user_id.name,
                 'numero_ordem': self.pos_reference,
+                'x_amount_other_value': self.x_amount_other_value,
+                'desconto_global': desconto_global,
             },
             'cliente': {
                 'nome': 'CONSUMIDOR FINAL',
@@ -170,7 +200,7 @@ class PosOrder(models.Model):
                 'cnpj_emitente': self.company_id.vat or '',
                 'modelo': '65',
             },
-            'confirmacao_venda': bool(self.x_confirmacao_venda), 
+            'confirmacao_venda': bool(self.x_confirmacao_venda),
             'contingencia': {
                 'ativa': bool(self.x_fiscal_offline),
                 'payload': self.x_contingencia_payload or None,
@@ -304,6 +334,7 @@ class PosSession(models.Model):
             'x_cpf_nota',  
             'x_email_cliente',  
             'x_contingencia_payload',
+            'x_amount_other_value',
         ])
         return params
 
