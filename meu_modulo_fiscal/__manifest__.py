@@ -28,6 +28,9 @@
             'meu_modulo_fiscal/static/src/xml/cpf_button.xml',
             'meu_modulo_fiscal/static/src/xml/order_receipt.xml',
             'meu_modulo_fiscal/static/src/css/order_receipt.css',
+            'meu_modulo_fiscal/static/src/xml/acrescimo_button.xml',
+            'meu_modulo_fiscal/static/src/js/acrescimo_popup.js',
+
         ],
         'web.assets_web': [
             'meu_modulo_fiscal/static/src/js/user_menu_cleanup.js',

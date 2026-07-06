@@ -1,0 +1,18 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<templates id="template" xml:space="preserve">
+
+    <t t-inherit="point_of_sale.PaymentScreenButtons" t-inherit-mode="extension">
+        <xpath expr="//button[@t-on-click='clickCpfButton']" position="after">
+            <div class="d-flex w-100 mt-1">
+                <button class="button btn btn-light btn-lg d-flex justify-content-between align-items-baseline w-100 lh-lg"
+                    t-on-click="clickAcrescimoButton">
+                    <span><i class="fa fa-plus-circle me-2" />Acréscimo</span>
+                    <t t-if="currentOrder.x_amount_other_value">
+                        <span><t t-esc="env.utils.formatCurrency(currentOrder.x_amount_other_value)"/></span>
+                    </t>
+                </button>
+            </div>
+        </xpath>
+    </t>
+
+</templates>

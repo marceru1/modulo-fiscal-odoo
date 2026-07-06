@@ -30,8 +30,26 @@ patch(PosOrder.prototype, {
             x_confirmacao_venda: json.x_confirmacao_venda,
             // x_email_cliente: json.x_email_cliente,  // REMOVIDO: Email não é mais coletado no PDV
             x_cpf_nota: json.x_cpf_nota,
+            x_amount_other_value: json.x_amount_other_value || 0.0,
             x_contingencia_payload: json.x_contingencia_payload || "",
         });
+    },
+
+    /**
+     * Patch no getter taxTotals para adicionar o acréscimo (surtaxa)
+     * no total geral do pedido e ajustar o saldo restante de pagamento.
+     */
+    get taxTotals() {
+        const taxTotals = super.taxTotals;
+        const acrescimo = this.x_amount_other_value || 0.0;
+        if (acrescimo > 0.0) {
+            taxTotals.order_total += acrescimo;
+            taxTotals.order_remaining += acrescimo;
+            
+            const remaining_with_rounding = taxTotals.order_remaining + (taxTotals.order_rounding || 0.0);
+            taxTotals.order_has_zero_remaining = Math.abs(remaining_with_rounding) < 0.00001;
+        }
+        return taxTotals;
     },
 
     /**
@@ -48,6 +66,7 @@ patch(PosOrder.prototype, {
         json.x_cpf_nota = this.x_cpf_nota || "";
         // json.x_email_cliente = this.x_email_cliente || "";  // REMOVIDO: Email não é mais coletado no PDV
         json.x_confirmacao_venda = !!this.x_confirmacao_venda;
+        json.x_amount_other_value = this.x_amount_other_value || 0.0;
         json.x_contingencia_payload = this.x_contingencia_payload || "";
 
         return json;
@@ -65,35 +84,56 @@ patch(PosOrder.prototype, {
         const orderlines = this.get_orderlines();
         let qtd_itens = 0;
 
+        // Identifica o produto de desconto global (pos_discount) para filtrar do DANFE.
+        // No padrão SEFAZ, desconto é vDesc (campo de total), não item.
+        const discountProduct = this.config.discount_product_id;
+        let descontoGlobal = 0.0;
+
         // Limpeza dos métodos de pagamento para o rodape do Danfe
-        const metodos = result.paymentlines.map(p => ({
-            metodo_nome: p.name,
-            metodo_valor: p.amount,
-        }));
+        const metodosMap = {};
+        for (const p of result.paymentlines) {
+            const nome = p.name;
+            if (!metodosMap[nome]) {
+                metodosMap[nome] = { metodo_nome: nome, metodo_valor: 0 };
+            }
+            metodosMap[nome].metodo_valor += p.amount;
+        }
+        const metodos = Object.values(metodosMap);
 
-        // Estruturação tabular padrão da Receita: Código, Descrição, Qtd, UN, Vlr e Subtotal.
-        const danfe_items = orderlines.map((line, index) => {
-            qtd_itens += line.get_quantity();
-            const product = line.get_product();
-
-            return {
-                index: String(index + 1).padStart(3, '0'),
-                code: product.barcode || 'SEM CÓDIGO',
-                description: product.display_name,
-                qntd: line.get_quantity(),
-                unit: line.get_unit() ? line.get_unit().name : 'UN',
-                vlr_unit: line.get_unit_price(),
-                desc: line.get_discount(),
-                vlr_total: line.get_price_with_tax()
-            };
-        });
+        // Filtra linhas de desconto global — não são itens do DANFE (padrão SEFAZ: vDesc, não item)
+        const danfe_items = orderlines
+            .filter((line) => {
+                const product = line.get_product();
+                if (discountProduct && product.id === discountProduct.id) {
+                    descontoGlobal += Math.abs(line.get_price_with_tax());
+                    return false;
+                }
+                return true;
+            })
+            .map((line, index) => {
+                qtd_itens += line.get_quantity();
+                const product = line.get_product();
+                return {
+                    index: String(index + 1).padStart(3, '0'),
+                    code: product.barcode || 'SEM CÓDIGO',
+                    description: product.display_name,
+                    qntd: line.get_quantity(),
+                    unit: line.get_unit() ? line.get_unit().name : 'UN',
+                    vlr_unit: line.get_unit_price(),
+                    desc: line.get_discount(),
+                    vlr_total: line.get_price_with_tax()
+                };
+            });
 
         result.danfe_items = danfe_items;
         result.danfe_totais = {
             qtd_itens: qtd_itens,
-            linhas: orderlines.length,
-            valor_total: this.get_total_with_tax(),
-            desconto_total: this.get_total_discount(),
+            linhas: danfe_items.length,
+            // vProd: get_total_with_tax() soma tudo (produtos + desconto negativo + acréscimo via taxTotals).
+            // Somamos descontoGlobal de volta (anula o negativo) e subtraímos o acréscimo para obter vProd puro.
+            valor_total: this.get_total_with_tax() + descontoGlobal - (this.x_amount_other_value || 0.0),
+            // vDesc: desconto por linha (get_total_discount) + desconto global (produto desconto)
+            desconto_total: this.get_total_discount() + descontoGlobal,
             metodos: metodos,
         };
 
@@ -128,6 +168,7 @@ patch(PosOrder.prototype, {
         };
         result.x_cpf_nota = this.x_cpf_nota;
         result.x_confirmacao_venda = this.x_confirmacao_venda;
+        result.x_amount_other_value = this.x_amount_other_value || 0.0;
         
         result.cashier = result.cashier || (this.cashier ? this.cashier.name : null);
         
