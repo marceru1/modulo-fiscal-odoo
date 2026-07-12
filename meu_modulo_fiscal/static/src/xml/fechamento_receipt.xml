@@ -1,0 +1,130 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<templates id="template" xml:space="preserve">
+
+    <t t-name="meu_modulo.FechamentoReceipt">
+        <div class="pos-receipt" style="font-family: 'Inconsolata', monospace; font-size: 12px;">
+
+            <!-- Cabeçalho da empresa -->
+            <div style="text-align: center;">
+                <div style="font-size: 14px; margin-bottom: 2px;">
+                    <t t-esc="data.empresa.nome ? data.empresa.nome.toUpperCase() : ''"/>
+                </div>
+                <div>
+                    <t t-esc="data.empresa.endereco_linha1 ? data.empresa.endereco_linha1.toUpperCase() : ''"/>
+                </div>
+                <div>
+                    <t t-esc="data.empresa.endereco_linha2 ? data.empresa.endereco_linha2.toUpperCase() : ''"/>
+                </div>
+                <div>
+                    <span>CNPJ: <t t-esc="data.empresa.cnpj"/></span>
+                    <span>    IE: <t t-esc="data.empresa.ie"/></span>
+                </div>
+            </div>
+
+            <div style="border-bottom: 1px dashed #000; margin: 4px 0;"></div>
+
+            <!-- Identificação do fechamento -->
+            <div style="text-align: center; margin-bottom: 4px;">
+                <strong>FECHAMENTO DE CAIXA</strong>
+            </div>
+            <div>
+                <span>USUARIO.........................</span>
+                <span t-esc="data.identificacao.usuario"/>
+            </div>
+            <div>
+                <span>ABERTURA............</span>
+                <span t-esc="data.identificacao.data_abertura"/>
+            </div>
+            <div>
+                <span>FECHAMENTO..........</span>
+                <span t-esc="data.identificacao.data_fechamento"/>
+            </div>
+            <div>
+                <span>FUNDO DE CAIXA(F)...............</span>
+                <span t-esc="formatCurrency(data.identificacao.fundo_caixa).replace('R$', '').trim()"/>
+            </div>
+
+            <div style="border-bottom: 1px dashed #000; margin: 4px 0;"></div>
+
+            <!-- Vendas por método -->
+            <div style="text-align: center; margin-bottom: 2px;">
+                VENDAS(V)
+            </div>
+            <t t-foreach="data.metodos_pagamento" t-as="metodo" t-key="metodo.nome">
+                <div style="display: flex; justify-content: space-between;">
+                    <span t-esc="metodo.nome"/>
+                    <span t-esc="formatCurrency(metodo.valor).replace('R$', '').trim()"/>
+                </div>
+            </t>
+            <div style="display: flex; justify-content: space-between; border-top: 1px dashed #000; margin-top: 2px; padding-top: 2px;">
+                <span><strong>TOTAL</strong></span>
+                <span><strong><t t-esc="formatCurrency(data.total_vendas).replace('R$', '').trim()"/></strong></span>
+            </div>
+
+            <!-- Sangrias -->
+            <t t-if="data.sangrias.length > 0">
+                <div style="border-bottom: 1px dashed #000; margin: 4px 0;"></div>
+                <div style="text-align: center; margin-bottom: 2px;">
+                    SANGRIAS(S)
+                </div>
+                <t t-foreach="data.sangrias" t-as="sangria" t-key="sangria.motivo">
+                    <div style="display: flex; justify-content: space-between;">
+                        <span t-esc="sangria.motivo"/>
+                        <span t-esc="formatCurrency(sangria.valor).replace('R$', '').trim()"/>
+                    </div>
+                </t>
+                <div style="display: flex; justify-content: space-between; border-top: 1px dashed #000; margin-top: 2px; padding-top: 2px;">
+                    <span><strong>TOTAL</strong></span>
+                    <span><strong><t t-esc="formatCurrency(data.total_sangrias).replace('R$', '').trim()"/></strong></span>
+                </div>
+            </t>
+
+            <!-- Saldo de movimentação -->
+            <div style="border-bottom: 1px dashed #000; margin: 4px 0;"></div>
+            <div style="text-align: center; margin-bottom: 2px;">
+                SALDO DE MOVIMENTACAO DO DIA
+            </div>
+            <div style="display: flex; justify-content: space-between;">
+                <span>ENTRADAS(F+V):</span>
+                <span t-esc="formatCurrency(data.saldo_movimentacao.entradas).replace('R$', '').trim()"/>
+            </div>
+            <div style="display: flex; justify-content: space-between;">
+                <span>SAIDAS(S):</span>
+                <span t-esc="formatCurrency(data.saldo_movimentacao.saidas).replace('R$', '').trim()"/>
+            </div>
+            <div style="display: flex; justify-content: space-between;">
+                <span><strong>SALDO DO CAIXA:</strong></span>
+                <span><strong><t t-esc="formatCurrency(data.saldo_movimentacao.saldo).replace('R$', '').trim()"/></strong></span>
+            </div>
+
+            <!-- Saldo detalhado -->
+            <div style="border-bottom: 1px dashed #000; margin: 4px 0;"></div>
+            <div style="text-align: center; margin-bottom: 2px;">
+                SALDO DETALHADO DO CAIXA
+            </div>
+            <t t-foreach="data.saldo_detalhado" t-as="saldo" t-key="saldo.nome">
+                <div style="display: flex; justify-content: space-between;">
+                    <span t-esc="saldo.nome"/>
+                    <span t-esc="formatCurrency(saldo.calculado).replace('R$', '').trim()"/>
+                </div>
+                <div style="display: flex; justify-content: space-between;">
+                    <span>INFORMADO</span>
+                    <span t-esc="formatCurrency(saldo.informado).replace('R$', '').trim()"/>
+                </div>
+                <div style="display: flex; justify-content: space-between;">
+                    <span>DIFERENCA</span>
+                    <span t-esc="formatCurrency(saldo.diferenca).replace('R$', '').trim()"/>
+                </div>
+                <div style="margin-bottom: 4px;"></div>
+            </t>
+
+            <!-- Assinatura -->
+            <div style="border-bottom: 1px dashed #000; margin: 4px 0;"></div>
+            <div style="text-align: center; margin-top: 20px;">
+                ASSINATURA
+            </div>
+
+        </div>
+    </t>
+
+</templates>
