@@ -32,6 +32,11 @@ class PosOrder(models.Model):
         digits=(16, 2),
         help="Outras despesas acessórias cobradas na venda — mapeia para vOutro do XML SEFAZ.",
     )
+    x_discount_value = fields.Float(
+        string="Desconto (R$)",
+        digits=(16, 2),
+        help="Desconto em valor fixo aplicado na venda — mapeia para vDesc do XML SEFAZ.",
+    )
 
     # ==========================================================
     # RETORNO FISCAL DO MIDDLEWARE (FOCUS NFE)
@@ -73,7 +78,7 @@ class PosOrder(models.Model):
             'x_fiscal_numero', 'x_fiscal_serie', 'x_fiscal_status',
             'x_fiscal_chave', 'x_fiscal_mensagem',
             'x_fiscal_qrcode_url', 'x_fiscal_qrcode_b64',
-            'x_amount_other_value',
+            'x_amount_other_value', 'x_discount_value',
         ]
         for campo in campos_para_sincronizar:
             if campo in ui_order:
@@ -91,11 +96,14 @@ class PosOrder(models.Model):
         """
         Sobrescreve o cálculo de preços para embutir o acréscimo
         no amount_total e atualizar a diferença de pagamento.
+        Também subtrai o desconto fixo (x_discount_value) do amount_total.
         """
         super()._compute_prices()
         for order in self:
             if order.x_amount_other_value:
                 order.amount_total += order.x_amount_other_value
+            if order.x_discount_value:
+                order.amount_total -= order.x_discount_value
 
     @api.model_create_multi
     def create(self, vals_list):
@@ -186,7 +194,7 @@ class PosOrder(models.Model):
                 'numero_caixa': self.user_id.name,
                 'numero_ordem': self.pos_reference,
                 'x_amount_other_value': self.x_amount_other_value,
-                'desconto_global': desconto_global,
+                'desconto_global': self.x_discount_value,
             },
             'cliente': {
                 'nome': 'CONSUMIDOR FINAL',
@@ -335,6 +343,7 @@ class PosSession(models.Model):
             'x_email_cliente',  
             'x_contingencia_payload',
             'x_amount_other_value',
+            'x_discount_value',
         ])
         return params
 

@@ -30,6 +30,9 @@
             'meu_modulo_fiscal/static/src/css/order_receipt.css',
             'meu_modulo_fiscal/static/src/xml/acrescimo_button.xml',
             'meu_modulo_fiscal/static/src/js/acrescimo_popup.js',
+            'meu_modulo_fiscal/static/src/xml/desconto_button.xml',
+            'meu_modulo_fiscal/static/src/js/desconto_popup.js',
+            'meu_modulo_fiscal/static/src/js/print_fix.js',
 
         ],
         'web.assets_web': [

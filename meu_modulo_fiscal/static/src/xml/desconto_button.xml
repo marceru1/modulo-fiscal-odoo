@@ -1,0 +1,18 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<templates id="template" xml:space="preserve">
+
+    <t t-inherit="point_of_sale.PaymentScreenButtons" t-inherit-mode="extension">
+        <xpath expr="//button[@t-on-click='clickAcrescimoButton']" position="after">
+            <div class="d-flex w-100 mt-1">
+                <button class="button btn btn-light btn-lg d-flex justify-content-between align-items-baseline w-100 lh-lg"
+                    t-on-click="clickDescontoButton">
+                    <span><i class="fa fa-minus-circle me-2" />Desconto</span>
+                    <t t-if="currentOrder.x_discount_value">
+                        <span><t t-esc="env.utils.formatCurrency(currentOrder.x_discount_value)"/></span>
+                    </t>
+                </button>
+            </div>
+        </xpath>
+    </t>
+
+</templates>
