@@ -31,6 +31,7 @@ patch(PosOrder.prototype, {
             // x_email_cliente: json.x_email_cliente,  // REMOVIDO: Email não é mais coletado no PDV
             x_cpf_nota: json.x_cpf_nota,
             x_amount_other_value: json.x_amount_other_value || 0.0,
+            x_discount_value: json.x_discount_value || 0.0,
             x_contingencia_payload: json.x_contingencia_payload || "",
         });
     },
@@ -45,7 +46,15 @@ patch(PosOrder.prototype, {
         if (acrescimo > 0.0) {
             taxTotals.order_total += acrescimo;
             taxTotals.order_remaining += acrescimo;
-            
+
+            const remaining_with_rounding = taxTotals.order_remaining + (taxTotals.order_rounding || 0.0);
+            taxTotals.order_has_zero_remaining = Math.abs(remaining_with_rounding) < 0.00001;
+        }
+        const desconto = this.x_discount_value || 0.0;
+        if (desconto > 0.0) {
+            taxTotals.order_total -= desconto;
+            taxTotals.order_remaining -= desconto;
+
             const remaining_with_rounding = taxTotals.order_remaining + (taxTotals.order_rounding || 0.0);
             taxTotals.order_has_zero_remaining = Math.abs(remaining_with_rounding) < 0.00001;
         }
@@ -67,6 +76,7 @@ patch(PosOrder.prototype, {
         // json.x_email_cliente = this.x_email_cliente || "";  // REMOVIDO: Email não é mais coletado no PDV
         json.x_confirmacao_venda = !!this.x_confirmacao_venda;
         json.x_amount_other_value = this.x_amount_other_value || 0.0;
+        json.x_discount_value = this.x_discount_value || 0.0;
         json.x_contingencia_payload = this.x_contingencia_payload || "";
 
         return json;
@@ -131,9 +141,10 @@ patch(PosOrder.prototype, {
             linhas: danfe_items.length,
             // vProd: get_total_with_tax() soma tudo (produtos + desconto negativo + acréscimo via taxTotals).
             // Somamos descontoGlobal de volta (anula o negativo) e subtraímos o acréscimo para obter vProd puro.
-            valor_total: this.get_total_with_tax() + descontoGlobal - (this.x_amount_other_value || 0.0),
-            // vDesc: desconto por linha (get_total_discount) + desconto global (produto desconto)
-            desconto_total: this.get_total_discount() + descontoGlobal,
+            // Também somamos x_discount_value de volta porque taxTotals já subtraiu.
+            valor_total: this.get_total_with_tax() + descontoGlobal - (this.x_amount_other_value || 0.0) + (this.x_discount_value || 0.0),
+            // vDesc: desconto por linha (get_total_discount) + desconto global (produto desconto) + desconto fixo em R$
+            desconto_total: this.get_total_discount() + descontoGlobal + (this.x_discount_value || 0.0),
             metodos: metodos,
         };
 

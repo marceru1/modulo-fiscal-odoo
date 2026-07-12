@@ -137,19 +137,11 @@
                 </t>
 
                 <div class="danfe-separador" style="border-bottom: 1px dashed #000; margin: 4px 0;"></div>
-                
-                <div class="valor-informado" style="display: flex; justify-content: space-between;">
-                    <span>VALOR INFORMADO</span>
-                    <t t-set="total_informado" t-value="props.data.danfe_totais.metodos.reduce((acc, p) => acc + p.metodo_valor, 0)"/>
-                    <span><t t-esc="props.formatCurrency(total_informado).replace('R$', '').trim()"/></span>
-                </div>
 
             </div>
 
-            <div class="danfe-separador" style="border-bottom: 1px dashed #000; margin: 4px 0;"></div>
-
             <div class="fiscal-section" style="text-align: center; font-family: 'Inconsolata', monospace; font-size: 12px;">
-                
+
                 <t t-if="props.data.x_fiscal and (props.data.x_fiscal.status === 'autorizado' or props.data.x_fiscal.status === 'contingencia')">
                     
                     <t t-if="props.data.x_fiscal.offline">
