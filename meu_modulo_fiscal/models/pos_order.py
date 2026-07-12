@@ -404,3 +404,107 @@ class PosSession(models.Model):
                 session['_fiscal_payment_method_ids'] = self.config_id.x_fiscal_payment_method_ids.ids
 
         return result
+
+    def get_fechamento_data(self):
+        """
+        Coleta todos os dados necessários para o relatório de fechamento
+        de caixa impresso na impressora térmica do PDV.
+
+        Reaproveita a lógica do get_closing_control_data do core e adiciona:
+        - Dados da empresa (razão social, CNPJ, IE, endereço)
+        - Usuário e datas de abertura/fechamento
+        - Fundo de caixa
+        - Vendas agrupadas por método de pagamento
+        - Sangrias (cash in/out) com motivo e valor
+        - Saldo de movimentação (entradas - saídas)
+        - Saldo detalhado por método (calculado, informado=0, diferença)
+
+        Returns:
+            dict: Estrutura completa para renderizar o template FechamentoReceipt.
+        """
+        self.ensure_one()
+        company = self.config_id.company_id
+
+        # Reaproveita os dados que o core já calcula
+        closing_data = self.get_closing_control_data()
+
+        # === EMPRESA ===
+        empresa = {
+            'nome': company.name or '',
+            'cnpj': (company.x_cnpj or '').strip(),
+            'ie': (company.x_ie or '').strip(),
+            'endereco_linha1': (company.x_endereco_linha1 or '').strip(),
+            'endereco_linha2': (company.x_endereco_linha2 or '').strip(),
+            'telefone': company.phone or '',
+        }
+
+        # === USUÁRIO E DATAS ===
+        identificacao = {
+            'usuario': self.user_id.name or '',
+            'data_abertura': (self.start_at or '').strftime('%d/%m/%Y %H:%M:%S') if self.start_at else '',
+            'data_fechamento': (self.stop_at or '').strftime('%d/%m/%Y %H:%M:%S') if self.stop_at else '',
+            'fundo_caixa': self.cash_register_balance_start or 0.0,
+        }
+
+        # === VENDAS POR MÉTODO ===
+        metodos_pagamento = []
+
+        # Cash (do default_cash_details)
+        cash_details = closing_data.get('default_cash_details', {})
+        if cash_details:
+            metodos_pagamento.append({
+                'nome': cash_details.get('name', 'Dinheiro'),
+                'valor': cash_details.get('payment_amount', 0.0),
+            })
+
+        # Non-cash (cartões, pix, etc)
+        for pm in closing_data.get('non_cash_payment_methods', []):
+            metodos_pagamento.append({
+                'nome': pm.get('name', ''),
+                'valor': pm.get('amount', 0.0),
+            })
+
+        total_vendas = sum(m['valor'] for m in metodos_pagamento)
+
+        # === SANGRIAS (Cash In/Out) ===
+        sangrias = []
+        for move in cash_details.get('moves', []):
+            sangrias.append({
+                'motivo': move.get('name', ''),
+                'valor': abs(move.get('amount', 0.0)),
+            })
+        total_sangrias = sum(s['valor'] for s in sangrias)
+
+        # === SALDO DE MOVIMENTAÇÃO ===
+        entradas = total_vendas + (identificacao['fundo_caixa'] or 0.0)
+        saidas = total_sangrias
+        saldo_caixa = entradas - saidas
+
+        # === SALDO DETALHADO POR MÉTODO ===
+        # Calculado/Sistema = valor do sistema
+        # Informado = 0 (operador preenche na hora — por enquanto 0)
+        # Diferença = informado - calculado = -calculado (por enquanto)
+        saldo_detalhado = []
+        for metodo in metodos_pagamento:
+            valor_sistema = metodo['valor']
+            saldo_detalhado.append({
+                'nome': metodo['nome'],
+                'calculado': valor_sistema,
+                'informado': 0.0,
+                'diferenca': 0.0 - valor_sistema,
+            })
+
+        return {
+            'empresa': empresa,
+            'identificacao': identificacao,
+            'metodos_pagamento': metodos_pagamento,
+            'total_vendas': total_vendas,
+            'sangrias': sangrias,
+            'total_sangrias': total_sangrias,
+            'saldo_movimentacao': {
+                'entradas': entradas,
+                'saidas': saidas,
+                'saldo': saldo_caixa,
+            },
+            'saldo_detalhado': saldo_detalhado,
+        }
