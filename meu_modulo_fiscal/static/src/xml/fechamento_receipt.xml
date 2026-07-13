@@ -2,126 +2,170 @@
 <templates id="template" xml:space="preserve">
 
     <t t-name="meu_modulo.FechamentoReceipt">
-        <div class="pos-receipt" style="font-family: 'Inconsolata', monospace; font-size: 12px;">
+        <div class="pos-receipt">
 
             <!-- Cabeçalho da empresa -->
-            <div style="text-align: center;">
-                <div style="font-size: 14px; margin-bottom: 2px;">
+            <div class="danfe-header">
+                <div class="emitente-nome">
                     <t t-esc="data.empresa.nome ? data.empresa.nome.toUpperCase() : ''"/>
                 </div>
-                <div>
+                <div class="emitente-endereco">
                     <t t-esc="data.empresa.endereco_linha1 ? data.empresa.endereco_linha1.toUpperCase() : ''"/>
                 </div>
-                <div>
+                <div class="emitente-endereco">
                     <t t-esc="data.empresa.endereco_linha2 ? data.empresa.endereco_linha2.toUpperCase() : ''"/>
                 </div>
-                <div>
+                <div class="emitente-dados">
                     <span>CNPJ: <t t-esc="data.empresa.cnpj"/></span>
                     <span>    IE: <t t-esc="data.empresa.ie"/></span>
                 </div>
             </div>
 
-            <div style="border-bottom: 1px dashed #000; margin: 4px 0;"></div>
+            <div class="danfe-separador"></div>
 
             <!-- Identificação do fechamento -->
-            <div style="text-align: center; margin-bottom: 4px;">
-                <strong>FECHAMENTO DE CAIXA</strong>
+            <div class="danfe-tipo">
+                FECHAMENTO DE CAIXA
             </div>
-            <div>
-                <span>USUARIO.........................</span>
-                <span t-esc="data.identificacao.usuario"/>
-            </div>
-            <div>
-                <span>ABERTURA............</span>
-                <span t-esc="data.identificacao.data_abertura"/>
-            </div>
-            <div>
-                <span>FECHAMENTO..........</span>
-                <span t-esc="data.identificacao.data_fechamento"/>
-            </div>
-            <div>
-                <span>FUNDO DE CAIXA(F)...............</span>
-                <span t-esc="formatCurrency(data.identificacao.fundo_caixa).replace('R$', '').trim()"/>
+            <div class="danfe-separador"></div>
+
+            <div class="totais-section">
+                <div class="fechamento-linha">
+                    <span>USUARIO.........................</span>
+                    <span class="total-valor"><t t-esc="data.identificacao.usuario"/></span>
+                </div>
+                <div class="fechamento-linha">
+                    <span>ABERTURA............</span>
+                    <span class="total-valor"><t t-esc="data.identificacao.data_abertura"/></span>
+                </div>
+                <div class="fechamento-linha">
+                    <span>FECHAMENTO..........</span>
+                    <span class="total-valor"><t t-esc="data.identificacao.data_fechamento"/></span>
+                </div>
+                <div class="fechamento-linha">
+                    <span>FUNDO DE CAIXA(F)...............</span>
+                    <span class="total-valor"><t t-esc="formatCurrency(data.identificacao.fundo_caixa).replace('R$', '').trim()"/></span>
+                </div>
             </div>
 
-            <div style="border-bottom: 1px dashed #000; margin: 4px 0;"></div>
+            <div class="danfe-separador"></div>
 
             <!-- Vendas por método -->
-            <div style="text-align: center; margin-bottom: 2px;">
-                VENDAS(V)
-            </div>
-            <t t-foreach="data.metodos_pagamento" t-as="metodo" t-key="metodo.nome">
-                <div style="display: flex; justify-content: space-between;">
-                    <span t-esc="metodo.nome"/>
-                    <span t-esc="formatCurrency(metodo.valor).replace('R$', '').trim()"/>
-                </div>
-            </t>
-            <div style="display: flex; justify-content: space-between; border-top: 1px dashed #000; margin-top: 2px; padding-top: 2px;">
-                <span><strong>TOTAL</strong></span>
-                <span><strong><t t-esc="formatCurrency(data.total_vendas).replace('R$', '').trim()"/></strong></span>
-            </div>
-
-            <!-- Sangrias -->
-            <t t-if="data.sangrias.length > 0">
-                <div style="border-bottom: 1px dashed #000; margin: 4px 0;"></div>
-                <div style="text-align: center; margin-bottom: 2px;">
-                    SANGRIAS(S)
-                </div>
-                <t t-foreach="data.sangrias" t-as="sangria" t-key="sangria.motivo">
-                    <div style="display: flex; justify-content: space-between;">
-                        <span t-esc="sangria.motivo"/>
-                        <span t-esc="formatCurrency(sangria.valor).replace('R$', '').trim()"/>
+            <div class="pagamento-titulo">VENDAS(V)</div>
+            <div class="totais-section">
+                <t t-foreach="data.metodos_pagamento" t-as="metodo" t-key="metodo.nome">
+                    <div class="fechamento-linha">
+                        <span><t t-esc="metodo.nome"/></span>
+                        <span class="total-valor"><t t-esc="formatCurrency(metodo.valor).replace('R$', '').trim()"/></span>
                     </div>
                 </t>
-                <div style="display: flex; justify-content: space-between; border-top: 1px dashed #000; margin-top: 2px; padding-top: 2px;">
-                    <span><strong>TOTAL</strong></span>
-                    <span><strong><t t-esc="formatCurrency(data.total_sangrias).replace('R$', '').trim()"/></strong></span>
+            </div>
+            <div class="fechamento-linha-total">
+                <span>TOTAL</span>
+                <span class="total-valor"><t t-esc="formatCurrency(data.total_vendas).replace('R$', '').trim()"/></span>
+            </div>
+
+            <!-- Vendas a Prazo (pay_later) -->
+            <t t-if="data.vendas_prazo.length > 0">
+                <div class="danfe-separador"></div>
+                <div class="pagamento-titulo">VENDAS A PRAZO</div>
+                <div class="totais-section">
+                    <t t-foreach="data.vendas_prazo" t-as="prazo" t-key="prazo_index">
+                        <div class="fechamento-linha">
+                            <span><t t-esc="prazo.cliente"/></span>
+                            <span class="total-valor"><t t-esc="formatCurrency(prazo.valor).replace('R$', '').trim()"/></span>
+                        </div>
+                        <div class="fechamento-linha" style="font-size: 10px; color: #555;">
+                            <span><t t-esc="prazo.data"/></span>
+                        </div>
+                    </t>
+                </div>
+                <div class="fechamento-linha-total">
+                    <span>TOTAL</span>
+                    <span class="total-valor"><t t-esc="formatCurrency(data.total_vendas_prazo).replace('R$', '').trim()"/></span>
+                </div>
+            </t>
+
+            <!-- Sangrias (Cash Out) -->
+            <t t-if="data.sangrias.length > 0">
+                <div class="danfe-separador"></div>
+                <div class="pagamento-titulo">SANGRIAS(S)</div>
+                <div class="totais-section">
+                    <t t-foreach="data.sangrias" t-as="sangria" t-key="sangria.motivo">
+                        <div class="fechamento-linha">
+                            <span><t t-esc="sangria.motivo"/></span>
+                            <span class="total-valor"><t t-esc="formatCurrency(sangria.valor).replace('R$', '').trim()"/></span>
+                        </div>
+                    </t>
+                </div>
+                <div class="fechamento-linha-total">
+                    <span>TOTAL</span>
+                    <span class="total-valor"><t t-esc="formatCurrency(data.total_sangrias).replace('R$', '').trim()"/></span>
+                </div>
+            </t>
+
+            <!-- Entradas (Cash In) -->
+            <t t-if="data.suprimentos.length > 0">
+                <div class="danfe-separador"></div>
+                <div class="pagamento-titulo">ENTRADAS(I)</div>
+                <div class="totais-section">
+                    <t t-foreach="data.suprimentos" t-as="supr" t-key="supr.motivo">
+                        <div class="fechamento-linha">
+                            <span><t t-esc="supr.motivo"/></span>
+                            <span class="total-valor"><t t-esc="formatCurrency(supr.valor).replace('R$', '').trim()"/></span>
+                        </div>
+                    </t>
+                </div>
+                <div class="fechamento-linha-total">
+                    <span>TOTAL</span>
+                    <span class="total-valor"><t t-esc="formatCurrency(data.total_suprimentos).replace('R$', '').trim()"/></span>
                 </div>
             </t>
 
             <!-- Saldo de movimentação -->
-            <div style="border-bottom: 1px dashed #000; margin: 4px 0;"></div>
-            <div style="text-align: center; margin-bottom: 2px;">
-                SALDO DE MOVIMENTACAO DO DIA
+            <div class="danfe-separador"></div>
+            <div class="pagamento-titulo">SALDO DE MOVIMENTACAO DO DIA</div>
+            <div class="totais-section">
+                <div class="fechamento-linha">
+                    <span>ENTRADAS(F+V+I):</span>
+                    <span class="total-valor"><t t-esc="formatCurrency(data.saldo_movimentacao.entradas).replace('R$', '').trim()"/></span>
+                </div>
+                <div class="fechamento-linha">
+                    <span>SAIDAS(S):</span>
+                    <span class="total-valor"><t t-esc="formatCurrency(data.saldo_movimentacao.saidas).replace('R$', '').trim()"/></span>
+                </div>
             </div>
-            <div style="display: flex; justify-content: space-between;">
-                <span>ENTRADAS(F+V):</span>
-                <span t-esc="formatCurrency(data.saldo_movimentacao.entradas).replace('R$', '').trim()"/>
-            </div>
-            <div style="display: flex; justify-content: space-between;">
-                <span>SAIDAS(S):</span>
-                <span t-esc="formatCurrency(data.saldo_movimentacao.saidas).replace('R$', '').trim()"/>
-            </div>
-            <div style="display: flex; justify-content: space-between;">
-                <span><strong>SALDO DO CAIXA:</strong></span>
-                <span><strong><t t-esc="formatCurrency(data.saldo_movimentacao.saldo).replace('R$', '').trim()"/></strong></span>
+            <div class="fechamento-linha-total">
+                <span>SALDO DO CAIXA:</span>
+                <span class="total-valor"><t t-esc="formatCurrency(data.saldo_movimentacao.saldo).replace('R$', '').trim()"/></span>
             </div>
 
             <!-- Saldo detalhado -->
-            <div style="border-bottom: 1px dashed #000; margin: 4px 0;"></div>
-            <div style="text-align: center; margin-bottom: 2px;">
-                SALDO DETALHADO DO CAIXA
-            </div>
+            <div class="danfe-separador"></div>
+            <div class="pagamento-titulo">SALDO DETALHADO DO CAIXA</div>
             <t t-foreach="data.saldo_detalhado" t-as="saldo" t-key="saldo.nome">
-                <div style="display: flex; justify-content: space-between;">
-                    <span t-esc="saldo.nome"/>
-                    <span t-esc="formatCurrency(saldo.calculado).replace('R$', '').trim()"/>
+                <div class="totais-section">
+                    <div class="fechamento-linha">
+                        <span><t t-esc="saldo.nome"/></span>
+                        <span class="total-valor"><t t-esc="formatCurrency(saldo.calculado).replace('R$', '').trim()"/></span>
+                    </div>
+                    <div class="fechamento-linha">
+                        <span>INFORMADO</span>
+                        <span class="total-valor"><t t-esc="formatCurrency(saldo.informado).replace('R$', '').trim()"/></span>
+                    </div>
+                    <div class="fechamento-linha">
+                        <span>DIFERENCA</span>
+                        <span class="total-valor"><t t-esc="formatCurrency(saldo.diferenca).replace('R$', '').trim()"/></span>
+                    </div>
                 </div>
-                <div style="display: flex; justify-content: space-between;">
-                    <span>INFORMADO</span>
-                    <span t-esc="formatCurrency(saldo.informado).replace('R$', '').trim()"/>
-                </div>
-                <div style="display: flex; justify-content: space-between;">
-                    <span>DIFERENCA</span>
-                    <span t-esc="formatCurrency(saldo.diferenca).replace('R$', '').trim()"/>
-                </div>
-                <div style="margin-bottom: 4px;"></div>
             </t>
 
             <!-- Assinatura -->
-            <div style="border-bottom: 1px dashed #000; margin: 4px 0;"></div>
-            <div style="text-align: center; margin-top: 20px;">
-                ASSINATURA
+            <div class="danfe-separador"></div>
+            <div class="assinatura-area">
+                <div class="assinatura-linha">
+                    ASSINATURA
+                </div>
             </div>
 
         </div>
