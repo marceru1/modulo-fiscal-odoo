@@ -3,8 +3,8 @@
 
     <t t-inherit="point_of_sale.PaymentScreenButtons" t-inherit-mode="extension">
         <xpath expr="//button[@t-on-click='clickCpfButton']" position="after">
-            <div class="d-flex w-100 mt-1">
-                <button class="button btn btn-light btn-lg d-flex justify-content-between align-items-baseline w-100 lh-lg"
+            <div class="d-flex flex-row gap-2 w-100 mt-1" name="acrescimo_desconto_row">
+                <button class="button btn btn-light btn-lg d-flex justify-content-between align-items-baseline flex-fill lh-lg"
                     t-on-click="clickAcrescimoButton">
                     <span><i class="fa fa-plus-circle me-2" />Acréscimo</span>
                     <t t-if="currentOrder.x_amount_other_value">
