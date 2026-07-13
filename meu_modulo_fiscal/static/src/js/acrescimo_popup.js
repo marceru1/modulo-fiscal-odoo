@@ -12,33 +12,34 @@ patch(PaymentScreen.prototype, {
     },
 
     /**
-     * Acionado quando o botão "Acréscimo" é clicado na tela de pagamento (PaymentScreen).
-     * Invoca um Modal Numérico (NumberPopup) nativo do Odoo para capturar o valor.
-     *
-     * #9: usa this.env.utils.parseValidFloat para suportar o formato brasileiro (vírgula).
-     * #10: usa this.pos.get_order() — consistente com cpf_popup.js.
-     * #11: validação explícita de NaN antes de limpar o valor negativo.
+     * Limpa todas as linhas de pagamento do pedido atual.
+     * Chamado antes de aplicar acréscimo/desconto para evitar
+     * valores residuais de troco quando o operador seleciona
+     * a forma de pagamento antes de aplicar acréscimo/desconto.
      */
+    _clearPaymentLines() {
+        const order = this.pos.get_order();
+        const lines = [...(order.payment_ids || [])];
+        for (const line of lines) {
+            line.delete();
+        }
+    },
+
     async clickAcrescimoButton() {
-        // #10: padrão do cpf_popup.js
         const order = this.pos.get_order();
         const currentAcrescimo = order.x_amount_other_value || 0.0;
+
+        // Se já tem linhas de pagamento, limpa antes de aplicar o acréscimo
+        if (order.payment_ids && order.payment_ids.length > 0) {
+            this._clearPaymentLines();
+        }
 
         this.dialog.add(NumberPopup, {
             title: "Valor do Acréscimo",
             startingValue: currentAcrescimo ? currentAcrescimo.toString() : "",
             getPayload: (num) => {
-                // #9: parseValidFloat suporta vírgula decimal (formato BR) nativamente
                 const val = this.env.utils.parseValidFloat(num ?? "0");
-
-                // #11: validação explícita de NaN
                 const cleanVal = isNaN(val) ? 0.0 : Math.max(0, val);
-
-                // #FIX: update() pula campos customizados (x_*) que não estão nas
-                // model field definitions do JS — o valor vai pra baseData mas
-                // não é setado no record reativo, então taxTotals nunca vê o acréscimo.
-                // Atribuição direta seta a propriedade no proxy reativo do Owl,
-                // disparando reavaliação do getter taxTotals (mesmo padrão do cpf_popup.js).
                 order.x_amount_other_value = cleanVal;
             },
         });

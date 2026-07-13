@@ -404,3 +404,140 @@ class PosSession(models.Model):
                 session['_fiscal_payment_method_ids'] = self.config_id.x_fiscal_payment_method_ids.ids
 
         return result
+
+    def get_fechamento_data(self):
+        """
+        Coleta todos os dados necessários para o relatório de fechamento
+        de caixa impresso na impressora térmica do PDV.
+
+        Reaproveita a lógica do get_closing_control_data do core e adiciona:
+        - Dados da empresa (razão social, CNPJ, IE, endereço)
+        - Usuário e datas de abertura/fechamento
+        - Fundo de caixa
+        - Vendas agrupadas por método de pagamento
+        - Sangrias (cash in/out) com motivo e valor
+        - Saldo de movimentação (entradas - saídas)
+        - Saldo detalhado por método (calculado, informado=0, diferença)
+
+        Returns:
+            dict: Estrutura completa para renderizar o template FechamentoReceipt.
+        """
+        self.ensure_one()
+        company = self.config_id.company_id
+
+        # Reaproveita os dados que o core já calcula
+        closing_data = self.get_closing_control_data()
+
+        # === EMPRESA ===
+        empresa = {
+            'nome': company.name or '',
+            'cnpj': (company.x_cnpj or '').strip(),
+            'ie': (company.x_ie or '').strip(),
+            'endereco_linha1': (company.x_endereco_linha1 or '').strip(),
+            'endereco_linha2': (company.x_endereco_linha2 or '').strip(),
+            'telefone': company.phone or '',
+        }
+
+        # === USUÁRIO E DATAS ===
+        from datetime import datetime
+        identificacao = {
+            'usuario': self.user_id.name or '',
+            'data_abertura': self.start_at.strftime('%d/%m/%Y %H:%M:%S') if self.start_at else '',
+            'data_fechamento': self.stop_at.strftime('%d/%m/%Y %H:%M:%S') if self.stop_at else datetime.now().strftime('%d/%m/%Y %H:%M:%S'),
+            'fundo_caixa': self.cash_register_balance_start or 0.0,
+        }
+
+        # === VENDAS POR MÉTODO ===
+        metodos_pagamento = []
+
+        # Cash (do default_cash_details)
+        cash_details = closing_data.get('default_cash_details', {})
+        if cash_details:
+            metodos_pagamento.append({
+                'nome': cash_details.get('name', 'Dinheiro'),
+                'valor': cash_details.get('payment_amount', 0.0),
+            })
+
+        # Non-cash (cartões, pix, etc)
+        for pm in closing_data.get('non_cash_payment_methods', []):
+            metodos_pagamento.append({
+                'nome': pm.get('name', ''),
+                'valor': pm.get('amount', 0.0),
+            })
+
+        total_vendas = sum(m['valor'] for m in metodos_pagamento)
+
+        # === VENDAS A PRAZO (pay_later) ===
+        # O core filtra pay_later do closing_control_data, então buscamos direto nos pedidos.
+        vendas_prazo = []
+        orders = self._get_closed_orders()
+        prazo_payments = orders.payment_ids.filtered(lambda p: p.payment_method_id.type == 'pay_later')
+        for payment in prazo_payments:
+            order = payment.pos_order_id
+            partner = order.partner_id
+            vendas_prazo.append({
+                'cliente': partner.name if partner and partner.name != 'Public' else 'CONSUMIDOR',
+                'data': order.date_order.strftime('%d/%m/%Y %H:%M') if order.date_order else '',
+                'valor': payment.amount,
+            })
+        total_vendas_prazo = sum(v['valor'] for v in vendas_prazo)
+
+        # === SANGRIAS E SUPRIMENTOS (Cash In/Out) ===
+        # payment_ref vem como "POS/00012-out-motivo" — extraímos só o motivo.
+        sangrias = []
+        suprimentos = []
+        for move in cash_details.get('moves', []):
+            ref = move.get('name', '')
+            amount = move.get('amount', 0.0)
+            # Remove o prefixo da sessão (ex: "POS/00012-")
+            prefix = (self.name or '') + '-'
+            if ref.startswith(prefix):
+                resto = ref[len(prefix):]  # "out-motivo" ou "in-motivo"
+                partes = resto.split('-', 1)
+                motivo = partes[1] if len(partes) > 1 else resto
+            else:
+                motivo = ref
+            if amount < 0:
+                sangrias.append({'motivo': motivo, 'valor': abs(amount)})
+            else:
+                suprimentos.append({'motivo': motivo, 'valor': abs(amount)})
+        total_sangrias = sum(s['valor'] for s in sangrias)
+        total_suprimentos = sum(s['valor'] for s in suprimentos)
+
+        # === SALDO DE MOVIMENTAÇÃO ===
+        entradas = total_vendas + (identificacao['fundo_caixa'] or 0.0) + total_suprimentos
+        saidas = total_sangrias
+        saldo_caixa = entradas - saidas
+
+        # === SALDO DETALHADO POR MÉTODO ===
+        # Calculado/Sistema = valor do sistema
+        # Informado = 0 (operador preenche na hora — por enquanto 0)
+        # Diferença = informado - calculado = -calculado (por enquanto)
+        saldo_detalhado = []
+        for metodo in metodos_pagamento:
+            valor_sistema = metodo['valor']
+            saldo_detalhado.append({
+                'nome': metodo['nome'],
+                'calculado': valor_sistema,
+                'informado': 0.0,
+                'diferenca': 0.0 - valor_sistema,
+            })
+
+        return {
+            'empresa': empresa,
+            'identificacao': identificacao,
+            'metodos_pagamento': metodos_pagamento,
+            'total_vendas': total_vendas,
+            'vendas_prazo': vendas_prazo,
+            'total_vendas_prazo': total_vendas_prazo,
+            'sangrias': sangrias,
+            'total_sangrias': total_sangrias,
+            'suprimentos': suprimentos,
+            'total_suprimentos': total_suprimentos,
+            'saldo_movimentacao': {
+                'entradas': entradas,
+                'saidas': saidas,
+                'saldo': saldo_caixa,
+            },
+            'saldo_detalhado': saldo_detalhado,
+        }
