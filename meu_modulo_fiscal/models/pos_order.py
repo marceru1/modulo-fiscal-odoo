@@ -439,10 +439,11 @@ class PosSession(models.Model):
         }
 
         # === USUÁRIO E DATAS ===
+        from datetime import datetime
         identificacao = {
             'usuario': self.user_id.name or '',
-            'data_abertura': (self.start_at or '').strftime('%d/%m/%Y %H:%M:%S') if self.start_at else '',
-            'data_fechamento': (self.stop_at or '').strftime('%d/%m/%Y %H:%M:%S') if self.stop_at else '',
+            'data_abertura': self.start_at.strftime('%d/%m/%Y %H:%M:%S') if self.start_at else '',
+            'data_fechamento': self.stop_at.strftime('%d/%m/%Y %H:%M:%S') if self.stop_at else datetime.now().strftime('%d/%m/%Y %H:%M:%S'),
             'fundo_caixa': self.cash_register_balance_start or 0.0,
         }
 
@@ -466,17 +467,45 @@ class PosSession(models.Model):
 
         total_vendas = sum(m['valor'] for m in metodos_pagamento)
 
-        # === SANGRIAS (Cash In/Out) ===
-        sangrias = []
-        for move in cash_details.get('moves', []):
-            sangrias.append({
-                'motivo': move.get('name', ''),
-                'valor': abs(move.get('amount', 0.0)),
+        # === VENDAS A PRAZO (pay_later) ===
+        # O core filtra pay_later do closing_control_data, então buscamos direto nos pedidos.
+        vendas_prazo = []
+        orders = self._get_closed_orders()
+        prazo_payments = orders.payment_ids.filtered(lambda p: p.payment_method_id.type == 'pay_later')
+        for payment in prazo_payments:
+            order = payment.pos_order_id
+            partner = order.partner_id
+            vendas_prazo.append({
+                'cliente': partner.name if partner and partner.name != 'Public' else 'CONSUMIDOR',
+                'data': order.date_order.strftime('%d/%m/%Y %H:%M') if order.date_order else '',
+                'valor': payment.amount,
             })
+        total_vendas_prazo = sum(v['valor'] for v in vendas_prazo)
+
+        # === SANGRIAS E SUPRIMENTOS (Cash In/Out) ===
+        # payment_ref vem como "POS/00012-out-motivo" — extraímos só o motivo.
+        sangrias = []
+        suprimentos = []
+        for move in cash_details.get('moves', []):
+            ref = move.get('name', '')
+            amount = move.get('amount', 0.0)
+            # Remove o prefixo da sessão (ex: "POS/00012-")
+            prefix = (self.name or '') + '-'
+            if ref.startswith(prefix):
+                resto = ref[len(prefix):]  # "out-motivo" ou "in-motivo"
+                partes = resto.split('-', 1)
+                motivo = partes[1] if len(partes) > 1 else resto
+            else:
+                motivo = ref
+            if amount < 0:
+                sangrias.append({'motivo': motivo, 'valor': abs(amount)})
+            else:
+                suprimentos.append({'motivo': motivo, 'valor': abs(amount)})
         total_sangrias = sum(s['valor'] for s in sangrias)
+        total_suprimentos = sum(s['valor'] for s in suprimentos)
 
         # === SALDO DE MOVIMENTAÇÃO ===
-        entradas = total_vendas + (identificacao['fundo_caixa'] or 0.0)
+        entradas = total_vendas + (identificacao['fundo_caixa'] or 0.0) + total_suprimentos
         saidas = total_sangrias
         saldo_caixa = entradas - saidas
 
@@ -499,8 +528,12 @@ class PosSession(models.Model):
             'identificacao': identificacao,
             'metodos_pagamento': metodos_pagamento,
             'total_vendas': total_vendas,
+            'vendas_prazo': vendas_prazo,
+            'total_vendas_prazo': total_vendas_prazo,
             'sangrias': sangrias,
             'total_sangrias': total_sangrias,
+            'suprimentos': suprimentos,
+            'total_suprimentos': total_suprimentos,
             'saldo_movimentacao': {
                 'entradas': entradas,
                 'saidas': saidas,
