@@ -105,12 +105,72 @@ class PosOrder(models.Model):
             if order.x_discount_value:
                 order.amount_total -= order.x_discount_value
 
+    def _register_prazo_movimentacoes(self):
+        """
+        Para cada pedido do recordset, verifica se há pagamentos pay_later
+        vinculados a um funcionário (hr.employee) e registra a movimentação
+        correspondente em x.prazo.movimentacao.
+
+        - Valor positivo → tipo='compra'  (funcionário comprou a prazo)
+        - Valor negativo → tipo='pagamento' (recebimento: funcionário pagou no PDV)
+
+        Clientes que não são funcionários são ignorados silenciosamente.
+        Duplicatas são evitadas verificando pos_reference antes de inserir.
+        """
+        for order in self:
+            partner = order.partner_id
+            if not partner:
+                continue
+
+            # Encontra o funcionário vinculado ao parceiro
+            employee = self.env['hr.employee'].search([
+                '|',
+                ('work_contact_id', '=', partner.id),
+                ('user_id.partner_id', '=', partner.id),
+            ], limit=1)
+            if not employee:
+                continue  # Não é funcionário — ignora
+
+            for payment in order.payment_ids:
+                if payment.payment_method_id.type != 'pay_later':
+                    continue
+
+                amount = payment.amount
+                if amount == 0:
+                    continue
+
+                # Evita duplicatas: verifica se já existe movimentação para este pedido
+                ref = order.pos_reference or order.name
+                existing = self.env['x.prazo.movimentacao'].search(
+                    [('pos_reference', '=', ref)], limit=1
+                )
+                if existing:
+                    continue
+
+                tipo = 'compra' if amount > 0 else 'pagamento'
+                self.env['x.prazo.movimentacao'].create({
+                    'employee_id': employee.id,
+                    'partner_id': partner.id,
+                    'data': order.date_order or fields.Datetime.now(),
+                    'valor': abs(amount),
+                    'tipo': tipo,
+                    'pos_reference': ref,
+                    'session_id': order.session_id.id if order.session_id else False,
+                })
+                _logger.info(
+                    '[PRAZO] Movimentação %s registrada | Funcionário: %s | Valor: %.2f | Pedido: %s',
+                    tipo, employee.name, abs(amount), ref
+                )
+
     @api.model_create_multi
     def create(self, vals_list):
         """
         Após criar o(s) pedido(s), atualiza o high-water mark de contingência
         no pos.config correspondente. Garante que o seed nunca fique atrás
         do último número realmente emitido, mesmo se o localStorage for limpo.
+
+        Também registra movimentações A Prazo para pagamentos pay_later
+        vinculados a funcionários (Task 9).
 
         DEC-011 | ERROR-010
         """
@@ -131,6 +191,8 @@ class PosOrder(models.Model):
                     '[CONTINGENCIA-HWM] pos.config %d | Série %s | High-water mark → %d',
                     config.id, order.x_fiscal_serie, numero
                 )
+
+        orders._register_prazo_movimentacoes()
 
         return orders
 
@@ -541,3 +603,58 @@ class PosSession(models.Model):
             },
             'saldo_detalhado': saldo_detalhado,
         }
+
+    def create_recebimento(self, partner_id, amount):
+        """Cria um recebimento (account.payment inbound) contra as faturas
+        em aberto do parceiro. Usado pelo botao Recebimento no PDV.
+
+        Args:
+            partner_id: int - ID do parceiro (cliente/funcionario)
+            amount: float - valor a ser recebido
+
+        Returns:
+            dict with success/message
+        """
+        partner = self.env['res.partner'].browse(partner_id)
+        if not partner.exists():
+            return {'success': False, 'message': 'Parceiro nao encontrado'}
+
+        if amount <= 0:
+            return {'success': False, 'message': 'Valor invalido'}
+
+        # Cria o pagamento de entrada (inbound)
+        payment = self.env['account.payment'].create({
+            'payment_type': 'inbound',
+            'partner_type': 'customer',
+            'partner_id': partner_id,
+            'amount': amount,
+            'date': fields.Date.context_today(self),
+            'memo': 'Recebimento PDV - %s' % partner.name,
+        })
+        payment.action_post()
+
+        _logger.info(
+            '[RECEBIMENTO-PDV] Pagamento criado | Parceiro: %s (ID=%d) | Valor: %.2f | Payment ID=%d',
+            partner.name, partner_id, amount, payment.id
+        )
+
+        # Registra movimentacao se o parceiro for funcionario
+        employee = self.env['hr.employee'].search([
+            '|',
+            ('work_contact_id', '=', partner_id),
+            ('user_id.partner_id', '=', partner_id),
+        ], limit=1)
+        if employee:
+            self.env['x.prazo.movimentacao'].create({
+                'employee_id': employee.id,
+                'partner_id': partner_id,
+                'data': fields.Datetime.now(),
+                'valor': amount,
+                'tipo': 'pagamento',
+            })
+            _logger.info(
+                '[RECEBIMENTO-PDV] Movimentacao registrada | Funcionario: %s | Valor: %.2f',
+                employee.name, amount
+            )
+
+        return {'success': True, 'message': 'Recebimento de R$ %.2f registrado' % amount}

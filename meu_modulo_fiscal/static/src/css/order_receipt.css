@@ -156,6 +156,7 @@
     display: flex;
     justify-content: space-between;
     margin: 2px 0;
+    font-size: 11px;
 }
 
 .pagamento-metodo {
@@ -164,7 +165,6 @@
 
 .pagamento-valor {
     text-align: right;
-    font-weight: bold;
 }
 
 /* ============================================ */

@@ -177,6 +177,16 @@ patch(PosOrder.prototype, {
             protocolo: this.x_fiscal_protocolo || "",
             offline: this.x_fiscal_offline || false,
         };
+        // Detecta pagamento "Conta do Cliente" (pay_later) para mostrar o nome no recibo
+        // Importante: isso é só exibição no cupom térmico — NÃO vai para a Focus NFe/SEFAZ
+        const temPrazo = (this.payment_ids || []).some(
+            (p) => p.payment_method_id && p.payment_method_id.type === 'pay_later'
+        );
+        if (temPrazo) {
+            const client = this.get_partner();
+            result.x_cliente_prazo = client ? client.name : '';
+        }
+
         result.x_cpf_nota = this.x_cpf_nota;
         result.x_confirmacao_venda = this.x_confirmacao_venda;
         result.x_amount_other_value = this.x_amount_other_value || 0.0;
