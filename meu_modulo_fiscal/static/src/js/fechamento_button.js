@@ -11,8 +11,8 @@ const RECEIPT_CSS = `
         font-size: 12px;
         line-height: 1.3;
         width: 72mm;
-        margin: 0;
-        padding: 1mm 2mm;
+        margin: 0 auto;
+        padding: 1mm 3mm;
     }
     .danfe-header { text-align: center; margin-bottom: 8px; }
     .emitente-nome { font-weight: bold; font-size: 13px; margin-bottom: 3px; }
@@ -69,9 +69,9 @@ const RECEIPT_CSS = `
         text-align: center;
     }
 
-    @page { size: 72mm auto; margin: 0; }
+    @page { size: 72mm auto; margin: 0 2mm; }
     @media print {
-        .pos-receipt { width: 70mm !important; font-size: 12px !important; padding: 0 1mm !important; margin: 0 !important; }
+        .pos-receipt { width: 70mm !important; font-size: 12px !important; padding: 0 2mm !important; margin: 0 auto !important; }
     }
 `;
 

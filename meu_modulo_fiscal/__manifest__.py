@@ -17,6 +17,7 @@
         'views/res_company_views.xml',
         'views/res_config_settings_views.xml',
         'views/hr_employee_prazo_views.xml',
+        'views/account_move_hide_outstanding.xml',
     ],
     'assets': {
         'point_of_sale._assets_pos': [
