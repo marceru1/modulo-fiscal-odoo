@@ -86,6 +86,24 @@
                 </div>
             </t>
 
+            <!-- Recebimentos (account.payment inbound) -->
+            <t t-if="data.recebimentos and data.recebimentos.length > 0">
+                <div class="danfe-separador"></div>
+                <div class="pagamento-titulo">RECEBIMENTOS(R)</div>
+                <div class="totais-section">
+                    <t t-foreach="data.recebimentos" t-as="rec" t-key="rec_index">
+                        <div class="fechamento-linha">
+                            <span><t t-esc="rec.cliente"/></span>
+                            <span class="total-valor"><t t-esc="formatCurrency(rec.valor).replace('R$', '').trim()"/></span>
+                        </div>
+                    </t>
+                </div>
+                <div class="fechamento-linha-total">
+                    <span>TOTAL</span>
+                    <span class="total-valor"><t t-esc="formatCurrency(data.total_recebimentos).replace('R$', '').trim()"/></span>
+                </div>
+            </t>
+
             <!-- Sangrias (Cash Out) -->
             <t t-if="data.sangrias.length > 0">
                 <div class="danfe-separador"></div>

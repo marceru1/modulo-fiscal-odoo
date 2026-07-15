@@ -132,7 +132,6 @@
                 </t>
 
                 <t t-if="props.data.x_cliente_prazo">
-                    <div style="margin-top: 4px; margin-bottom: 4px; font-weight: bold; font-size: 11px;">CLIENTE: <t t-esc="props.data.x_cliente_prazo"/></div>
                 </t>
 
                 <div class="total-linha" style="display: flex; justify-content: space-between;">
@@ -140,10 +139,16 @@
                     <span class="total-valor"><t t-esc="props.formatCurrency(props.data.danfe_totais.valor_total).replace('R$', '').trim()"/></span>
                 </div>
                 
-                <div class="total-linha" style="display: flex; justify-content: space-between;">
+                <div class="total-linha" style="display: flex; justify-content: space-between; font-weight: bold;">
                     <span class="total-label">VALOR A PAGAR R$</span>
                     <span class="total-valor"><t t-esc="props.formatCurrency(valor_a_pagar).replace('R$', '').trim()"/></span>
                 </div>
+
+                <t t-if="props.data.x_cliente_prazo">
+                    <div class="danfe-separador" style="border-bottom: 1px dashed #000; margin: 4px 0;"></div>
+                    <div style="margin-top: 4px; margin-bottom: 4px; font-weight: bold; font-size: 11px;">CLIENTE: <t t-esc="props.data.x_cliente_prazo"/></div>
+                </t>
+
                 <div class="danfe-separador" style="border-bottom: 1px dashed #000; margin: 4px 0;"></div>
 
             </div>
