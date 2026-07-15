@@ -2,9 +2,9 @@
 import { Navbar } from "@point_of_sale/app/navbar/navbar";
 import { patch } from "@web/core/utils/patch";
 import { useService } from "@web/core/utils/hooks";
-import { NumberPopup } from "@point_of_sale/app/utils/input_popups/number_popup";
 import { PartnerList } from "@point_of_sale/app/screens/partner_list/partner_list";
-import { makeAwaitable } from "@point_of_sale/app/store/make_awaitable_dialog";
+import { SelectionPopup } from "@point_of_sale/app/utils/input_popups/selection_popup";
+import { makeAwaitable, ask } from "@point_of_sale/app/store/make_awaitable_dialog";
 
 patch(Navbar.prototype, {
     setup() {
@@ -27,67 +27,96 @@ patch(Navbar.prototype, {
             return;
         }
 
-        // ── 2. Ler saldo devedor do parceiro via ORM (res.partner.credit) ───────
-        // O campo `credit` não é carregado no POS por padrão — leitura direta ao backend.
-        let saldo = 0;
+        // ── 2. Buscar faturas em aberto do parceiro via ORM ─────────────────────
+        let invoices = [];
         try {
-            const result = await this.orm.call(
-                "res.partner",
-                "read",
-                [[selectedPartner.id], ["credit"]]
+            invoices = await this.orm.call(
+                "account.move",
+                "search_read",
+                [
+                    [
+                        ["partner_id", "=", selectedPartner.id],
+                        ["move_type", "=", "out_invoice"],
+                        ["payment_state", "in", ["not_paid", "partial"]],
+                        ["state", "=", "posted"],
+                    ],
+                    ["name", "invoice_date_due", "amount_total", "amount_residual", "payment_state", "state"],
+                    0,
+                    50,
+                    "invoice_date_due",
+                ]
             );
-            saldo = (result && result[0] && result[0].credit) || 0;
         } catch (e) {
-            console.error("[RECEBIMENTO] Erro ao buscar saldo do parceiro:", e);
-            this.notification.add("Erro ao consultar saldo do cliente.", { type: "danger" });
+            console.error("[RECEBIMENTO] Erro ao buscar faturas:", e);
+            this.notification.add("Erro ao consultar faturas do cliente.", { type: "danger" });
             return;
         }
 
-        if (saldo <= 0) {
+        if (!invoices || invoices.length === 0) {
             this.notification.add(
-                `${selectedPartner.name} não possui saldo devedor.`,
+                `Nenhuma fatura em aberto para ${selectedPartner.name}.`,
                 { type: "warning" }
             );
             return;
         }
 
-        // ── 3. Capturar valor via NumberPopup (pré-preenchido com o saldo) ──────
-        const rawAmount = await makeAwaitable(this.dialog, NumberPopup, {
-            title: `Recebimento — ${selectedPartner.name}`,
-            subtitle: `Saldo devedor: ${this.env.utils.formatCurrency(saldo)}`,
-            startingValue: saldo,
+        // ── 3. Mostrar lista de faturas via SelectionPopup ──────────────────────
+        // Formata cada fatura como label legível para o operador.
+        const statusLabel = (state) => {
+            if (state === "partial") return "Parcial";
+            if (state === "not_paid") return "Em aberto";
+            return state;
+        };
+
+        const formatDate = (isoDate) => {
+            if (!isoDate) return "—";
+            // isoDate: "2026-07-14"
+            const [year, month, day] = isoDate.split("-");
+            return `${day}/${month}/${year}`;
+        };
+
+        const formatCurrency = (amount) => {
+            return "R$ " + Number(amount).toFixed(2).replace(".", ",");
+        };
+
+        const invoiceItems = invoices.map((inv) => ({
+            id: inv.id,
+            label: `${inv.name} — ${formatDate(inv.invoice_date_due)} — ${formatCurrency(inv.amount_residual)} (${statusLabel(inv.payment_state)})`,
+            item: inv,
+        }));
+
+        const selectedItem = await makeAwaitable(this.dialog, SelectionPopup, {
+            title: `Faturas em aberto — ${selectedPartner.name}`,
+            list: invoiceItems,
         });
 
-        if (rawAmount === undefined || rawAmount === null || rawAmount === "") {
-            // Operador cancelou
+        if (!selectedItem) {
+            // Operador cancelou a seleção
             return;
         }
 
-        // Converte o valor retornado pelo NumberPopup para float
-        let valor;
-        try {
-            valor = this.env.utils.parseValidFloat
-                ? this.env.utils.parseValidFloat(String(rawAmount))
-                : parseFloat(String(rawAmount).replace(",", "."));
-        } catch (_) {
-            valor = parseFloat(String(rawAmount).replace(",", ".")) || 0;
-        }
+        const selectedInvoice = selectedItem;
 
-        if (!valor || valor <= 0 || isNaN(valor)) {
-            this.notification.add("Valor inválido para recebimento.", { type: "warning" });
+        // ── 4. Confirmar pagamento do valor residual completo ───────────────────
+        const confirmed = await ask(this.dialog, {
+            title: "Confirmar Recebimento",
+            body: `Confirma o pagamento de ${formatCurrency(selectedInvoice.amount_residual)} da fatura ${selectedInvoice.name}?`,
+            confirmText: "Confirmar",
+            cancelText: "Cancelar",
+        });
+
+        if (!confirmed) {
             return;
         }
 
-        // ── 4. Chamar o backend para criar o account.payment ─────────────────────
-        // O método Python create_recebimento(partner_id, amount) cria o pagamento
-        // inbound, faz action_post() e reconcilia com as faturas abertas do parceiro.
+        // ── 5. Chamar o backend para criar e reconciliar o account.payment ──────
         let response;
         try {
             this.env.services.ui.block({ message: "Registrando recebimento..." });
             response = await this.orm.call(
                 "pos.session",
                 "create_recebimento",
-                [[this.pos.session.id], selectedPartner.id, valor]
+                [[this.pos.session.id], selectedInvoice.id]
             );
         } catch (e) {
             console.error("[RECEBIMENTO] Erro ao registrar recebimento:", e);
@@ -100,7 +129,7 @@ patch(Navbar.prototype, {
             this.env.services.ui.unblock();
         }
 
-        // ── 5. Exibir resultado ──────────────────────────────────────────────────
+        // ── 6. Exibir resultado ──────────────────────────────────────────────────
         if (response && response.success) {
             this.notification.add(
                 `✅ ${response.message}`,

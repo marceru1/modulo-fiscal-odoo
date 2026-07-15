@@ -566,8 +566,22 @@ class PosSession(models.Model):
         total_sangrias = sum(s['valor'] for s in sangrias)
         total_suprimentos = sum(s['valor'] for s in suprimentos)
 
+        # === RECEBIMENTOS (account.payment inbound criados pelo botão Recebimento) ===
+        recebimentos = []
+        for payment in self.bank_payment_ids.filtered(
+            lambda p: p.payment_type == 'inbound' and p.partner_type == 'customer'
+                      and p.memo and 'Recebimento PDV' in p.memo
+        ):
+            recebimentos.append({
+                'cliente': payment.partner_id.name or '',
+                'data': payment.date.strftime('%d/%m/%Y %H:%M') if payment.date else '',
+                'valor': payment.amount,
+                'memo': payment.memo or '',
+            })
+        total_recebimentos = sum(r['valor'] for r in recebimentos)
+
         # === SALDO DE MOVIMENTAÇÃO ===
-        entradas = total_vendas + (identificacao['fundo_caixa'] or 0.0) + total_suprimentos
+        entradas = total_vendas + (identificacao['fundo_caixa'] or 0.0) + total_suprimentos + total_recebimentos
         saidas = total_sangrias
         saldo_caixa = entradas - saidas
 
@@ -596,6 +610,8 @@ class PosSession(models.Model):
             'total_sangrias': total_sangrias,
             'suprimentos': suprimentos,
             'total_suprimentos': total_suprimentos,
+            'recebimentos': recebimentos,
+            'total_recebimentos': total_recebimentos,
             'saldo_movimentacao': {
                 'entradas': entradas,
                 'saidas': saidas,
@@ -604,39 +620,72 @@ class PosSession(models.Model):
             'saldo_detalhado': saldo_detalhado,
         }
 
-    def create_recebimento(self, partner_id, amount):
-        """Cria um recebimento (account.payment inbound) contra as faturas
-        em aberto do parceiro. Usado pelo botao Recebimento no PDV.
+    def create_recebimento(self, invoice_id):
+        """Cria um recebimento (account.payment inbound) para uma fatura
+        especifica, reconciliando automaticamente o pagamento com a fatura.
+        Usado pelo botao Recebimento no PDV.
 
         Args:
-            partner_id: int - ID do parceiro (cliente/funcionario)
-            amount: float - valor a ser recebido
+            invoice_id: int - ID da fatura (account.move) a ser quitada
 
         Returns:
             dict with success/message
         """
-        partner = self.env['res.partner'].browse(partner_id)
-        if not partner.exists():
-            return {'success': False, 'message': 'Parceiro nao encontrado'}
+        invoice = self.env['account.move'].browse(invoice_id)
+        if not invoice.exists():
+            return {'success': False, 'message': 'Fatura nao encontrada'}
 
+        if invoice.state != 'posted':
+            return {'success': False, 'message': 'Fatura nao esta confirmada (state=%s)' % invoice.state}
+
+        if invoice.payment_state not in ('not_paid', 'partial'):
+            return {'success': False, 'message': 'Fatura ja foi quitada (payment_state=%s)' % invoice.payment_state}
+
+        amount = invoice.amount_residual
         if amount <= 0:
-            return {'success': False, 'message': 'Valor invalido'}
+            return {'success': False, 'message': 'Valor residual invalido (%.2f)' % amount}
 
-        # Cria o pagamento de entrada (inbound)
+        partner = invoice.partner_id
+        partner_id = partner.id
+
+        # Cria o pagamento de entrada (inbound) pelo valor residual da fatura
         payment = self.env['account.payment'].create({
             'payment_type': 'inbound',
             'partner_type': 'customer',
             'partner_id': partner_id,
             'amount': amount,
             'date': fields.Date.context_today(self),
-            'memo': 'Recebimento PDV - %s' % partner.name,
+            'memo': 'Recebimento PDV - Fatura %s' % invoice.name,
+            'pos_session_id': self.id,
         })
         payment.action_post()
 
         _logger.info(
-            '[RECEBIMENTO-PDV] Pagamento criado | Parceiro: %s (ID=%d) | Valor: %.2f | Payment ID=%d',
-            partner.name, partner_id, amount, payment.id
+            '[RECEBIMENTO-PDV] Pagamento criado | Fatura: %s | Parceiro: %s (ID=%d) | Valor: %.2f | Payment ID=%d',
+            invoice.name, partner.name, partner_id, amount, payment.id
         )
+
+        # Reconcilia o pagamento com a fatura via linhas a receber
+        # No Odoo 18, as linhas contábeis do pagamento ficam em payment.move_id.line_ids
+        payment_move = payment.move_id
+        payment_line = payment_move.line_ids.filtered(
+            lambda l: l.account_id.account_type == 'asset_receivable'
+        )
+        invoice_line = invoice.line_ids.filtered(
+            lambda l: l.account_id.account_type == 'asset_receivable' and not l.reconciled
+        )
+        if payment_line and invoice_line:
+            (payment_line + invoice_line).reconcile()
+            _logger.info(
+                '[RECEBIMENTO-PDV] Reconciliacao realizada | Fatura: %s | Payment ID=%d',
+                invoice.name, payment.id
+            )
+        else:
+            _logger.warning(
+                '[RECEBIMENTO-PDV] Nao foi possivel reconciliar | Fatura: %s | '
+                'payment_line=%s | invoice_line=%s',
+                invoice.name, bool(payment_line), bool(invoice_line)
+            )
 
         # Registra movimentacao se o parceiro for funcionario
         employee = self.env['hr.employee'].search([
@@ -657,4 +706,7 @@ class PosSession(models.Model):
                 employee.name, amount
             )
 
-        return {'success': True, 'message': 'Recebimento de R$ %.2f registrado' % amount}
+        return {
+            'success': True,
+            'message': 'Recebimento de R$ %.2f registrado para fatura %s' % (amount, invoice.name),
+        }
