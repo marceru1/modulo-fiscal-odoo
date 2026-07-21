@@ -18,6 +18,7 @@
         'views/res_config_settings_views.xml',
         'views/hr_employee_prazo_views.xml',
         'views/account_move_hide_outstanding.xml',
+        'views/pos_session_fechamento_views.xml',
     ],
     'assets': {
         'point_of_sale._assets_pos': [
@@ -42,6 +43,9 @@
             'meu_modulo_fiscal/static/src/xml/fechamento_receipt.xml',
             'meu_modulo_fiscal/static/src/js/recebimento_button.js',
             'meu_modulo_fiscal/static/src/xml/recebimento_button.xml',
+            # pay_later (A Prazo): input "Counted" no popup de fechamento de caixa
+            'meu_modulo_fiscal/static/src/js/fechamento_pay_later_input.js',
+            'meu_modulo_fiscal/static/src/xml/fechamento_pay_later_input.xml',
 
         ],
         'web.assets_web': [

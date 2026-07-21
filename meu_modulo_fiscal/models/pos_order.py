@@ -620,6 +620,19 @@ class PosSession(models.Model):
             'saldo_detalhado': saldo_detalhado,
         }
 
+    def action_print_fechamento(self):
+        """Retorna uma action do tipo ``ir.actions.client`` que abre a URL
+        do controller de reimpressão do fechamento numa nova janela.
+        Usado pelo botão "Imprimir Fechamento" na form view de pos.session.
+        """
+        self.ensure_one()
+        url = '/pos/fechamento/%d' % self.id
+        return {
+            'type': 'ir.actions.act_url',
+            'url': url,
+            'target': 'new',
+        }
+
     def create_recebimento(self, invoice_id):
         """Cria um recebimento (account.payment inbound) para uma fatura
         especifica, reconciliando automaticamente o pagamento com a fatura.
