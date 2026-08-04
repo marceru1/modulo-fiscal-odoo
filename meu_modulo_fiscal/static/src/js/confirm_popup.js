@@ -1,10 +1,8 @@
 /** @odoo-module */
 import { useService } from "@web/core/utils/hooks";
-import { makeAwaitable } from "@point_of_sale/app/store/make_awaitable_dialog";
 import { _t } from "@web/core/l10n/translation";
 import { PaymentScreen } from "@point_of_sale/app/screens/payment_screen/payment_screen";
 import { patch } from "@web/core/utils/patch";
-import { SelectionPopup } from "@point_of_sale/app/utils/input_popups/selection_popup";
 // import { TextInputPopup } from "@point_of_sale/app/utils/input_popups/text_input_popup";  // REMOVIDO: Email dialog removido do fluxo PDV
 import { emitirContingencia } from "./fiscal_contingencia";
 
@@ -121,18 +119,11 @@ patch(PaymentScreen.prototype, {
         } else {
             hasFiscalPayment = false;
 
-            const paymentlines = this.paymentLines
-                ?? order.get_paymentlines?.()
-                ?? order.paymentlines?.models
-                ?? order.paymentlines
-                ?? [];
-
-            const payArray = Array.isArray(paymentlines) ? paymentlines : Array.from(paymentlines || []);
+            const payArray = order.payment_ids || [];
 
             for (const line of payArray) {
-                if (typeof line === 'number') continue; // Previne erro caso ainda caia em IDs puros
-                const methodId = line.payment_method_id?.id ?? line.payment_method?.id ?? line.payment_method_id;
-                if (fiscalMethods.includes(methodId)) {
+                const methodId = line.payment_method_id?.id;
+                if (methodId && fiscalMethods.includes(methodId)) {
                     hasFiscalPayment = true;
                     break;
                 }

@@ -30,4 +30,6 @@ class HrEmployee(models.Model):
             partner = employee.work_contact_id or (
                 employee.user_id.partner_id if employee.user_id else None
             )
-            employee.x_saldo_prazo = partner.credit if partner else 0.0
+            # N15: .sudo() evita erro de acesso em multi-empresa (partner.credit
+            # pode estar em empresa diferente da do usuário logado)
+            employee.x_saldo_prazo = partner.sudo().credit if partner else 0.0

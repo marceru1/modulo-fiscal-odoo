@@ -131,9 +131,6 @@
                     </div>
                 </t>
 
-                <t t-if="props.data.x_cliente_prazo">
-                </t>
-
                 <div class="total-linha" style="display: flex; justify-content: space-between;">
                     <span class="total-label">VALOR TOTAL R$</span>
                     <span class="total-valor"><t t-esc="props.formatCurrency(props.data.danfe_totais.valor_total).replace('R$', '').trim()"/></span>
@@ -172,6 +169,7 @@
                     <div style="margin: 2px 0;">Via Consumidor</div>
                     
                     <div style="margin: 2px 0;">Consulte pela Chave de Acesso em</div>
+                    <!-- TODO: vir de company.x_uf_codigo -->
                     <div style="margin: 2px 0;">http://www.nfce.sefaz.am.gov.br/consumidor/</div>
 
                     <div style="margin: 4px 0;">CHAVE DE ACESSO</div>
@@ -206,6 +204,7 @@
 
                     <div class="danfe-separador" style="border-bottom: 1px dashed #000; margin: 4px 0;"></div>
 
+                    <!-- TODO: calcular via IBPT/NCM -->
                     <div style="display: flex; justify-content: space-between; font-size: 11px;">
                         <span>Tributos Totais e Incidentes (Lei Federal 12.741/2012)</span>
                         <span>(0,14%)</span>

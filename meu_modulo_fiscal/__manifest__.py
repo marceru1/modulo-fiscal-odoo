@@ -28,12 +28,16 @@
             'meu_modulo_fiscal/static/src/js/auto_invoice_pay_later.js',
             'meu_modulo_fiscal/static/src/js/export_data.js',
             'meu_modulo_fiscal/static/src/js/cpf_popup.js', 
-            'meu_modulo_fiscal/static/src/js/order_receipt.js', 
+ 
             'meu_modulo_fiscal/static/src/js/pos_menu_cleanup.js',
             'meu_modulo_fiscal/static/src/xml/cpf_button.xml',
             'meu_modulo_fiscal/static/src/xml/order_receipt.xml',
             'meu_modulo_fiscal/static/src/css/order_receipt.css',
+            # I3: CSS compartilhado do fechamento de caixa (antes duplicado em 3 lugares)
+            'meu_modulo_fiscal/static/src/css/fechamento.css',
             'meu_modulo_fiscal/static/src/xml/acrescimo_button.xml',
+            # I9: helper compartilhado entre acrescimo_popup.js e desconto_popup.js
+            'meu_modulo_fiscal/static/src/js/valor_popup_helper.js',
             'meu_modulo_fiscal/static/src/js/acrescimo_popup.js',
             'meu_modulo_fiscal/static/src/xml/desconto_button.xml',
             'meu_modulo_fiscal/static/src/js/desconto_popup.js',

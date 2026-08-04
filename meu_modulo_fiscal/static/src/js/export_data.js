@@ -28,7 +28,6 @@ patch(PosOrder.prototype, {
             x_fiscal_qrcode_b64: json.x_fiscal_qrcode_b64 || "",
             x_fiscal_offline: Boolean(json.x_fiscal_offline),
             x_confirmacao_venda: json.x_confirmacao_venda,
-            // x_email_cliente: json.x_email_cliente,  // REMOVIDO: Email não é mais coletado no PDV
             x_cpf_nota: json.x_cpf_nota,
             x_amount_other_value: json.x_amount_other_value || 0.0,
             x_discount_value: json.x_discount_value || 0.0,
@@ -71,9 +70,8 @@ patch(PosOrder.prototype, {
     export_as_JSON() {
         const json = super.export_as_JSON();
 
-        // Envia as decisões do operador pro Banco de Dados 
+        // Envia as decisões do operador pro Banco de Dados
         json.x_cpf_nota = this.x_cpf_nota || "";
-        // json.x_email_cliente = this.x_email_cliente || "";  // REMOVIDO: Email não é mais coletado no PDV
         json.x_confirmacao_venda = !!this.x_confirmacao_venda;
         json.x_amount_other_value = this.x_amount_other_value || 0.0;
         json.x_discount_value = this.x_discount_value || 0.0;
@@ -96,6 +94,10 @@ patch(PosOrder.prototype, {
 
         // Identifica o produto de desconto global (pos_discount) para filtrar do DANFE.
         // No padrão SEFAZ, desconto é vDesc (campo de total), não item.
+        // Duplicação intencional: mesma lógica de filtro existe em pos_order.py
+        // _prepare_nfce_payload (backend) e aqui (frontend) — ver skill brazilian-fiscal-nfe.
+        // A duplicação é aceitável porque o backend alimenta o webhook (Focus NFe) e o
+        // frontend monta o DANFE impresso — contextos distintos, sem shared runtime.
         const discountProduct = this.config.discount_product_id;
         let descontoGlobal = 0.0;
 
