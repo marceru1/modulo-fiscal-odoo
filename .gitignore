@@ -19,6 +19,9 @@ build/
 .DS_Store
 Thumbs.db
 
+# Test files (run via odoo-bin --test-enable, not standalone)
+tests/
+
 # Environment
 .env
 .env.local
