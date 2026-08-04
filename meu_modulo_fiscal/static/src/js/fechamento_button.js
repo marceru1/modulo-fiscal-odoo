@@ -2,9 +2,15 @@
 import { ClosePosPopup } from "@point_of_sale/app/navbar/closing_popup/closing_popup";
 import { patch } from "@web/core/utils/patch";
 import { renderToElement } from "@web/core/utils/render";
-import { parseFloat as parseFloat } from "@web/views/fields/parsers";
+import { parseFloat } from "@web/views/fields/parsers";
 
-// CSS extraído do order_receipt.css — mesmo estilo do DANFE
+// Débito técnico I3: CSS compartilhado do fechamento de caixa extraído para
+// static/src/css/fechamento.css (carregado como asset do POS).
+// Esta const é mantida temporariamente porque o fallback de impressão
+// (_printFallback) abre uma window nova via window.open() que não herda os
+// assets do bundle — por isso precisa do CSS inline no <head> do popup.
+// TODO: extrair para arquivo CSS compartilhado quando o fallback suportar
+// carregar assets externos na window nova.
 const RECEIPT_CSS = `
     .pos-receipt {
         font-family: 'Inconsolata', 'Courier New', monospace;

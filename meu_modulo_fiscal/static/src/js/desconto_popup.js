@@ -2,46 +2,17 @@
 import { PaymentScreen } from "@point_of_sale/app/screens/payment_screen/payment_screen";
 import { patch } from "@web/core/utils/patch";
 import { useService } from "@web/core/utils/hooks";
-import { NumberPopup } from "@point_of_sale/app/utils/input_popups/number_popup";
+import { showValorPopup } from "./valor_popup_helper";
 
 patch(PaymentScreen.prototype, {
-    
     setup() {
         super.setup();
         this.dialog = useService("dialog");
     },
 
-    /**
-     * Limpa todas as linhas de pagamento do pedido atual.
-     * Chamado antes de aplicar acréscimo/desconto para evitar
-     * valores residuais de troco quando o operador seleciona
-     * a forma de pagamento antes de aplicar acréscimo/desconto.
-     */
-    _clearPaymentLines() {
-        const order = this.pos.get_order();
-        const lines = [...(order.payment_ids || [])];
-        for (const line of lines) {
-            line.delete();
-        }
-    },
-
     async clickDescontoButton() {
         const order = this.pos.get_order();
-        const currentDesconto = order.x_discount_value || 0.0;
-
-        // Se já tem linhas de pagamento, limpa antes de aplicar o desconto
-        if (order.payment_ids && order.payment_ids.length > 0) {
-            this._clearPaymentLines();
-        }
-
-        this.dialog.add(NumberPopup, {
-            title: "Valor do Desconto (R$)",
-            startingValue: currentDesconto ? currentDesconto.toString() : "",
-            getPayload: (num) => {
-                const val = this.env.utils.parseValidFloat(num ?? "0");
-                const cleanVal = isNaN(val) ? 0.0 : Math.max(0, val);
-                order.x_discount_value = cleanVal;
-            },
-        });
+        // I9: lógica extraída para helper compartilhado (valor_popup_helper.js)
+        showValorPopup(this.dialog, this.env, order, "x_discount_value", "Valor do Desconto (R$)");
     }
 });

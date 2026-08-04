@@ -28,12 +28,14 @@ class ResCompany(models.Model):
         help="Ex: Centro, Itacoatiara, AM"
     )
 
+    # TODO: derivar default de x_uf_codigo se migrar para multi-estado
     x_url_qrcode_homolog = fields.Char(
         string="URL QR Code (Homologação)",
         default="https://homnfce.sefaz.am.gov.br/nfce/qrcode",
         help="URL Sefaz para consulta QRCode em homologação."
     )
 
+    # TODO: derivar default de x_uf_codigo se migrar para multi-estado
     x_url_qrcode_producao = fields.Char(
         string="URL QR Code (Produção)",
         default="https://sistemas.sefaz.am.gov.br/nfceweb/consultarNFCe.jsp",

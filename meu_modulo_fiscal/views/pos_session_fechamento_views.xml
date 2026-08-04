@@ -31,67 +31,12 @@
                 <meta charset="utf-8"/>
                 <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
                 <title>Fechamento de Caixa</title>
+                <!-- I3: CSS compartilhado — antes era <style> inline duplicado.
+                     Agora referencia o arquivo único static/src/css/fechamento.css. -->
+                <link rel="stylesheet" href="/meu_modulo_fiscal/static/src/css/fechamento.css"/>
                 <style>
+                    /* Apenas regras específicas do QWeb server-side (não no arquivo compartilhado) */
                     body { margin: 0; padding: 0; background: #fff; }
-                    .pos-receipt {
-                        font-family: 'Inconsolata', 'Courier New', monospace;
-                        font-size: 12px;
-                        line-height: 1.3;
-                        width: 72mm;
-                        margin: 0 auto;
-                        padding: 1mm 3mm;
-                    }
-                    .danfe-header { text-align: center; margin-bottom: 8px; }
-                    .emitente-nome { font-weight: bold; font-size: 13px; margin-bottom: 3px; }
-                    .emitente-dados { font-size: 10px; line-height: 1.2; }
-                    .emitente-endereco { font-size: 10px; line-height: 1.3; margin-top: 3px; }
-                    .danfe-tipo { text-align: center; font-weight: bold; font-size: 11px; margin: 8px 0; line-height: 1.4; }
-                    .danfe-separador { border-top: 1px dashed #000; margin: 5px 0; }
-                    .totais-section { margin: 8px 0; }
-                    .pagamento-titulo { font-weight: bold; text-align: center; margin-bottom: 4px; }
-                    .fiscal-section { margin-top: 10px; text-align: center; }
-                    .fechamento-linha {
-                        display: flex;
-                        justify-content: space-between;
-                        align-items: baseline;
-                        margin: 1px 0;
-                        font-size: 11px;
-                    }
-                    .fechamento-linha span:first-child {
-                        white-space: nowrap;
-                        overflow: hidden;
-                    }
-                    .fechamento-linha .total-valor {
-                        white-space: nowrap;
-                        text-align: right;
-                        font-weight: normal;
-                    }
-                    .fechamento-linha-total {
-                        display: flex;
-                        justify-content: space-between;
-                        align-items: baseline;
-                        font-weight: bold;
-                        font-size: 12px;
-                        margin-top: 4px;
-                        padding-top: 3px;
-                        border-top: 1px solid #000;
-                    }
-                    .fechamento-linha-total .total-valor {
-                        text-align: right;
-                        font-weight: bold;
-                    }
-                    .assinatura-area { margin-top: 30px; text-align: center; }
-                    .assinatura-linha {
-                        border-top: 1px solid #000;
-                        margin-top: 40px;
-                        padding-top: 3px;
-                        font-size: 10px;
-                        text-align: center;
-                    }
-                    @page { size: 72mm auto; margin: 0 2mm; }
-                    @media print {
-                        .pos-receipt { width: 70mm !important; font-size: 12px !important; padding: 0 2mm !important; margin: 0 auto !important; }
-                    }
                 </style>
             </head>
             <body>
@@ -188,6 +133,10 @@
                                 <div class="fechamento-linha">
                                     <span><t t-out="rec['cliente']"/></span>
                                     <span class="total-valor"><t t-out="format_currency(rec['valor']).replace('R$', '').strip()"/></span>
+                                </div>
+                                <!-- Data/hora do recebimento (igual ao bloco VENDAS A PRAZO) -->
+                                <div class="fechamento-linha" style="font-size: 10px; color: #555;">
+                                    <span><t t-out="rec['data']"/></span>
                                 </div>
                             </t>
                         </div>

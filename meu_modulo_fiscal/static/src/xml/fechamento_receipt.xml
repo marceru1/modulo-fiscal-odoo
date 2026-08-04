@@ -46,6 +46,14 @@
                     <span>FUNDO DE CAIXA(F)...............</span>
                     <span class="total-valor"><t t-esc="formatCurrency(data.identificacao.fundo_caixa).replace('R$', '').trim()"/></span>
                 </div>
+                <div class="fechamento-linha">
+                    <span>QTDE DE VENDAS.............</span>
+                    <span class="total-valor"><t t-esc="data.identificacao.qtd_vendas"/></span>
+                </div>
+                <div class="fechamento-linha">
+                    <span>CUPONS EMITIDOS............</span>
+                    <span class="total-valor"><t t-esc="data.identificacao.qtd_cupons"/></span>
+                </div>
             </div>
 
             <div class="danfe-separador"></div>
@@ -95,6 +103,10 @@
                         <div class="fechamento-linha">
                             <span><t t-esc="rec.cliente"/></span>
                             <span class="total-valor"><t t-esc="formatCurrency(rec.valor).replace('R$', '').trim()"/></span>
+                        </div>
+                        <!-- Data/hora do recebimento (igual ao bloco VENDAS A PRAZO) -->
+                        <div class="fechamento-linha" style="font-size: 10px; color: #555;">
+                            <span><t t-esc="rec.data"/></span>
                         </div>
                     </t>
                 </div>

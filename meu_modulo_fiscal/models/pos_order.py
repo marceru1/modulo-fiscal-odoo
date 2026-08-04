@@ -641,6 +641,9 @@ class PosSession(models.Model):
 
         # === VENDAS A PRAZO, SANGRIAS/SUPRIMENTOS, RECEBIMENTOS (helpers) ===
         orders = self._get_closed_orders()
+        qtd_vendas = len(orders)
+        identificacao['qtd_vendas'] = qtd_vendas
+        identificacao['qtd_cupons'] = qtd_vendas
         vendas_prazo, total_vendas_prazo = self._get_vendas_prazo(orders)
         sangrias, suprimentos, total_sangrias, total_suprimentos = self._get_sangrias_suprimentos(cash_details)
         recebimentos, total_recebimentos = self._get_recebimentos()

@@ -7,6 +7,7 @@ class ProductTemplate(models.Model):
     """
     _inherit = 'product.template'
 
+    # sanitize=False necessário para renderizar <span class="badge"> no compute
     x_variant_badges = fields.Html(string="Variantes", compute='_compute_variant_badges', sanitize=False)
 
     @api.depends('attribute_line_ids', 'attribute_line_ids.value_ids')
@@ -39,6 +40,7 @@ class ProductProduct(models.Model):
     """
     _inherit = 'product.product'
 
+    # sanitize=False necessário para renderizar <span class="badge"> no compute
     x_variant_badges = fields.Html(string="Valores da Variante", compute='_compute_variant_badges_product', sanitize=False)
 
     @api.depends('product_template_attribute_value_ids')

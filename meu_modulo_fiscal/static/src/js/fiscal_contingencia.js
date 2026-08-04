@@ -104,23 +104,30 @@ export async function emitirContingencia(order, config, posConfigId, seedFromSes
 
     const codigoUnico = Math.floor(10000000 + Math.random() * 90000000).toString(); // cNF (8 dígitos)
 
-    // Data de emissão em UTC-4 (Manaus/AM), independente do timezone do browser.
-    // agora.getTime() retorna ms desde o epoch (sempre UTC), então subtraímos 4h para obter Manaus.
+    // Data de emissão em America/Manaus (UTC-4), independente do timezone do browser.
+    // Usa Intl.DateTimeFormat com timeZone para obter os componentes corretos do
+    // fuso de Manaus em vez de hardcode -4h (mais robusto e respeita mudanças de
+    // fuso oficiais, caso o estado altere seu offset no futuro).
     const agora = new Date();
-    const pad = (n) => String(n).padStart(2, '0');
+    const parts = new Intl.DateTimeFormat('sv-SE', {
+        timeZone: 'America/Manaus',
+        year: 'numeric', month: '2-digit', day: '2-digit',
+        hour: '2-digit', minute: '2-digit', second: '2-digit',
+        hour12: false
+    }).formatToParts(agora).reduce((acc, part) => {
+        if (part.type !== 'literal') acc[part.type] = part.value;
+        return acc;
+    }, {});
 
-    const manausMs = agora.getTime() - (4 * 60 * 60 * 1000); // UTC - 4h = Manaus
-    const dt = new Date(manausMs); // "fingimos" que é UTC pra usar os getters sem conversão
-
-    const ano = (dt.getUTCFullYear() % 100).toString().padStart(2, '0');
-    const mes = pad(dt.getUTCMonth() + 1);
-    const dia = pad(dt.getUTCDate());
-    const hora = pad(dt.getUTCHours());
-    const min = pad(dt.getUTCMinutes());
-    const seg = pad(dt.getUTCSeconds());
+    const ano = (parseInt(parts.year) % 100).toString().padStart(2, '0');
+    const mes = parts.month;
+    const dia = parts.day;
+    const hora = parts.hour;
+    const min = parts.minute;
+    const seg = parts.second;
     const aamm = ano + mes;
 
-    const dataEmissao = `${dt.getUTCFullYear()}-${mes}-${dia}T${hora}:${min}:${seg}-04:00`;
+    const dataEmissao = `${parts.year}-${mes}-${dia}T${hora}:${min}:${seg}-04:00`;
 
     const modelo = '65';
     const tpEmis = '9'; // 9 = Contingência offline da NFC-e

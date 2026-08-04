@@ -7,7 +7,4 @@ from odoo import models, fields
 class PosPaymentMethod(models.Model):
     _inherit = 'pos.payment.method'
 
-    type = fields.Selection(
-        selection=[('cash', 'Cash'), ('bank', 'Bank'), ('pay_later', 'A Prazo')],
-        compute="_compute_type",
-    )
+    type = fields.Selection(selection_add=[('pay_later', 'A Prazo')])
