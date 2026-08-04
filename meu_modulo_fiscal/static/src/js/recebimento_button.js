@@ -4,6 +4,7 @@ import { patch } from "@web/core/utils/patch";
 import { useService } from "@web/core/utils/hooks";
 import { PartnerList } from "@point_of_sale/app/screens/partner_list/partner_list";
 import { SelectionPopup } from "@point_of_sale/app/utils/input_popups/selection_popup";
+import { NumberPopup } from "@point_of_sale/app/utils/input_popups/number_popup";
 import { makeAwaitable, ask } from "@point_of_sale/app/store/make_awaitable_dialog";
 
 patch(Navbar.prototype, {
@@ -96,11 +97,43 @@ patch(Navbar.prototype, {
         }
 
         const selectedInvoice = selectedItem;
+        const amountResidual = selectedInvoice.amount_residual;
 
-        // ── 4. Confirmar pagamento do valor residual completo ───────────────────
+        // ── 4. NumberPopup para digitar o valor a receber ────────────────────
+        const rawValue = await makeAwaitable(this.dialog, NumberPopup, {
+            title: `Valor a receber — ${selectedInvoice.name}`,
+            startingValue: amountResidual.toFixed(2),
+            confirmText: "OK",
+            cancelText: "Cancelar",
+        });
+
+        if (!rawValue) {
+            // Operador cancelou o NumberPopup
+            return;
+        }
+
+        // Converte o valor para float (NumberPopup retorna string)
+        const amount = parseFloat(rawValue);
+        if (isNaN(amount) || amount <= 0) {
+            this.notification.add("Valor inválido. Digite um valor maior que zero.", { type: "warning" });
+            return;
+        }
+
+        // Validação client-side
+        if (amount < 1.0) {
+            this.notification.add("Valor mínimo de R$ 1,00", { type: "warning" });
+            return;
+        }
+
+        if (amount > amountResidual) {
+            this.notification.add("Valor superior ao saldo da fatura (R$ " + amountResidual.toFixed(2) + ")", { type: "warning" });
+            return;
+        }
+
+        // ── 5. Confirmar pagamento com o valor digitado ────────────────────────
         const confirmed = await ask(this.dialog, {
             title: "Confirmar Recebimento",
-            body: `Confirma o pagamento de ${formatCurrency(selectedInvoice.amount_residual)} da fatura ${selectedInvoice.name}?`,
+            body: `Confirma o pagamento de ${formatCurrency(amount)} da fatura ${selectedInvoice.name}? (Saldo em aberto: ${formatCurrency(amountResidual)})`,
             confirmText: "Confirmar",
             cancelText: "Cancelar",
         });
@@ -109,14 +142,14 @@ patch(Navbar.prototype, {
             return;
         }
 
-        // ── 5. Chamar o backend para criar e reconciliar o account.payment ──────
+        // ── 6. Chamar o backend para criar e reconciliar o account.payment ────
         let response;
         try {
             this.env.services.ui.block({ message: "Registrando recebimento..." });
             response = await this.orm.call(
                 "pos.session",
                 "create_recebimento",
-                [[this.pos.session.id], selectedInvoice.id]
+                [[this.pos.session.id], selectedInvoice.id, Math.round(amount * 100) / 100]
             );
         } catch (e) {
             console.error("[RECEBIMENTO] Erro ao registrar recebimento:", e);
@@ -129,7 +162,7 @@ patch(Navbar.prototype, {
             this.env.services.ui.unblock();
         }
 
-        // ── 6. Exibir resultado ──────────────────────────────────────────────────
+        // ── 7. Exibir resultado ──────────────────────────────────────────────────
         if (response && response.success) {
             this.notification.add(
                 `✅ ${response.message}`,

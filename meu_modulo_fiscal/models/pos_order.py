@@ -1,6 +1,7 @@
 import json
 import requests
 from odoo import models, api, fields
+from datetime import datetime
 import logging
 import os
 
@@ -22,10 +23,83 @@ class PosOrder(models.Model):
     _inherit = 'pos.order'
 
     # ==========================================================
+    # HELPERS DE CONFIGURAÇÃO (I7)
+    # Lê parâmetros em runtime via ir.config_parameter em vez das
+    # constantes globais cacheadas na importação do módulo.
+    # ==========================================================
+    @api.model
+    def _get_middleware_url(self):
+        """Devolve a URL base do middleware lida em runtime.
+
+        Prefere ir.config_parameter; faz fallback para a constante
+        global BASE_URL (lida de os.environ) para não quebrar installs
+        existentes que ainda não migraram.
+        """
+        param = self.env['ir.config_parameter'].sudo().get_param(
+            'meu_modulo_fiscal.middleware_url'
+        )
+        return param or BASE_URL
+
+    @api.model
+    def _get_webhook_secret(self):
+        """Devolve o shared secret do webhook lido em runtime.
+
+        Prefere ir.config_parameter; faz fallback para a constante
+        global WEBHOOK_SECRET (lida de os.environ) para não quebrar
+        installs existentes.
+        """
+        param = self.env['ir.config_parameter'].sudo().get_param(
+            'meu_modulo_fiscal.webhook_secret'
+        )
+        if param is not None and param != '':
+            return param
+        return WEBHOOK_SECRET
+
+    @api.model
+    def _get_webhook_timeout(self):
+        """Devolve o timeout (em segundos) do webhook lido em runtime.
+
+        Prefere ir.config_parameter; faz fallback para 5 (valor histórico
+        hardcoded) para não quebrar installs existentes que ainda não migraram.
+        """
+        param = self.env['ir.config_parameter'].sudo().get_param(
+            'meu_modulo_fiscal.webhook_timeout'
+        )
+        try:
+            return float(param) if param is not None and param != '' else 5
+        except (ValueError, TypeError):
+            return 5
+
+    # ==========================================================
+    # HELPER DE FUNCIONÁRIO (I10)
+    # Busca o hr.employee vinculado a um res.partner.
+    # ==========================================================
+    @api.model
+    def _find_employee_for_partner(self, partner_id):
+        """Devolve o hr.employee vinculado ao partner_id, ou recordset vazio.
+
+        Busca pelo contato de trabalho (work_contact_id) ou pelo partner
+        do usuário (user_id.partner_id). Usado por _register_prazo_movimentacoes
+        e create_recebimento para evitar a duplicação da busca.
+
+        Args:
+            partner_id (int): ID do res.partner.
+
+        Returns:
+            hr.employee recordset (limit=1): vazio se não houver vínculo.
+        """
+        if not partner_id:
+            return self.env['hr.employee']
+        return self.env['hr.employee'].search([
+            '|',
+            ('work_contact_id', '=', partner_id),
+            ('user_id.partner_id', '=', partner_id),
+        ], limit=1)
+
+    # ==========================================================
     # DADOS CAPTURADOS DO CONSUMIDOR NA TELA DO CAIXA
     # ==========================================================
     x_cpf_nota = fields.Char(string="CPF na nota", help="CPF informado pelo cliente para a via do consumidor.")
-    x_email_cliente = fields.Char(string="E-mail do cliente", help="Para envio do XML/Danfe contigenciado.")
     x_confirmacao_venda = fields.Boolean(string="Venda enviada?", help="Flag que dita se o PDV já sincronizou a criação offline dessa venda.")
     x_amount_other_value = fields.Float(
         string="Outras Despesas (vOutro)",
@@ -74,7 +148,7 @@ class PosOrder(models.Model):
         vals = super(PosOrder, self)._order_fields(ui_order)
         
         campos_para_sincronizar = [
-            'x_cpf_nota', 'x_email_cliente', 'x_contingencia_payload',
+            'x_cpf_nota', 'x_contingencia_payload',
             'x_fiscal_numero', 'x_fiscal_serie', 'x_fiscal_status',
             'x_fiscal_chave', 'x_fiscal_mensagem',
             'x_fiscal_qrcode_url', 'x_fiscal_qrcode_b64',
@@ -122,12 +196,8 @@ class PosOrder(models.Model):
             if not partner:
                 continue
 
-            # Encontra o funcionário vinculado ao parceiro
-            employee = self.env['hr.employee'].search([
-                '|',
-                ('work_contact_id', '=', partner.id),
-                ('user_id.partner_id', '=', partner.id),
-            ], limit=1)
+            # Encontra o funcionário vinculado ao parceiro (I10: helper extraído)
+            employee = self._find_employee_for_partner(partner.id)
             if not employee:
                 continue  # Não é funcionário — ignora
 
@@ -207,6 +277,10 @@ class PosOrder(models.Model):
 
         # Identifica o produto de desconto global (pos_discount) para filtrar do payload.
         # No padrão SEFAZ, desconto é vDesc (campo de total), não item fiscal.
+        # Duplicação intencional: mesma lógica de filtro existe em export_data.js
+        # export_for_printing (frontend) e aqui (backend) — ver skill brazilian-fiscal-nfe.
+        # A duplicação é aceitável porque o backend alimenta o webhook (Focus NFe) e o
+        # frontend monta o DANFE impresso — contextos distintos, sem shared runtime.
         discount_product_id = self.config_id.discount_product_id.id if self.config_id.discount_product_id else None
         dados_dos_produtos = []
         desconto_global = 0.0
@@ -253,7 +327,7 @@ class PosOrder(models.Model):
                 'id_odoo': self.name,
                 'data': self.date_order,
                 'total': self.amount_total,
-                'numero_caixa': self.user_id.name,
+                'numero_caixa': self.session_id.config_id.id,
                 'numero_ordem': self.pos_reference,
                 'x_amount_other_value': self.x_amount_other_value,
                 'desconto_global': self.x_discount_value,
@@ -261,13 +335,13 @@ class PosOrder(models.Model):
             'cliente': {
                 'nome': 'CONSUMIDOR FINAL',
                 'cpf': self.x_cpf_nota or None,
-                # 'email': self.x_email_cliente or None,  # REMOVIDO: Email não é mais coletado no PDV
             },
             'produtos': dados_dos_produtos,
             'pagamentos': pagamentos,
             'fiscal': {
                 'estado': self.company_id.state_id.code or 'AM',
                 'cnpj_emitente': self.company_id.vat or '',
+                # TODO: tornar configurável se suportar NF-e (55) no futuro
                 'modelo': '65',
             },
             'confirmacao_venda': bool(self.x_confirmacao_venda),
@@ -291,16 +365,24 @@ class PosOrder(models.Model):
             try:
                 payload = order._prepare_nfce_payload()
                 json_payload = json.dumps(payload, default=str)
-            
+
+                # I7: lê URL e secret em runtime via ir.config_parameter,
+                # com fallback para as constantes globais (compat retrógrada).
+                middleware_url = order._get_middleware_url()
+                api_url = f"{middleware_url}/api/odoo/webhook"
+                webhook_secret = order._get_webhook_secret()
+
                 headers = {
                     'Content-Type': 'application/json',
                     'Accept': 'application/json',
                 }
 
-                if WEBHOOK_SECRET:
-                    headers['X-Webhook-Token'] = WEBHOOK_SECRET
+                if webhook_secret:
+                    headers['X-Webhook-Token'] = webhook_secret
 
-                response = requests.post(API_LARAVEL_URL, data=json_payload, headers=headers, timeout=5)
+                # N10: timeout configurável via ir.config_parameter (default 5s)
+                webhook_timeout = order._get_webhook_timeout()
+                response = requests.post(api_url, data=json_payload, headers=headers, timeout=webhook_timeout)
 
                 if 200 <= response.status_code < 300:
                     _logger.info(f"[MIDDLEWARE-WEBHOOK] Sucesso. Pedido despachado: {order.name}.")
@@ -311,7 +393,7 @@ class PosOrder(models.Model):
                     )
                     
             except requests.exceptions.Timeout:
-                _logger.error(f"[MIDDLEWARE-WEBHOOK] Timeout (5s) excedido para {order.name}.")
+                _logger.error(f"[MIDDLEWARE-WEBHOOK] Timeout excedido para {order.name}.")
             except requests.exceptions.RequestException as e:
                 _logger.error(f"[MIDDLEWARE-WEBHOOK] Falha crítica de conexão para {order.name}: {e}.")
             except Exception as e:
@@ -341,6 +423,52 @@ class PosConfig(models.Model):
              'Nunca decrementar manualmente.'
     )
 
+    def _get_max_numero_contingencia(self, serie):
+        """
+        Helper compartilhado (I6) que devolve o maior número de NFC-e emitido
+        em contingência para uma série, cruzando duas fontes:
+
+          1. High-water mark persistido no pos.config (x_contingencia_ultimo_numero)
+          2. Scan de segurança nos pos.order da série (captura updates feitos pelo
+             callback do middleware que não passam pelo create/write do POS)
+
+        Se o scan achar um número maior que o HWM, o HWM é corrigido em-place.
+
+        Args:
+            serie (str): série de contingência (ex: "700" + config_id).
+
+        Returns:
+            tuple[int, int, int]: (resultado, hwm, scan) — resultado=max(hwm, scan).
+                Devolve hwm e scan separadamente para logging detalhado nos callers.
+        """
+        self.ensure_one()
+        # Fonte primária: high-water mark do pos.config (atualizado a cada sync)
+        hwm = self.x_contingencia_ultimo_numero or 0
+
+        # Fonte secundária: scan do pos.order (captura updates feitos pelo callback
+        # do middleware que não passam pelo create/write do POS)
+        pedidos = self.env['pos.order'].sudo().search(
+            [('x_fiscal_serie', '=', serie)],
+            order='id desc',
+            limit=50
+        )
+        scan = 0
+        for pedido in pedidos:
+            try:
+                n = int(pedido.x_fiscal_numero or 0)
+                if n > scan:
+                    scan = n
+            except (ValueError, TypeError):
+                continue
+
+        resultado = max(hwm, scan)
+
+        # Corrige drift se o scan achou número maior que o high-water mark
+        if resultado > hwm:
+            self.sudo().write({'x_contingencia_ultimo_numero': resultado})
+
+        return resultado, hwm, scan
+
     def get_ultimo_numero_contingencia(self):
         """
         RPC público para o JS consultar o contador atualizado em tempo real.
@@ -355,38 +483,44 @@ class PosConfig(models.Model):
         # DEC-012: séries online (6xx) e offline (7xx) são namespaces distintos
         serie = str(700 + self.id)
 
-        # Dupla verificação: high-water mark do config + scan de segurança no pos.order
-        hwm = self.x_contingencia_ultimo_numero or 0
-
-        ultimo_do_banco = 0
-        pedidos = self.env['pos.order'].sudo().search(
-            [('x_fiscal_serie', '=', serie)],
-            order='id desc',
-            limit=50
-        )
-        for pedido in pedidos:
-            try:
-                n = int(pedido.x_fiscal_numero or 0)
-                if n > ultimo_do_banco:
-                    ultimo_do_banco = n
-            except (ValueError, TypeError):
-                continue
-
-        resultado = max(hwm, ultimo_do_banco)
-
-        # Se o scan achou um número maior, corrige o high-water mark
-        if resultado > hwm:
-            self.sudo().write({'x_contingencia_ultimo_numero': resultado})
+        # I6: scan delegado ao helper compartilhado _get_max_numero_contingencia
+        resultado, hwm, scan = self._get_max_numero_contingencia(serie)
 
         _logger.info(
             '[CONTINGENCIA-RPC] config_id=%d | série=%s | hwm=%d | scan=%d | resultado=%d',
-            self.id, serie, hwm, ultimo_do_banco, resultado
+            self.id, serie, hwm, scan, resultado
         )
         return resultado
 
 
 class PosSession(models.Model):
     _inherit = 'pos.session'
+
+    # ==========================================================
+    # HELPER DE FUNCIONÁRIO (I10)
+    # Espelha o helper de PosOrder para que create_recebimento possa
+    # buscar hr.employee por partner sem duplicar a busca.
+    # ==========================================================
+    @api.model
+    def _find_employee_for_partner(self, partner_id):
+        """Devolve o hr.employee vinculado ao partner_id, ou recordset vazio.
+
+        Busca pelo contato de trabalho (work_contact_id) ou pelo partner
+        do usuário (user_id.partner_id). Usado por create_recebimento.
+
+        Args:
+            partner_id (int): ID do res.partner.
+
+        Returns:
+            hr.employee recordset (limit=1): vazio se não houver vínculo.
+        """
+        if not partner_id:
+            return self.env['hr.employee']
+        return self.env['hr.employee'].search([
+            '|',
+            ('work_contact_id', '=', partner_id),
+            ('user_id.partner_id', '=', partner_id),
+        ], limit=1)
 
     def _loader_params_pos_order(self):
         params = super()._loader_params_pos_order()
@@ -401,8 +535,7 @@ class PosSession(models.Model):
             'x_fiscal_serie',
             'x_fiscal_protocolo',
             'x_fiscal_qrcode_b64',
-            'x_cpf_nota',  
-            'x_email_cliente',  
+            'x_cpf_nota',
             'x_contingencia_payload',
             'x_amount_other_value',
             'x_discount_value',
@@ -427,31 +560,9 @@ class PosSession(models.Model):
         # DEC-012: séries online (6xx) e offline (7xx) são namespaces distintos
         serie_contingencia = str(700 + config.id)
 
-        # Fonte primária: high-water mark do pos.config (atualizado a cada sync)
-        hwm = config.x_contingencia_ultimo_numero or 0
-
-        # Fonte secundária: scan do pos.order (captura updates feitos pelo callback
-        # do middleware que não passam pelo create/write do POS)
-        ultimos_pedidos = self.env['pos.order'].sudo().search(
-            [('x_fiscal_serie', '=', serie_contingencia)],
-            order='id desc',
-            limit=50
-        )
-
-        ultimo_do_scan = 0
-        for pedido in ultimos_pedidos:
-            try:
-                n = int(pedido.x_fiscal_numero or 0)
-                if n > ultimo_do_scan:
-                    ultimo_do_scan = n
-            except (ValueError, TypeError):
-                continue
-
-        ultimo_numero = max(hwm, ultimo_do_scan)
-
-        # Corrige drift se o scan achou número maior que o high-water mark
-        if ultimo_numero > hwm:
-            config.sudo().write({'x_contingencia_ultimo_numero': ultimo_numero})
+        # I6: scan delegado ao helper compartilhado _get_max_numero_contingencia.
+        # Antes o scan era duplicado aqui e em get_ultimo_numero_contingencia.
+        ultimo_numero, hwm, ultimo_do_scan = config._get_max_numero_contingencia(serie_contingencia)
 
         result['data'][0]['_ultimo_numero_contingencia'] = ultimo_numero
         result['data'][0]['_serie_contingencia'] = serie_contingencia
@@ -501,7 +612,6 @@ class PosSession(models.Model):
         }
 
         # === USUÁRIO E DATAS ===
-        from datetime import datetime
         identificacao = {
             'usuario': self.user_id.name or '',
             'data_abertura': self.start_at.strftime('%d/%m/%Y %H:%M:%S') if self.start_at else '',
@@ -529,75 +639,17 @@ class PosSession(models.Model):
 
         total_vendas = sum(m['valor'] for m in metodos_pagamento)
 
-        # === VENDAS A PRAZO (pay_later) ===
-        # O core filtra pay_later do closing_control_data, então buscamos direto nos pedidos.
-        vendas_prazo = []
+        # === VENDAS A PRAZO, SANGRIAS/SUPRIMENTOS, RECEBIMENTOS (helpers) ===
         orders = self._get_closed_orders()
-        prazo_payments = orders.payment_ids.filtered(lambda p: p.payment_method_id.type == 'pay_later')
-        for payment in prazo_payments:
-            order = payment.pos_order_id
-            partner = order.partner_id
-            vendas_prazo.append({
-                'cliente': partner.name if partner and partner.name != 'Public' else 'CONSUMIDOR',
-                'data': order.date_order.strftime('%d/%m/%Y %H:%M') if order.date_order else '',
-                'valor': payment.amount,
-            })
-        total_vendas_prazo = sum(v['valor'] for v in vendas_prazo)
-
-        # === SANGRIAS E SUPRIMENTOS (Cash In/Out) ===
-        # payment_ref vem como "POS/00012-out-motivo" — extraímos só o motivo.
-        sangrias = []
-        suprimentos = []
-        for move in cash_details.get('moves', []):
-            ref = move.get('name', '')
-            amount = move.get('amount', 0.0)
-            # Remove o prefixo da sessão (ex: "POS/00012-")
-            prefix = (self.name or '') + '-'
-            if ref.startswith(prefix):
-                resto = ref[len(prefix):]  # "out-motivo" ou "in-motivo"
-                partes = resto.split('-', 1)
-                motivo = partes[1] if len(partes) > 1 else resto
-            else:
-                motivo = ref
-            if amount < 0:
-                sangrias.append({'motivo': motivo, 'valor': abs(amount)})
-            else:
-                suprimentos.append({'motivo': motivo, 'valor': abs(amount)})
-        total_sangrias = sum(s['valor'] for s in sangrias)
-        total_suprimentos = sum(s['valor'] for s in suprimentos)
-
-        # === RECEBIMENTOS (account.payment inbound criados pelo botão Recebimento) ===
-        recebimentos = []
-        for payment in self.bank_payment_ids.filtered(
-            lambda p: p.payment_type == 'inbound' and p.partner_type == 'customer'
-                      and p.memo and 'Recebimento PDV' in p.memo
-        ):
-            recebimentos.append({
-                'cliente': payment.partner_id.name or '',
-                'data': payment.date.strftime('%d/%m/%Y %H:%M') if payment.date else '',
-                'valor': payment.amount,
-                'memo': payment.memo or '',
-            })
-        total_recebimentos = sum(r['valor'] for r in recebimentos)
+        vendas_prazo, total_vendas_prazo = self._get_vendas_prazo(orders)
+        sangrias, suprimentos, total_sangrias, total_suprimentos = self._get_sangrias_suprimentos(cash_details)
+        recebimentos, total_recebimentos = self._get_recebimentos()
+        saldo_detalhado = self._calc_saldo_detalhado(metodos_pagamento)
 
         # === SALDO DE MOVIMENTAÇÃO ===
         entradas = total_vendas + (identificacao['fundo_caixa'] or 0.0) + total_suprimentos + total_recebimentos
         saidas = total_sangrias
         saldo_caixa = entradas - saidas
-
-        # === SALDO DETALHADO POR MÉTODO ===
-        # Calculado/Sistema = valor do sistema
-        # Informado = 0 (operador preenche na hora — por enquanto 0)
-        # Diferença = informado - calculado = -calculado (por enquanto)
-        saldo_detalhado = []
-        for metodo in metodos_pagamento:
-            valor_sistema = metodo['valor']
-            saldo_detalhado.append({
-                'nome': metodo['nome'],
-                'calculado': valor_sistema,
-                'informado': 0.0,
-                'diferenca': 0.0 - valor_sistema,
-            })
 
         return {
             'empresa': empresa,
@@ -620,6 +672,111 @@ class PosSession(models.Model):
             'saldo_detalhado': saldo_detalhado,
         }
 
+    def _get_vendas_prazo(self, orders):
+        """Coleta as vendas a prazo (pay_later) da sessão.
+
+        O core filtra pay_later do closing_control_data, então buscamos
+        direto nos pedidos.
+
+        Args:
+            orders: recordset de pos.order já fechadas da sessão.
+
+        Returns:
+            tuple(list[dict], float): lista de vendas a prazo e total.
+        """
+        vendas_prazo = []
+        prazo_payments = orders.payment_ids.filtered(
+            lambda p: p.payment_method_id.type == 'pay_later'
+        )
+        for payment in prazo_payments:
+            order = payment.pos_order_id
+            partner = order.partner_id
+            vendas_prazo.append({
+                'cliente': partner.name if partner and partner.name != 'Public' else 'CONSUMIDOR',
+                'data': order.date_order.strftime('%d/%m/%Y %H:%M') if order.date_order else '',
+                'valor': payment.amount,
+            })
+        total_vendas_prazo = sum(v['valor'] for v in vendas_prazo)
+        return vendas_prazo, total_vendas_prazo
+
+    def _get_sangrias_suprimentos(self, cash_details):
+        """Extrai sangrias e suprimentos (cash in/out) dos detalhes de caixa.
+
+        payment_ref vem como "POS/00012-out-motivo" — extraímos só o motivo.
+
+        Args:
+            cash_details: dict com os detalhes de dinheiro (default_cash_details).
+
+        Returns:
+            tuple(list, list, float, float): sangrias, suprimentos,
+            total_sangrias, total_suprimentos.
+        """
+        sangrias = []
+        suprimentos = []
+        for move in cash_details.get('moves', []):
+            ref = move.get('name', '')
+            amount = move.get('amount', 0.0)
+            # Remove o prefixo da sessão (ex: "POS/00012-")
+            prefix = (self.name or '') + '-'
+            if ref.startswith(prefix):
+                resto = ref[len(prefix):]  # "out-motivo" ou "in-motivo"
+                partes = resto.split('-', 1)
+                motivo = partes[1] if len(partes) > 1 else resto
+            else:
+                motivo = ref
+            if amount < 0:
+                sangrias.append({'motivo': motivo, 'valor': abs(amount)})
+            else:
+                suprimentos.append({'motivo': motivo, 'valor': abs(amount)})
+        total_sangrias = sum(s['valor'] for s in sangrias)
+        total_suprimentos = sum(s['valor'] for s in suprimentos)
+        return sangrias, suprimentos, total_sangrias, total_suprimentos
+
+    def _get_recebimentos(self):
+        """Coleta os recebimentos (account.payment inbound) criados pelo
+        botão Recebimento no PDV.
+
+        Returns:
+            tuple(list[dict], float): lista de recebimentos e total.
+        """
+        recebimentos = []
+        for payment in self.bank_payment_ids.filtered(
+            lambda p: p.payment_type == 'inbound' and p.partner_type == 'customer'
+                      and p.memo and 'Recebimento PDV' in p.memo
+        ):
+            recebimentos.append({
+                'cliente': payment.partner_id.name or '',
+                'data': payment.date.strftime('%d/%m/%Y %H:%M') if payment.date else '',
+                'valor': payment.amount,
+                'memo': payment.memo or '',
+            })
+        total_recebimentos = sum(r['valor'] for r in recebimentos)
+        return recebimentos, total_recebimentos
+
+    def _calc_saldo_detalhado(self, metodos_pagamento):
+        """Calcula o saldo detalhado por método de pagamento.
+
+        Calculado/Sistema = valor do sistema.
+        Informado = 0 (operador preenche na hora — por enquanto 0).
+        Diferença = informado - calculado = -calculado (por enquanto).
+
+        Args:
+            metodos_pagamento: lista de dicts com 'nome' e 'valor'.
+
+        Returns:
+            list[dict]: saldo detalhado por método.
+        """
+        saldo_detalhado = []
+        for metodo in metodos_pagamento:
+            valor_sistema = metodo['valor']
+            saldo_detalhado.append({
+                'nome': metodo['nome'],
+                'calculado': valor_sistema,
+                'informado': 0.0,
+                'diferenca': 0.0 - valor_sistema,
+            })
+        return saldo_detalhado
+
     def action_print_fechamento(self):
         """Retorna uma action do tipo ``ir.actions.client`` que abre a URL
         do controller de reimpressão do fechamento numa nova janela.
@@ -633,13 +790,15 @@ class PosSession(models.Model):
             'target': 'new',
         }
 
-    def create_recebimento(self, invoice_id):
+    def create_recebimento(self, invoice_id, amount=None):
         """Cria um recebimento (account.payment inbound) para uma fatura
         especifica, reconciliando automaticamente o pagamento com a fatura.
         Usado pelo botao Recebimento no PDV.
 
         Args:
             invoice_id: int - ID da fatura (account.move) a ser quitada
+            amount: float - valor a receber (opcional). Se None, usa o
+                valor residual da fatura (comportamento legado).
 
         Returns:
             dict with success/message
@@ -654,21 +813,41 @@ class PosSession(models.Model):
         if invoice.payment_state not in ('not_paid', 'partial'):
             return {'success': False, 'message': 'Fatura ja foi quitada (payment_state=%s)' % invoice.payment_state}
 
-        amount = invoice.amount_residual
+        # Se amount nao foi passado, usa o residual (compatibilidade retrograda)
+        if amount is None:
+            amount = invoice.amount_residual
+
+        # Valida o amount
         if amount <= 0:
-            return {'success': False, 'message': 'Valor residual invalido (%.2f)' % amount}
+            return {'success': False, 'message': 'Valor invalido (%.2f). O valor deve ser maior que zero.' % amount}
+
+        if amount < 1.0:
+            return {'success': False, 'message': 'Valor minimo de R$ 1,00'}
+
+        if amount > invoice.amount_residual + 0.001:
+            return {
+                'success': False,
+                'message': 'Valor superior ao saldo da fatura (R$ %.2f)' % invoice.amount_residual,
+            }
 
         partner = invoice.partner_id
         partner_id = partner.id
 
-        # Cria o pagamento de entrada (inbound) pelo valor residual da fatura
+        # Monta o memo: diferenciado para pagamento parcial
+        is_partial = amount < invoice.amount_residual - 0.001
+        if is_partial:
+            memo = 'Recebimento PDV - Fatura %s - Parcial R$ %.2f' % (invoice.name, amount)
+        else:
+            memo = 'Recebimento PDV - Fatura %s' % invoice.name
+
+        # Cria o pagamento de entrada (inbound) pelo valor informado
         payment = self.env['account.payment'].create({
             'payment_type': 'inbound',
             'partner_type': 'customer',
             'partner_id': partner_id,
             'amount': amount,
             'date': fields.Date.context_today(self),
-            'memo': 'Recebimento PDV - Fatura %s' % invoice.name,
+            'memo': memo,
             'pos_session_id': self.id,
         })
         payment.action_post()
@@ -700,26 +879,28 @@ class PosSession(models.Model):
                 invoice.name, bool(payment_line), bool(invoice_line)
             )
 
-        # Registra movimentacao se o parceiro for funcionario
-        employee = self.env['hr.employee'].search([
-            '|',
-            ('work_contact_id', '=', partner_id),
-            ('user_id.partner_id', '=', partner_id),
-        ], limit=1)
+        # Le o saldo residual APOS reconciliacao (DEC-003)
+        residual_pos = invoice.amount_residual
+
+        # Registra movimentacao se o parceiro for funcionario (I10: helper extraído)
+        # Usa o saldo residual pos-reconciliacao (DEC-003)
+        employee = self._find_employee_for_partner(partner_id)
         if employee:
             self.env['x.prazo.movimentacao'].create({
                 'employee_id': employee.id,
                 'partner_id': partner_id,
                 'data': fields.Datetime.now(),
-                'valor': amount,
+                'valor': residual_pos,
                 'tipo': 'pagamento',
             })
             _logger.info(
-                '[RECEBIMENTO-PDV] Movimentacao registrada | Funcionario: %s | Valor: %.2f',
-                employee.name, amount
+                '[RECEBIMENTO-PDV] Movimentacao registrada | Funcionario: %s | Valor residual: %.2f',
+                employee.name, residual_pos
             )
 
         return {
             'success': True,
-            'message': 'Recebimento de R$ %.2f registrado para fatura %s' % (amount, invoice.name),
+            'message': 'Recebido R$ %.2f | Saldo restante: R$ %.2f | Fatura %s' % (
+                amount, residual_pos, invoice.name
+            ),
         }
