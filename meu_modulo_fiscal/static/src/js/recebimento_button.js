@@ -100,34 +100,47 @@ patch(Navbar.prototype, {
         const amountResidual = selectedInvoice.amount_residual;
 
         // ── 4. NumberPopup para digitar o valor a receber ────────────────────
-        const rawValue = await makeAwaitable(this.dialog, NumberPopup, {
-            title: `Valor a receber — ${selectedInvoice.name}`,
-            startingValue: amountResidual.toFixed(2),
-            confirmText: "OK",
-            cancelText: "Cancelar",
-        });
+        // Repete até obter um valor válido ou o operador cancelar.
+        let amount = null;
+        while (true) {
+            const rawValue = await makeAwaitable(this.dialog, NumberPopup, {
+                title: `Valor a receber — ${selectedInvoice.name}`,
+                startingValue: amountResidual.toFixed(2),
+                confirmText: "OK",
+                cancelText: "Cancelar",
+            });
 
-        if (!rawValue) {
-            // Operador cancelou o NumberPopup
-            return;
-        }
+            if (!rawValue) {
+                // Operador cancelou o NumberPopup
+                return;
+            }
 
-        // Converte o valor para float (NumberPopup retorna string)
-        const amount = parseFloat(rawValue);
-        if (isNaN(amount) || amount <= 0) {
-            this.notification.add("Valor inválido. Digite um valor maior que zero.", { type: "warning" });
-            return;
-        }
+            // Converte e arredonda para 2 casas (mesma precisão enviada ao backend)
+            const parsed = parseFloat(rawValue);
+            if (isNaN(parsed)) {
+                this.notification.add("Valor inválido. Digite um número.", { type: "warning" });
+                continue;
+            }
 
-        // Validação client-side
-        if (amount < 1.0) {
-            this.notification.add("Valor mínimo de R$ 1,00", { type: "warning" });
-            return;
-        }
+            amount = Math.round(parsed * 100) / 100;
 
-        if (amount > amountResidual) {
-            this.notification.add("Valor superior ao saldo da fatura (R$ " + amountResidual.toFixed(2) + ")", { type: "warning" });
-            return;
+            if (amount <= 0) {
+                this.notification.add("Valor inválido. Digite um valor maior que zero.", { type: "warning" });
+                continue;
+            }
+
+            // Validação client-side (alinhada com o backend: tolerância de R$ 0,001)
+            if (amount < 1.0) {
+                this.notification.add("Valor mínimo de R$ 1,00", { type: "warning" });
+                continue;
+            }
+
+            if (amount > amountResidual + 0.001) {
+                this.notification.add("Valor superior ao saldo da fatura (R$ " + amountResidual.toFixed(2) + ")", { type: "warning" });
+                continue;
+            }
+
+            break;
         }
 
         // ── 5. Confirmar pagamento com o valor digitado ────────────────────────
