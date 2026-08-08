@@ -12,13 +12,13 @@ Hermes (orquestrador)
     ├── 1. Pre-grill (3 perguntas)
     │
     ├── 2. Terminal do AGY (grill + spec + tickets)
-    │       agy --model claude-sonnet-4-6
+    │       rtk agy --model claude-sonnet-4-6
     │
     ├── 3. Terminal do CODER (implementação)
-    │       ollama launch claude --model deepseek-v4-flash:cloud
+    │       rtk ollama launch claude --model deepseek-v4-flash:cloud
     │
     └── 4. Terminal do REVIEWER (revisão)
-            ollama launch claude --model kimi-k2.7-code:cloud
+            rtk ollama launch claude --model kimi-k2.7-code:cloud
 ```
 
 ## Passo a Passo
@@ -52,7 +52,7 @@ O Hermes monta o prompt completo com:
 
 ```bash
 orca terminal create --worktree active --title "fiscal-planner" \
-  --command "agy --model claude-sonnet-4-6 --prompt-interactive '<PROMPT MONTADO>'" \
+  --command "rtk agy --model claude-sonnet-4-6 --prompt-interactive '<PROMPT MONTADO>'" \
   --focus
 ```
 
@@ -81,7 +81,7 @@ O Hermes abre o terminal com Claude Code + DeepSeek:
 
 ```bash
 orca terminal create --worktree active --title "fiscal-coder" \
-  --command "ollama launch claude --model deepseek-v4-flash:cloud" \
+  --command "rtk ollama launch claude --model deepseek-v4-flash:cloud" \
   --focus
 ```
 
@@ -106,7 +106,7 @@ O Hermes abre o terminal com Claude Code + Kimi:
 
 ```bash
 orca terminal create --worktree active --title "fiscal-reviewer" \
-  --command "ollama launch claude --model kimi-k2.7-code:cloud" \
+  --command "rtk ollama launch claude --model kimi-k2.7-code:cloud" \
   --focus
 ```
 

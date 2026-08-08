@@ -78,7 +78,7 @@ Com as respostas, o Hermes monta o prompt completo pro agy com a skill certa + c
 
 ```bash
 orca terminal create --worktree active --title "<skill>" \
-  --command "agy --model claude-sonnet-4-6 --prompt-interactive '<PROMPT COM A SKILL E A DESCRICAO DA FEATURE>'" \
+  --command "rtk agy --model claude-sonnet-4-6 --prompt-interactive '<PROMPT COM A SKILL E A DESCRICAO DA FEATURE>'" \
   --focus
 ```
 
@@ -99,7 +99,7 @@ BACKLOG → A FAZER → EM ANDAMENTO → REVISÃO → TESTE → CONCLUÍDO
 
 ```bash
 orca terminal create --worktree active --title "fiscal-planner" \
-  --command "agy --model claude-sonnet-4-6 --prompt-interactive 'Carrega a skill fiscal-planner e me grilla sobre: <DESCREVA A FEATURE>'" \
+  --command "rtk agy --model claude-sonnet-4-6 --prompt-interactive 'Carrega a skill fiscal-planner e me grilla sobre: <DESCREVA A FEATURE>'" \
   --focus
 ```
 
@@ -109,7 +109,7 @@ O agy abre no workspace com Claude Sonnet 4.6, carrega AGENTS.md automático, e 
 
 ```bash
 orca terminal create --worktree active --title "fiscal-taskbreaker" \
-  --command "agy --model claude-sonnet-4-6 --prompt-interactive 'Carrega a skill fiscal-taskbreaker e quebra a spec em .agents/specs/<feature>.md em tickets'" \
+  --command "rtk agy --model claude-sonnet-4-6 --prompt-interactive 'Carrega a skill fiscal-taskbreaker e quebra a spec em .agents/specs/<feature>.md em tickets'" \
   --focus
 ```
 
@@ -123,7 +123,7 @@ orca terminal create --worktree active --title "fiscal-taskbreaker" \
 
 ```bash
 orca terminal create --worktree active --title "fiscal-coder" \
-  --command "ollama launch claude --model deepseek-v4-flash:cloud" \
+  --command "rtk ollama launch claude --model deepseek-v4-flash:cloud" \
   --focus
 ```
 
@@ -135,7 +135,7 @@ O Claude Code abre no workspace com DeepSeek, le AGENTS.md automaticamente, e ca
 
 ```bash
 orca terminal create --worktree active --title "fiscal-reviewer" \
-  --command "ollama launch claude --model kimi-k2.7-code:cloud" \
+  --command "rtk ollama launch claude --model kimi-k2.7-code:cloud" \
   --focus
 ```
 
