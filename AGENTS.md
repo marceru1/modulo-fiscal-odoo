@@ -87,7 +87,7 @@ O Hermes monta o prompt com:
 - A descrição da feature que o usuário passou
 - Instrução pra encadear fases no mesmo terminal quando fizer sentido (planner → taskbreaker)
 
-## Workflow (Trello + Git + Orca)
+## Workflow (Obsidian PM + Git + Orca)
 
 ```
 BACKLOG → A FAZER → EM ANDAMENTO → REVISÃO → TESTE → CONCLUÍDO
@@ -103,7 +103,7 @@ orca terminal create --worktree active --title "fiscal-planner" \
   --focus
 ```
 
-O agy abre no workspace com Claude Sonnet 4.6, carrega AGENTS.md automático, e inicia o grill. Ao final: spec em `.agents/specs/<feature>.md` + ADRs + título do card Trello.
+O agy abre no workspace com Claude Sonnet 4.6, carrega AGENTS.md automático, e inicia o grill. Ao final: spec em `.agents/specs/<feature>.md` + ADRs + título do task no Obsidian PM.
 
 2. **Abrir terminal do taskbreaker** (depois que a spec estiver pronta):
 
@@ -113,7 +113,7 @@ orca terminal create --worktree active --title "fiscal-taskbreaker" \
   --focus
 ```
 
-3. No Trello: cria card com o título sugerido, cola checklist, move pra Em andamento
+3. No Obsidian PM: cria task no projeto "Modulo Odoo" com o título sugerido, anexa checklist, move pra Em andamento
 
 **EM ANDAMENTO:**
 
@@ -168,9 +168,9 @@ orca terminal read --terminal <handle>   # ler output de um terminal
 
 | Regra | Detalhe |
 |-------|---------|
-| 1 card = 1 feature | Nunca misturar duas features no mesmo card |
-| Checklist = tasks | Cada task do taskbreaker vira um item do checklist |
-| Só move pra Em andamento | Depois que o checklist estiver colado no card |
+| 1 task = 1 feature | Nunca misturar duas features no mesmo task |
+| Subtasks = tickets | Cada ticket do taskbreaker vira uma subtask no Obsidian PM |
+| Só move pra Em andamento | Depois que as subtasks estiverem criadas no task |
 | Só move pra Concluído | Depois do merge do PR em dev |
 | Branch sempre `feat/` | a partir de dev |
 | PR sempre | Nunca mergear direto na dev sem PR |
@@ -217,7 +217,7 @@ Decision: <o que foi decidido>
 Consequences: <trade-offs, riscos>
 ```
 
-### Output do Grill: título do card Trello
+### Output do Grill: título do task no Obsidian PM
 
 Sugerir título curto (máx 60 chars) — vira nome do card e prefixo da branch (`feat/<slug>`).
 
@@ -324,7 +324,7 @@ Usado quando a spec já está pronta e precisa ser quebrada em tasks (se o plann
 4. **Wide refactors são exceção** — expand-contract, não tracer bullet
 5. **Salvar** em `.agents/tickets/<feature-slug>/<NN>-<short-title>.md`
 6. **Apresentar** lista numerada (Title, Blocked by, What it delivers) → iterar até aprovação
-7. **Checklist pra Trello:**
+7. **Checklist pra Obsidian PM (subtasks):**
 
 ```markdown
 ## Checklist
