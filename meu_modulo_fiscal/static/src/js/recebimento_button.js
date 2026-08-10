@@ -195,7 +195,8 @@ patch(Navbar.prototype, {
             }
             const reprint = await ask(this.dialog, {
                 title: "Pagamento registrado",
-                body: `R$ ${formatCurrency(amount)} — Fatura ${selectedInvoice.name}`,
+                // formatCurrency já inclui o prefixo "R$ " — sem prefixo duplicado
+                body: `${formatCurrency(amount)} — Fatura ${selectedInvoice.name}`,
                 confirmText: "OK",
                 cancelText: "Reimprimir",
             });
