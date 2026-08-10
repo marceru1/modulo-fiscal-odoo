@@ -203,7 +203,7 @@ orca terminal create --worktree branch:<feature-slug> --title "fiscal-coder" \
   --focus
 ```
 
-O Claude Code abre na worktree da feature com DeepSeek, le AGENTS.md automaticamente, e carrega a skill `fiscal-coder`. Instruir o agente a implementar os tickets em `.agents/tickets/<feature>/` um por um com TDD. Sub-skills `source-driven-development` e `doubt-driven-development` disparam automatic.
+O Claude Code abre na worktree da feature com DeepSeek, le AGENTS.md automaticamente, e carrega a skill `fiscal-coder`. Instruir o agente a implementar os tickets em `.agents/tickets/<feature>/` um por um com TDD. Sub-skills `source-driven-development` e `doubt-driven-development` disparam automatic. PULAR verificacao de ambiente (Odoo nao roda local) — ir direto pra implementacao lendo os arquivos do modulo.
 
 3. Push + PR (`<feature-slug>` → dev)
 
