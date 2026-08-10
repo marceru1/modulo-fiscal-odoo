@@ -63,8 +63,11 @@ class TestRecebimento(TransactionCase):
         self.assertEqual(comp['valor_pago'], amount)
         self.assertEqual(comp['fatura'], self.invoice.name)
         self.assertIsInstance(comp['data_hora'], str)
+        # Ticket 04: tipos explícitos + valores vinculados ao contexto da sessão
+        self.assertIsInstance(comp['numero_pdv'], int)
         self.assertEqual(comp['numero_pdv'], self.pos_config.id)
         self.assertIsInstance(comp['operador'], str)
+        self.assertEqual(comp['operador'], self.pos_session.user_id.name)
         self.assertEqual(comp['forma_pagamento'], payment_method_name)
 
     # ── Caso 1: Pagamento parcial ──────────────────────────────────────────
