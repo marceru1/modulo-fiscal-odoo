@@ -60,9 +60,75 @@ my_addons/
 
 O Hermes é o orchestrador. O usuário descreve o que quer e o Hermes decide:
 
-1. **Feature nova** (precisa de grill + spec + tickets + code + review) → faz pre-grill de 3 perguntas basicas com o usuario, monta o prompt completo, e abre terminal do agy no Orca
+1. **Feature nova** (precisa de grill + spec + tickets + code + review) → cria task no Obsidian PM (Backlog), faz pre-grill de 3 perguntas basicas com o usuario, monta o prompt completo, e abre terminal do agy no Orca
 2. **Bugfix simples** (uma linha, um import) → faz direto no Hermes
 3. **Pergunta** (status, dúvida, explicação) → responde direto
+
+### Obsidian PM (Kanban)
+
+O Hermes gerencia tasks diretamente no filesystem do vault Obsidian. O plugin Project Manager le os `.md` files automaticamente.
+
+**Caminhos:**
+- Projeto: `~/Library/Mobile Documents/iCloud~md~obsidian/Documents/brain/Kanban Projects/Modulo Odoo.md`
+- Tasks: `~/Library/Mobile Documents/iCloud~md~obsidian/Documents/brain/Kanban Projects/Modulo Odoo_tasks/<slug>.md`
+- Project ID: `zk233d8lmsku7qbv`
+
+**Criar task (feature nova no Backlog):**
+
+Criar `.md` file em `Modulo Odoo_tasks/<feature-slug>.md` com:
+
+```yaml
+---
+pm-task: true
+projectId: "zk233d8lmsku7qbv"
+parentId:
+id: "<unique-id>"
+title: "<titulo da feature>"
+type: "task"
+status: "todo"
+priority: "<low|medium|high|critical>"
+start: "<YYYY-MM-DD>"
+due: ""
+progress: 0
+assignees: []
+tags: []
+subtaskIds: []
+dependencies: []
+feature-slug: "<slug>"
+branch: "feat/<slug>"
+createdAt: "<ISO timestamp>"
+updatedAt: "<ISO timestamp>"
+---
+
+<descricao da feature>
+
+Project: [[Modulo Odoo|Modulo Odoo]]
+```
+
+**Criar subtask (ticket do taskbreaker):**
+
+Mesmo formato mas com `parentId: "<id do task pai>"` e `type: "subtask"`.
+
+**Atualizar status (mover no Kanban):**
+
+Editar o campo `status` no frontmatter do `.md`:
+
+| Status Kanban | Valor no YAML |
+|---------------|---------------|
+| Backlog | `todo` |
+| A Fazer | `todo` |
+| Em Andamento | `in-progress` |
+| Revisão | `review` |
+| Teste | `testing` |
+| Concluído | `done` |
+
+**Quando o Hermes atualiza status:**
+- Feature nova criada → `todo` (Backlog)
+- Spec + tickets prontos → `todo` (A Fazer) + criar subtasks
+- Coder começou → `in-progress`
+- Código pronto, PR aberto → `review`
+- Review passou → `testing`
+- Mergeiado em dev → `done`
 
 ### Pre-grill (antes de abrir o agy)
 
@@ -72,7 +138,9 @@ O Hermes faz 3 perguntas rapidas pra montar o prompt com contexto maximo:
 2. Quais modelos/telas do Odoo sao afetados? (ex: pos.order, receibo, fechamento)
 3. Tem que funcionar em contingencia/offline?
 
-Com as respostas, o Hermes monta o prompt completo pro agy com a skill certa + contexto + encadeamento de fases.
+Com as respostas, o Hermes:
+1. Cria o task no Obsidian PM (Backlog)
+2. Monta o prompt completo pro agy com a skill certa + contexto + encadeamento de fases
 
 ### Comando base pra abrir terminal do agy no Orca
 

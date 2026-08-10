@@ -33,7 +33,25 @@ Usuário: "adicionar botão de teste no PDV"
 
 O Hermes lê o AGENTS.md automático e identifica que é feature nova.
 
-### Passo 2 — Pre-grill (Hermes → Usuário)
+### Passo 2 — Hermes cria task no Obsidian PM
+
+O Hermes cria um `.md` file em `Modulo Odoo_tasks/botao-teste-pdv.md` com:
+
+```yaml
+---
+pm-task: true
+projectId: "zk233d8lmsku7qbv"
+title: "Botão de Teste no PDV"
+status: "todo"
+priority: "medium"
+feature-slug: "botao-teste-pdv"
+branch: "feat/botao-teste-pdv"
+---
+```
+
+O task aparece automaticamente no Kanban do Obsidian (coluna Backlog).
+
+### Passo 3 — Pre-grill (Hermes → Usuário)
 
 O Hermes faz 3 perguntas rápidas:
 
@@ -43,7 +61,7 @@ O Hermes faz 3 perguntas rápidas:
 
 O usuário responde. O Hermes não gasta tokens à toa — só 3 perguntas.
 
-### Passo 3 — Hermes abre terminal do AGY no Orca
+### Passo 4 — Hermes abre terminal do AGY no Orca
 
 O Hermes monta o prompt completo com:
 - A skill certa (`fiscal-planner`)
@@ -56,7 +74,7 @@ orca terminal create --worktree active --title "fiscal-planner" \
   --focus
 ```
 
-### Passo 4 — Usuário trabalha no terminal do AGY
+### Passo 5 — Usuário trabalha no terminal do AGY
 
 O agy no Orca:
 - Carrega AGENTS.md automático
@@ -69,13 +87,15 @@ O agy no Orca:
 
 Tudo no mesmo terminal, mesma sessão.
 
-### Passo 5 — Usuário volta no Hermes
+### Passo 6 — Usuário volta no Hermes
 
 ```
 Usuário: "spec e tickets prontos, feature: botao-teste-pdv"
 ```
 
-### Passo 6 — Hermes abre terminal do CODER no Orca
+O Hermes atualiza o status do task no Obsidian PM para A Fazer e cria subtasks com os tickets do taskbreaker.
+
+### Passo 7 — Hermes abre terminal do CODER no Orca
 
 O Hermes abre o terminal com Claude Code + DeepSeek:
 
@@ -94,13 +114,15 @@ O Claude Code abre no workspace:
   - `doubt-driven-development` — revisão adversarial de decisões não-triviais
 - Commita cada ticket com conventional commit
 
-### Passo 7 — Usuário volta no Hermes
+### Passo 8 — Usuário volta no Hermes
 
 ```
 Usuário: "código pronto, PR aberto"
 ```
 
-### Passo 8 — Hermes abre terminal do REVIEWER no Orca
+O Hermes atualiza o status do task no Obsidian PM para Revisão.
+
+### Passo 9 — Hermes abre terminal do REVIEWER no Orca
 
 O Hermes abre o terminal com Claude Code + Kimi:
 
@@ -117,13 +139,17 @@ O Claude Code abre no workspace:
 - Sub-skill `code-simplification` dispara se achar smell
 - Salva relatório em `.agents/reviews/<feature>-<data>.md`
 
-### Passo 9 — Usuário volta no Hermes
+### Passo 10 — Usuário volta no Hermes
 
 ```
 Usuário: "review passou" ou "review achou X problemas"
 ```
 
-### Passo 10 — Resultado
+O Hermes atualiza o status no Obsidian PM:
+- Review passou → Teste
+- Review falhou → Em Andamento (volta pro coder corrigir)
+
+### Passo 11 — Resultado
 
 - **Review passou** → usuário testa manualmente no PDV → mergeia PR → avisa o Hermes pra limpar branches
 - **Review falhou** → Hermes reabre o terminal do coder com o relatório da review pra corrigir
