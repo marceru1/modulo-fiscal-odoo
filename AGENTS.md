@@ -186,24 +186,30 @@ orca terminal create --worktree active --title "fiscal-taskbreaker" \
 
 **EM ANDAMENTO:**
 
-1. Cria branch `feat/<slug>` a partir de dev
-
-2. **Abrir terminal do coder:**
+1. **Criar worktree isolada pra feature** (cada feature roda em paralelo sem conflito):
 
 ```bash
-orca terminal create --worktree active --title "fiscal-coder" \
+orca worktree create --name <feature-slug> --base-branch dev --activate
+```
+
+Isso cria um checkout isolado em `/Users/marceloC/orca/workspaces/my_addons/<feature-slug>` com branch `<feature-slug>` a partir de dev. Multiplas features podem rodar em paralelo, cada uma na sua worktree.
+
+2. **Abrir terminal do coder na worktree da feature:**
+
+```bash
+orca terminal create --worktree branch:<feature-slug> --title "fiscal-coder" \
   --command "rtk ollama launch claude --model deepseek-v4-flash:cloud" \
   --focus
 ```
 
-O Claude Code abre no workspace com DeepSeek, le AGENTS.md automaticamente, e carrega a skill `fiscal-coder`. Instruir o agente a implementar os tickets em `.agents/tickets/<feature>/` um por um com TDD. Sub-skills `source-driven-development` e `doubt-driven-development` disparam automatic.
+O Claude Code abre na worktree da feature com DeepSeek, le AGENTS.md automaticamente, e carrega a skill `fiscal-coder`. Instruir o agente a implementar os tickets em `.agents/tickets/<feature>/` um por um com TDD. Sub-skills `source-driven-development` e `doubt-driven-development` disparam automatic.
 
-3. Push + PR (`feat/<slug>` → dev)
+3. Push + PR (`<feature-slug>` → dev)
 
-4. **Abrir terminal do reviewer:**
+4. **Abrir terminal do reviewer na worktree da feature:**
 
 ```bash
-orca terminal create --worktree active --title "fiscal-reviewer" \
+orca terminal create --worktree branch:<feature-slug> --title "fiscal-reviewer" \
   --command "rtk ollama launch claude --model kimi-k2.7-code:cloud" \
   --focus
 ```
@@ -211,6 +217,19 @@ orca terminal create --worktree active --title "fiscal-reviewer" \
 O Claude Code abre com Kimi K2.7, le AGENTS.md automaticamente, e carrega a skill `fiscal-reviewer`. Instruir o agente a revisar o diff desde dev (5 eixos) e salvar relatório em `.agents/reviews/`. Sub-skill `code-simplification` dispara se achar smell.
 
 5. Se reviewer achar problemas → corrige no mesmo terminal do coder, commita, pusha
+
+6. **Remover worktree quando concluir** (apos merge):
+
+```bash
+orca worktree rm --worktree branch:<feature-slug> --force
+```
+
+### Ver worktrees ativas
+
+```bash
+orca worktree ps              # resumo compacto
+orca worktree list --json     # detalhado
+```
 
 **REVISÃO (WIP máx 3 cards):** falhar volta pra Em andamento; passar segue pra Teste.
 
