@@ -442,6 +442,8 @@ Cada título máx 60 chars, auto-explicativo.
    6. Commit com conventional commit
    7. Após todos os tickets, rodar `fiscal-reviewer`
 
+**NAO fazer push. NAO abrir PR.** O usuario precisa testar localmente primeiro. Parar apos commitar e avisar.
+
 ### Commit
 
 ```
