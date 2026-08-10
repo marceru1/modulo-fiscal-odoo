@@ -793,7 +793,7 @@ class PosSession(models.Model):
             'target': 'new',
         }
 
-    def create_recebimento(self, invoice_id, amount=None):
+    def create_recebimento(self, invoice_id, amount=None, payment_method_name=''):
         """Cria um recebimento (account.payment inbound) para uma fatura
         especifica, reconciliando automaticamente o pagamento com a fatura.
         Usado pelo botao Recebimento no PDV.
@@ -802,9 +802,15 @@ class PosSession(models.Model):
             invoice_id: int - ID da fatura (account.move) a ser quitada
             amount: float - valor a receber (opcional). Se None, usa o
                 valor residual da fatura (comportamento legado).
+            payment_method_name: str - nome do metodo de pagamento exibido
+                no comprovante (DEC-001). Vem do frontend sem validacao
+                fiscal; default '' (backward-compatible).
 
         Returns:
-            dict with success/message
+            dict with success/message. Em caso de sucesso, inclui a chave
+            ``comprovante`` (DEC-004) com os dados para impressao termica:
+            fatura, valor_pago, forma_pagamento, data_hora, numero_pdv e
+            operador.
         """
         invoice = self.env['account.move'].browse(invoice_id)
         if not invoice.exists():
@@ -901,9 +907,19 @@ class PosSession(models.Model):
                 employee.name, residual_pos
             )
 
+        # DEC-004: dados do comprovante de pagamento p/ impressao termica.
+        # Nao inclui saldo restante (fora do escopo da feature).
         return {
             'success': True,
             'message': 'Recebido R$ %.2f | Saldo restante: R$ %.2f | Fatura %s' % (
                 amount, residual_pos, invoice.name
             ),
+            'comprovante': {
+                'fatura': invoice.name,
+                'valor_pago': amount,
+                'forma_pagamento': payment_method_name,
+                'data_hora': fields.Datetime.now().strftime('%d/%m/%Y %H:%M:%S'),
+                'numero_pdv': self.config_id.id,
+                'operador': self.user_id.name,
+            },
         }
