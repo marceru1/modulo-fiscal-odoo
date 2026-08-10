@@ -44,6 +44,10 @@
             'meu_modulo_fiscal/static/src/js/print_fix.js',
             # I3: helper compartilhado de impressão térmica (fallback window.print)
             'meu_modulo_fiscal/static/src/js/receipt_print_helper.js',
+            # recibo-sangria-impresso: componente antes do patch (patch importa o componente)
+            'meu_modulo_fiscal/static/src/xml/sangria_receipt.xml',
+            'meu_modulo_fiscal/static/src/js/sangria_receipt.js',
+            'meu_modulo_fiscal/static/src/js/cash_move_popup_patch.js',
             'meu_modulo_fiscal/static/src/js/fechamento_button.js',
             'meu_modulo_fiscal/static/src/xml/fechamento_button.xml',
             'meu_modulo_fiscal/static/src/xml/fechamento_receipt.xml',
