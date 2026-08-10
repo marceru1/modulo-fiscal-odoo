@@ -61,8 +61,9 @@ my_addons/
 O Hermes é o orchestrador. O usuário descreve o que quer e o Hermes decide:
 
 1. **Feature nova** (precisa de grill + spec + tickets + code + review) → cria task no Obsidian PM (Backlog), faz pre-grill de 3 perguntas basicas com o usuario, monta o prompt completo, e abre terminal do agy no Orca
-2. **Bugfix simples** (uma linha, um import) → faz direto no Hermes
-3. **Pergunta** (status, dúvida, explicação) → responde direto
+2. **"puxa do backlog"** → le tasks no Obsidian PM com status `todo`, lista pro usuario escolher, faz pre-grill da escolhida e abre terminal do agy
+3. **Bugfix simples** (uma linha, um import) → faz direto no Hermes
+4. **Pergunta** (status, dúvida, explicação) → responde direto
 
 ### Obsidian PM (Kanban)
 
