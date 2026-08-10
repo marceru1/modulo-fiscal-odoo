@@ -51,6 +51,22 @@ class TestRecebimento(TransactionCase):
         })
         self.invoice.action_post()
 
+    # ── Helpers ──────────────────────────────────────────────────────────────
+    def _assert_comprovante(self, response, amount, payment_method_name=''):
+        """Valida a estrutura da chave ``comprovante`` no retorno de sucesso.
+
+        Seam da spec: a chave ``comprovante`` carrega todos os dados necessários
+        para imprimir o comprovante de pagamento na térmica do PDV.
+        """
+        self.assertIn('comprovante', response)
+        comp = response['comprovante']
+        self.assertEqual(comp['valor_pago'], amount)
+        self.assertEqual(comp['fatura'], self.invoice.name)
+        self.assertIsInstance(comp['data_hora'], str)
+        self.assertEqual(comp['numero_pdv'], self.pos_config.id)
+        self.assertIsInstance(comp['operador'], str)
+        self.assertEqual(comp['forma_pagamento'], payment_method_name)
+
     # ── Caso 1: Pagamento parcial ──────────────────────────────────────────
     def test_pagamento_parcial(self):
         """Amount < residual → success=True, payment_state='partial', saldo correto."""
@@ -67,6 +83,8 @@ class TestRecebimento(TransactionCase):
             self.invoice.amount_residual, 70.0, places=2,
             msg="Saldo residual deve ser R$ 70,00 após pagamento de R$ 30,00"
         )
+        # DEC-004: comprovante presente e com o valor pago (não o residual)
+        self._assert_comprovante(result, 30.0)
 
     # ── Caso 2: Quitação total ──────────────────────────────────────────────
     def test_quitacao_total(self):
@@ -78,6 +96,8 @@ class TestRecebimento(TransactionCase):
             self.invoice.payment_state, ('in_payment', 'paid'),
             msg="Fatura quitada deve ter payment_state='in_payment' ou 'paid'"
         )
+        # User Story 3: comprovante sai também na quitação total
+        self._assert_comprovante(result, 100.0)
 
     # ── Caso 3: Amount zero ────────────────────────────────────────────────
     def test_amount_zero(self):
@@ -133,3 +153,29 @@ class TestRecebimento(TransactionCase):
             "quitada", result['message'].lower(),
             msg="Mensagem deve indicar que fatura já foi quitada"
         )
+
+    # ── Caso 8: payment_method_name explícito (DEC-001) ─────────────────────
+    def test_comprovante_payment_method_name(self):
+        """payment_method_name passado → comp['forma_pagamento'] == valor."""
+        result = self.pos_session.create_recebimento(
+            self.invoice.id, 30.0, payment_method_name='Cartão'
+        )
+
+        self.assertTrue(result['success'])
+        self._assert_comprovante(result, 30.0, payment_method_name='Cartão')
+
+    # ── Caso 9: payment_method_name default (backward-compatible) ───────────
+    def test_comprovante_default_payment_method(self):
+        """Sem payment_method_name → comp['forma_pagamento'] == '' (default)."""
+        result = self.pos_session.create_recebimento(self.invoice.id, 30.0)
+
+        self.assertTrue(result['success'])
+        self._assert_comprovante(result, 30.0, payment_method_name='')
+
+    # ── Caso 10: Falha não carrega comprovante (DEC-004) ────────────────────
+    def test_falha_sem_comprovante(self):
+        """success=False → chave 'comprovante' ausente do retorno."""
+        result = self.pos_session.create_recebimento(self.invoice.id, 0.0)
+
+        self.assertFalse(result['success'])
+        self.assertNotIn('comprovante', result)
