@@ -2,10 +2,12 @@
 import { Navbar } from "@point_of_sale/app/navbar/navbar";
 import { patch } from "@web/core/utils/patch";
 import { useService } from "@web/core/utils/hooks";
+import { renderToElement } from "@web/core/utils/render";
 import { PartnerList } from "@point_of_sale/app/screens/partner_list/partner_list";
 import { SelectionPopup } from "@point_of_sale/app/utils/input_popups/selection_popup";
 import { NumberPopup } from "@point_of_sale/app/utils/input_popups/number_popup";
 import { makeAwaitable, ask } from "@point_of_sale/app/store/make_awaitable_dialog";
+import { printFallback } from "./receipt_print_helper";
 
 patch(Navbar.prototype, {
     setup() {
@@ -162,7 +164,14 @@ patch(Navbar.prototype, {
             response = await this.orm.call(
                 "pos.session",
                 "create_recebimento",
-                [[this.pos.session.id], selectedInvoice.id, Math.round(amount * 100) / 100]
+                [
+                    [this.pos.session.id],
+                    selectedInvoice.id,
+                    Math.round(amount * 100) / 100,
+                    // DEC-001: sem seletor explícito de método no fluxo atual — passa ''.
+                    // O comprovante exibirá o nome do método quando o seletor for adicionado.
+                    "",
+                ]
             );
         } catch (e) {
             console.error("[RECEBIMENTO] Erro ao registrar recebimento:", e);
@@ -177,14 +186,63 @@ patch(Navbar.prototype, {
 
         // ── 7. Exibir resultado ──────────────────────────────────────────────────
         if (response && response.success) {
-            this.notification.add(
-                `✅ ${response.message}`,
-                { type: "success" }
-            );
+            // DEC-002: popup de sucesso com "Reimprimir" em vez de notification
+            // (notification não tem ação secundária).
+            try {
+                await this._printComprovante(response.comprovante);
+            } catch (e) {
+                console.error("[COMPROVANTE] Erro ao imprimir comprovante:", e);
+            }
+            const reprint = await ask(this.dialog, {
+                title: "Pagamento registrado",
+                body: `R$ ${formatCurrency(amount)} — Fatura ${selectedInvoice.name}`,
+                confirmText: "OK",
+                cancelText: "Reimprimir",
+            });
+            if (reprint === false && response.comprovante) {
+                // Reimprimir sem nova RPC (re-render + print)
+                await this._printComprovante(response.comprovante);
+            }
         } else {
             const msg = (response && response.message) || "Erro desconhecido no recebimento.";
             console.error("[RECEBIMENTO] Falha retornada pelo backend:", msg);
             this.notification.add(msg, { type: "danger" });
         }
+    },
+
+    /**
+     * Monta os dados do comprovante, renderiza o template OWL e imprime na
+     * térmica (com fallback window.print via printFallback). Retorna o elemento
+     * DOM renderizado — permite reimpressão sem nova RPC (DEC-002).
+     *
+     * Reutiliza o mesmo mecanismo do fechamento de caixa: renderToElement +
+     * printer.printReceipt + printFallback (Boundary "Always do" da spec).
+     */
+    async _printComprovante(comprovante) {
+        const data = {
+            empresa: {
+                nome: this.pos.company.name || '',
+                cnpj: this.pos.company.x_cnpj || '',
+                endereco_linha1: this.pos.company.x_endereco_linha1 || '',
+                endereco_linha2: this.pos.company.x_endereco_linha2 || '',
+            },
+            comprovante,
+        };
+        const report = renderToElement("meu_modulo.ComprovanteParcialReceipt", {
+            data,
+            formatCurrency: this.env.utils.formatCurrency,
+        });
+        const printer = this.hardwareProxy.printer;
+        if (printer) {
+            const { successful } = await printer.printReceipt(report);
+            if (!successful) {
+                console.warn("[COMPROVANTE] Impressora falhou, usando window.print");
+                printFallback(report, "Comprovante de Pagamento");
+            }
+        } else {
+            console.log("[COMPROVANTE] Sem impressora, usando window.print");
+            printFallback(report, "Comprovante de Pagamento");
+        }
+        return report;
     },
 });
