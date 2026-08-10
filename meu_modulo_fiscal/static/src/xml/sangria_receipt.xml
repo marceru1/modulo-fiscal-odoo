@@ -1,0 +1,73 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<templates id="template" xml:space="preserve">
+
+    <!--
+        Recibo de Sangria de Caixa — impresso na térmica ao confirmar uma
+        sangria (type='out') no CashMovePopup.
+
+        props = {
+            empresa: { nome, cnpj, endereco_linha1, endereco_linha2 },
+            formattedAmount, reason, date,
+        }
+
+        Cabeçalho segue o padrão danfe-header do módulo (decisão do usuário
+        no grill — substitui o DEC-002 da spec que previa o ReceiptHeader
+        nativo, que não renderiza endereço/CNPJ da empresa).
+    -->
+    <t t-name="meu_modulo_fiscal.SangriaReceipt">
+        <div class="pos-receipt">
+
+            <!-- Cabeçalho da empresa (danfe-header do módulo) -->
+            <div class="danfe-header">
+                <div class="emitente-nome">
+                    <t t-esc="props.empresa.nome ? props.empresa.nome.toUpperCase() : ''"/>
+                </div>
+                <div class="emitente-endereco">
+                    <t t-esc="props.empresa.endereco_linha1 ? props.empresa.endereco_linha1.toUpperCase() : ''"/>
+                </div>
+                <div class="emitente-endereco">
+                    <t t-esc="props.empresa.endereco_linha2 ? props.empresa.endereco_linha2.toUpperCase() : ''"/>
+                </div>
+                <div class="emitente-dados">
+                    <span>CNPJ: <t t-esc="props.empresa.cnpj"/></span>
+                </div>
+            </div>
+
+            <div class="danfe-separador"></div>
+
+            <!-- Título centralizado (danfe-tipo já centraliza) -->
+            <div class="danfe-tipo">SANGRIA DE CAIXA</div>
+
+            <div class="danfe-separador"></div>
+
+            <!-- Dados da sangria -->
+            <div class="totais-section">
+                <div class="fechamento-linha">
+                    <span>VALOR</span>
+                    <span class="total-valor"><t t-esc="props.formattedAmount"/></span>
+                </div>
+                <div class="fechamento-linha">
+                    <span>MOTIVO</span>
+                    <span class="total-valor" style="white-space: normal; word-break: break-word; text-align: right;">
+                        <t t-esc="props.reason"/>
+                    </span>
+                </div>
+                <div class="fechamento-linha">
+                    <span>DATA/HORA</span>
+                    <span class="total-valor"><t t-esc="props.date"/></span>
+                </div>
+            </div>
+
+            <div class="danfe-separador"></div>
+
+            <!-- Linha de assinatura física -->
+            <div class="assinatura-area">
+                <div class="assinatura-linha">
+                    Assinatura: ______________________________
+                </div>
+            </div>
+
+        </div>
+    </t>
+
+</templates>
