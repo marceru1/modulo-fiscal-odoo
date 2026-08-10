@@ -7,7 +7,16 @@
 // método auxiliar que possa ser sobrescrito isoladamente. Então o patch:
 //   - delega type='in' para super.confirm() — zero duplicação no caminho nativo
 //   - replica a lógica nativa APENAS para type='out', trocando o print pelo
-//     SangriaReceipt (danfe-header do módulo, decisão do grill)
+//     SangriaReceipt (danfe-header do módulo, decisão do grill), mas usando
+//     o MESMO mecanismo de impressão do módulo (renderToElement +
+//     hardwareProxy.printReceipt + printFallback) — o caminho nativo
+//     this.printer.print(Component, props) não imprime neste ambiente
+//     (ver comentário no confirm()).
+//   Fix 2026-08-10: o v1 usava this.printer.print(SangriaReceipt, props)
+//     (printer SERVICE) copiando o nativo — sem webPrintFallback ele retorna
+//     undefined silenciosamente quando não há dispositivo (printer_service.js
+//     printHtml:29-30). Mesma falha do CashMoveReceipt nativo, que a spec já
+//     apontava ("a impressão não está acontecendo no ambiente atual").
 // Consequência documentada (DEC-001): se o Odoo mudar a assinatura de
 // confirm(), este caminho 'out' precisa ser revisto na migração.
 // Revisão adversarial (doubt-driven): this._super não existe no patch() do
@@ -15,8 +24,9 @@
 import { _t } from "@web/core/l10n/translation";
 import { parseFloat } from "@web/views/fields/parsers";
 import { patch } from "@web/core/utils/patch";
+import { renderToElement } from "@web/core/utils/render";
 import { CashMovePopup } from "@point_of_sale/app/navbar/cash_move_popup/cash_move_popup";
-import { SangriaReceipt } from "./sangria_receipt";
+import { printFallback } from "./receipt_print_helper";
 
 patch(CashMovePopup.prototype, {
     async confirm() {
@@ -51,17 +61,46 @@ patch(CashMovePopup.prototype, {
             `${_t("Cash")} ${_t("out")} - ${_t("Amount")}: ${formattedAmount}`,
             "CASH_DRAWER_ACTION"
         );
-        await this.printer.print(SangriaReceipt, {
-            reason,
-            formattedAmount,
-            empresa: {
-                nome: this.pos.company.name || "",
-                cnpj: this.pos.company.x_cnpj || "",
-                endereco_linha1: this.pos.company.x_endereco_linha1 || "",
-                endereco_linha2: this.pos.company.x_endereco_linha2 || "",
-            },
-            date: new Date().toLocaleString(),
-        });
+        // Imprime o recibo no MESMO mecanismo do comprovante e do fechamento:
+        // renderToElement + hardwareProxy.printReceipt + printFallback.
+        // O caminho this.printer.print(Component, props) (printer SERVICE,
+        // usado pelo CashMoveReceipt nativo) não imprime neste ambiente:
+        // printHtml() retorna undefined silenciosamente quando não há
+        // dispositivo e webPrintFallback é false (printer_service.js:29-30).
+        //
+        // O try/catch aqui NÃO contradiz o ticket 03 ("não adicionar try/catch
+        // redundante"): a sangria já foi persistida acima (try_cash_in_out) e o
+        // try/catch garante que uma falha de impressora nunca impeça o popup
+        // de fechar — mesmo intuito do comprovante (recebimento_button.js
+        // envolve _printComprovante em try/catch).
+        try {
+            const report = renderToElement("meu_modulo_fiscal.SangriaReceipt", {
+                props: {
+                    empresa: {
+                        nome: this.pos.company.name || "",
+                        cnpj: this.pos.company.x_cnpj || "",
+                        endereco_linha1: this.pos.company.x_endereco_linha1 || "",
+                        endereco_linha2: this.pos.company.x_endereco_linha2 || "",
+                    },
+                    formattedAmount,
+                    reason,
+                    date: new Date().toLocaleString(),
+                },
+            });
+            const printer = this.hardwareProxy.printer;
+            if (printer) {
+                const { successful } = await printer.printReceipt(report);
+                if (!successful) {
+                    console.warn("[SANGRIA] Impressora falhou, usando window.print");
+                    printFallback(report, "Sangria de Caixa");
+                }
+            } else {
+                console.log("[SANGRIA] Sem impressora, usando window.print");
+                printFallback(report, "Sangria de Caixa");
+            }
+        } catch (error) {
+            console.error("[SANGRIA] Erro ao imprimir recibo:", error);
+        }
 
         this.props.close();
         this.notification.add(
