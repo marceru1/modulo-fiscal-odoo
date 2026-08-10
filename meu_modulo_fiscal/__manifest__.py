@@ -45,6 +45,7 @@
             'meu_modulo_fiscal/static/src/js/fechamento_button.js',
             'meu_modulo_fiscal/static/src/xml/fechamento_button.xml',
             'meu_modulo_fiscal/static/src/xml/fechamento_receipt.xml',
+            'meu_modulo_fiscal/static/src/xml/comprovante_parcial_receipt.xml',
             'meu_modulo_fiscal/static/src/js/recebimento_button.js',
             'meu_modulo_fiscal/static/src/xml/recebimento_button.xml',
             # pay_later (A Prazo): input "Counted" no popup de fechamento de caixa
