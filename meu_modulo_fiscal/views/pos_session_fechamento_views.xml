@@ -138,6 +138,10 @@
                                 <div class="fechamento-linha" style="font-size: 10px; color: #555;">
                                     <span><t t-out="rec['data']"/></span>
                                 </div>
+                                <!-- Forma de pagamento (DEC-001: preenchida pelo backend via ticket 01) -->
+                                <div class="fechamento-linha" style="font-size: 10px; color: #555;">
+                                    <span>FORMA: <t t-out="rec['forma_pagamento'] or '—'"/></span>
+                                </div>
                             </t>
                         </div>
                         <div class="fechamento-linha-total">
