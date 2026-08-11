@@ -201,7 +201,7 @@ Isso cria um checkout isolado em `/Users/marceloC/orca/workspaces/my_addons/<fea
 
 ```bash
 orca terminal create --worktree branch:<feature-slug> --title "fiscal-coder" \
-  --command "rtk ollama launch claude --model deepseek-v4-flash:cloud --yes -- -p 'Carrega a skill fiscal-coder e implementa os tickets em .agents/tickets/<feature-slug>/ um por um com TDD. Le a spec em .agents/specs/<feature-slug>.md. PULA verificacao de ambiente (Odoo nao roda local) — vai direto pra implementacao lendo os arquivos do modulo. NAO faca push nem abra PR. Ao terminar, escreve um relatorio em .agents/code-reports/<feature-slug>.md com: resumo do que fez, arquivos alterados, decisoes tecnicas, testes rodados, e pontos de atencao pro reviewer.'" \
+  --command "rtk ollama launch claude --model deepseek-v4-flash:cloud --yes -- --dangerously-skip-permissions -p 'Carrega a skill fiscal-coder e implementa os tickets em .agents/tickets/<feature-slug>/ um por um com TDD. Le a spec em .agents/specs/<feature-slug>.md. PULA verificacao de ambiente (Odoo nao roda local) — vai direto pra implementacao lendo os arquivos do modulo. NAO faca push nem abra PR. Ao terminar, escreve um relatorio em .agents/code-reports/<feature-slug>.md com: resumo do que fez, arquivos alterados, decisoes tecnicas, testes rodados, e pontos de atencao pro reviewer.'" \
   --focus
 ```
 
@@ -213,7 +213,7 @@ O Claude Code abre na worktree com DeepSeek e o prompt ja vem completo — imple
 
 ```bash
 orca terminal create --worktree branch:<feature-slug> --title "fiscal-reviewer" \
-  --command "rtk ollama launch claude --model kimi-k2.7-code:cloud --yes -- -p 'Carrega a skill fiscal-reviewer. Le o relatorio do coder em .agents/code-reports/<feature-slug>.md. Revisa o diff desde dev com git diff dev...HEAD nos 5 eixos (Correctness, Readability, Architecture, Security, Performance). Salva o relatorio em .agents/reviews/<feature-slug>-<data>.md. NAO faca push nem abra PR.'" \
+  --command "rtk ollama launch claude --model kimi-k2.7-code:cloud --yes -- --dangerously-skip-permissions -p 'Carrega a skill fiscal-reviewer. Le o relatorio do coder em .agents/code-reports/<feature-slug>.md. Revisa o diff desde dev com git diff dev...HEAD nos 5 eixos (Correctness, Readability, Architecture, Security, Performance). Salva o relatorio em .agents/reviews/<feature-slug>-<data>.md. NAO faca push nem abra PR.'" \
   --focus
 ```
 
