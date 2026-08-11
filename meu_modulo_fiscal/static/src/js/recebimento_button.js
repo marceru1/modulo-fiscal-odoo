@@ -148,7 +148,9 @@ patch(Navbar.prototype, {
         // ── 5. Selecionar a forma de pagamento (DEC-001) ───────────────────────
         // Métodos configurados no caixa, excluindo pay_later (DEC-003):
         // recebimento de fatura não gera NFC-e, então não usa os métodos fiscais.
-        const paymentMethods = this.pos.payment_methods.filter(
+        // Odoo 18: métodos ficam no registry this.pos.models["pos.payment.method"]
+        // (não existe this.pos.payment_methods no store).
+        const paymentMethods = this.pos.models["pos.payment.method"].getAll().filter(
             (pm) => pm.type !== "pay_later"
         );
 
