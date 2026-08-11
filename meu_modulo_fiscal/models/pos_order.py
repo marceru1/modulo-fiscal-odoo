@@ -786,10 +786,12 @@ class PosSession(models.Model):
             nome = metodo['nome']
             vendas_por_metodo[nome] = vendas_por_metodo.get(nome, 0.0) + metodo['valor']
 
-        # DEC-006: itera a união dos métodos de vendas e de recebimentos para
-        # cobrir o caso onde um método só aparece em recebimentos (ex: só PIX
-        # em recebimentos, sem venda PIX na sessão).
-        nomes = set(vendas_por_metodo) | set(recebimentos_por_metodo)
+        # DEC-006: união dos métodos de vendas e de recebimentos. Preserva a
+        # ordem de metodos_pagamento (cash primeiro) e anexa métodos que só
+        # aparecem em recebimentos (ex: só PIX em recebimentos, sem venda PIX).
+        nomes = list(vendas_por_metodo) + [
+            n for n in recebimentos_por_metodo if n not in vendas_por_metodo
+        ]
 
         saldo_detalhado = []
         for nome in nomes:
