@@ -209,15 +209,15 @@ O Claude Code abre na worktree com DeepSeek e o prompt ja vem completo — imple
 
 3. Push + PR (`<feature-slug>` → dev)
 
-4. **Abrir terminal do reviewer na worktree da feature:**
+4. **Abrir terminal do reviewer na worktree da feature** (com prompt ja embutido no comando):
 
 ```bash
 orca terminal create --worktree branch:<feature-slug> --title "fiscal-reviewer" \
-  --command "rtk ollama launch claude --model kimi-k2.7-code:cloud" \
+  --command "rtk ollama launch claude --model kimi-k2.7-code:cloud --yes -- -p 'Carrega a skill fiscal-reviewer. Le o relatorio do coder em .agents/code-reports/<feature-slug>.md. Revisa o diff desde dev com git diff dev...HEAD nos 5 eixos (Correctness, Readability, Architecture, Security, Performance). Salva o relatorio em .agents/reviews/<feature-slug>-<data>.md. NAO faca push nem abra PR.'" \
   --focus
 ```
 
-O Claude Code abre com Kimi K2.7, le AGENTS.md automaticamente, e carrega a skill `fiscal-reviewer`. Instruir o agente a revisar o diff desde dev (5 eixos) e salvar relatório em `.agents/reviews/`. Sub-skill `code-simplification` dispara se achar smell.
+O Claude Code abre com Kimi K2.7 e o prompt ja vem completo — le o relatorio do coder, revisa o diff nos 5 eixos, e salva o relatorio. Sub-skill `code-simplification` dispara se achar smell.
 
 5. Se reviewer achar problemas → corrige no mesmo terminal do coder, commita, pusha
 
