@@ -793,7 +793,7 @@ class PosSession(models.Model):
             'target': 'new',
         }
 
-    def create_recebimento(self, invoice_id, amount=None, payment_method_name=''):
+    def create_recebimento(self, invoice_id, amount=None, payment_method_name='', payment_method_id=None):
         """Cria um recebimento (account.payment inbound) para uma fatura
         especifica, reconciliando automaticamente o pagamento com a fatura.
         Usado pelo botao Recebimento no PDV.
@@ -803,8 +803,13 @@ class PosSession(models.Model):
             amount: float - valor a receber (opcional). Se None, usa o
                 valor residual da fatura (comportamento legado).
             payment_method_name: str - nome do metodo de pagamento exibido
-                no comprovante (DEC-001). Vem do frontend sem validacao
-                fiscal; default '' (backward-compatible).
+                no comprovante (DEC-001). Fallback legado quando
+                ``payment_method_id`` nao e informado.
+            payment_method_id: int - ID do pos.payment.method escolhido no
+                PDV (DEC-001). Tem prioridade sobre ``payment_method_name``:
+                o backend resolve o nome via ORM e persiste o Many2one no
+                account.payment. Se invalido/inexistente, cai no fallback
+                (nao quebra o recebimento).
 
         Returns:
             dict with success/message. Em caso de sucesso, inclui a chave
@@ -839,6 +844,13 @@ class PosSession(models.Model):
                 'message': 'Valor superior ao saldo da fatura (R$ %.2f)' % invoice.amount_residual,
             }
 
+        # DEC-001: resolve o metodo de pagamento. payment_method_id (int) tem
+        # prioridade; payment_method_name (str) e o fallback legado. Um id
+        # inexistente cai no fallback sem quebrar o recebimento.
+        payment_method = self.env['pos.payment.method'].browse(payment_method_id) if payment_method_id else self.env['pos.payment.method']
+        if payment_method.exists():
+            payment_method_name = payment_method.name
+
         partner = invoice.partner_id
         partner_id = partner.id
 
@@ -858,6 +870,7 @@ class PosSession(models.Model):
             'date': fields.Date.context_today(self),
             'memo': memo,
             'pos_session_id': self.id,
+            'x_payment_method_id': payment_method.id if payment_method.exists() else False,
         })
         payment.action_post()
 
