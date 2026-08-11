@@ -51,6 +51,8 @@ my_addons/
 │   │   └── <feature-slug>/
 │   │       ├── 01-<title>.md
 │   │       └── 02-<title>.md
+│   ├── code-reports/      ← relatórios do coder
+│   │   └── <feature-slug>.md
 │   └── reviews/           ← relatórios de review
 │       └── <feature-slug>-<date>.md
 └── meu_modulo_fiscal/     ← o módulo Odoo
@@ -195,15 +197,15 @@ orca worktree create --name <feature-slug> --base-branch dev --activate
 
 Isso cria um checkout isolado em `/Users/marceloC/orca/workspaces/my_addons/<feature-slug>` com branch `<feature-slug>` a partir de dev. Multiplas features podem rodar em paralelo, cada uma na sua worktree.
 
-2. **Abrir terminal do coder na worktree da feature:**
+2. **Abrir terminal do coder na worktree da feature** (com prompt ja embutido no comando):
 
 ```bash
 orca terminal create --worktree branch:<feature-slug> --title "fiscal-coder" \
-  --command "rtk ollama launch claude --model deepseek-v4-flash:cloud" \
+  --command "rtk ollama launch claude --model deepseek-v4-flash:cloud --yes -- -p 'Carrega a skill fiscal-coder e implementa os tickets em .agents/tickets/<feature-slug>/ um por um com TDD. Le a spec em .agents/specs/<feature-slug>.md. PULA verificacao de ambiente (Odoo nao roda local) — vai direto pra implementacao lendo os arquivos do modulo. NAO faca push nem abra PR. Ao terminar, escreve um relatorio em .agents/code-reports/<feature-slug>.md com: resumo do que fez, arquivos alterados, decisoes tecnicas, testes rodados, e pontos de atencao pro reviewer.'" \
   --focus
 ```
 
-O Claude Code abre na worktree da feature com DeepSeek, le AGENTS.md automaticamente, e carrega a skill `fiscal-coder`. Instruir o agente a implementar os tickets em `.agents/tickets/<feature>/` um por um com TDD. Sub-skills `source-driven-development` e `doubt-driven-development` disparam automatic. PULAR verificacao de ambiente (Odoo nao roda local) — ir direto pra implementacao lendo os arquivos do modulo.
+O Claude Code abre na worktree com DeepSeek e o prompt ja vem completo — implementa tickets com TDD, commita local, e gera relatorio em `.agents/code-reports/<feature-slug>.md` pra ser passado pro reviewer. Sub-skills `source-driven-development` e `doubt-driven-development` disparam automatic.
 
 3. Push + PR (`<feature-slug>` → dev)
 
@@ -441,8 +443,9 @@ Cada título máx 60 chars, auto-explicativo.
    5. Rodar suite completa no final
    6. Commit com conventional commit
    7. Após todos os tickets, rodar `fiscal-reviewer`
+   8. Escrever relatório em `.agents/code-reports/<feature-slug>.md` com: resumo do que fez, arquivos alterados, decisões técnicas, testes rodados, e pontos de atenção pro reviewer
 
-**NAO fazer push. NAO abrir PR.** O usuario precisa testar localmente primeiro. Parar apos commitar e avisar.
+**NAO fazer push. NAO abrir PR.** O usuario precisa testar localmente primeiro. Parar apos commitar e avisar. O relatório em `code-reports/` é o que alimenta o reviewer (Kimi).
 
 ### Commit
 
