@@ -52,6 +52,22 @@ class TestRecebimento(TransactionCase):
         self.invoice.action_post()
 
     # ── Helpers ──────────────────────────────────────────────────────────────
+    def _create_payment_method(self, name, journal_type='bank'):
+        """Cria um pos.payment.method com diário do tipo informado.
+
+        O ``type`` do método é computado a partir do ``journal_id.type``
+        (cash/bank → mesmo tipo; outro → 'pay_later').
+        """
+        journal = self.env['account.journal'].create({
+            'name': 'Diário %s Teste' % name,
+            'type': journal_type,
+            'company_id': self.company.id,
+        })
+        return self.env['pos.payment.method'].create({
+            'name': name,
+            'journal_id': journal.id,
+        })
+
     def _assert_comprovante(self, response, amount, payment_method_name=''):
         """Valida a estrutura da chave ``comprovante`` no retorno de sucesso.
 
@@ -182,3 +198,102 @@ class TestRecebimento(TransactionCase):
 
         self.assertFalse(result['success'])
         self.assertNotIn('comprovante', result)
+
+    # ── Caso 11: payment_method_id válido (DEC-001) ─────────────────────────
+    def test_payment_method_id_salvo(self):
+        """payment_method_id válido → x_payment_method_id salvo no account.payment
+        e comp['forma_pagamento'] == nome do método."""
+        pm = self._create_payment_method('PIX')
+        result = self.pos_session.create_recebimento(
+            self.invoice.id, 30.0, payment_method_id=pm.id
+        )
+
+        self.assertTrue(result['success'])
+        payment = self.env['account.payment'].search([
+            ('memo', 'like', 'Recebimento PDV'),
+        ], limit=1, order='id desc')
+        self.assertEqual(
+            payment.x_payment_method_id, pm,
+            msg="account.payment deve ter x_payment_method_id apontando pro método"
+        )
+        self._assert_comprovante(result, 30.0, payment_method_name='PIX')
+
+    # ── Caso 12: payment_method_id=None (backward-compatible) ───────────────
+    def test_payment_method_id_none_backward_compat(self):
+        """Sem payment_method_id, payment_method_name='PIX' → forma_pagamento='PIX'
+        (compat retrógrada mantida)."""
+        result = self.pos_session.create_recebimento(
+            self.invoice.id, 30.0, payment_method_name='PIX'
+        )
+
+        self.assertTrue(result['success'])
+        self._assert_comprovante(result, 30.0, payment_method_name='PIX')
+
+    # ── Caso 13: payment_method_id inválido (graceful fallback) ─────────────
+    def test_payment_method_id_invalido(self):
+        """payment_method_id inexistente → recebimento ainda criado com sucesso
+        (fallback: usa payment_method_name, não quebra)."""
+        result = self.pos_session.create_recebimento(
+            self.invoice.id, 30.0, payment_method_id=999999
+        )
+
+        self.assertTrue(result['success'])
+        self._assert_comprovante(result, 30.0, payment_method_name='')
+
+    # ── Caso 14: _get_recebimentos com método (DEC-005) ────────────────────
+    def test_get_recebimentos_com_metodo(self):
+        """Pagamento com x_payment_method_id → forma_pagamento correto e
+        recebimentos_por_metodo somando no método certo."""
+        pm = self._create_payment_method('PIX')
+        self.pos_session.create_recebimento(
+            self.invoice.id, 30.0, payment_method_id=pm.id
+        )
+
+        recebimentos, total, por_metodo = self.pos_session._get_recebimentos()
+
+        self.assertEqual(len(recebimentos), 1)
+        self.assertEqual(recebimentos[0]['forma_pagamento'], 'PIX')
+        self.assertAlmostEqual(total, 30.0, places=2)
+        self.assertEqual(por_metodo, {'PIX': 30.0})
+
+    # ── Caso 15: _get_recebimentos sem método (DEC-005) ────────────────────
+    def test_get_recebimentos_sem_metodo(self):
+        """Pagamento sem x_payment_method_id → forma_pagamento '—' e
+        recebimentos_por_metodo usa '—' como chave (não quebra)."""
+        self.pos_session.create_recebimento(self.invoice.id, 30.0)
+
+        recebimentos, total, por_metodo = self.pos_session._get_recebimentos()
+
+        self.assertEqual(len(recebimentos), 1)
+        self.assertEqual(recebimentos[0]['forma_pagamento'], '—')
+        self.assertAlmostEqual(total, 30.0, places=2)
+        self.assertEqual(por_metodo, {'—': 30.0})
+
+    # ── Caso 16: _calc_saldo_detalhado soma recebimentos (DEC-006) ─────────
+    def test_calc_saldo_detalhado_soma_recebimentos(self):
+        """Vendas PIX 100 + recebimentos PIX 50 → calculado 150."""
+        metodos = [{'nome': 'PIX', 'valor': 100.0}]
+        por_metodo = {'PIX': 50.0}
+
+        saldo = self.pos_session._calc_saldo_detalhado(metodos, por_metodo)
+
+        self.assertEqual(len(saldo), 1)
+        self.assertEqual(saldo[0]['nome'], 'PIX')
+        self.assertAlmostEqual(saldo[0]['calculado'], 150.0, places=2)
+        self.assertAlmostEqual(saldo[0]['diferenca'], -150.0, places=2)
+
+    # ── Caso 17: método só em recebimentos (DEC-006) ───────────────────────
+    def test_calc_saldo_detalhado_metodo_so_em_recebimentos(self):
+        """Método 'Dinheiro' só em recebimentos (sem venda) → aparece no
+        resultado com calculado == valor do recebimento."""
+        metodos = [{'nome': 'PIX', 'valor': 100.0}]
+        por_metodo = {'Dinheiro': 200.0}
+
+        saldo = self.pos_session._calc_saldo_detalhado(metodos, por_metodo)
+
+        nomes = {s['nome'] for s in saldo}
+        self.assertEqual(nomes, {'PIX', 'Dinheiro'})
+        dinheiro = next(s for s in saldo if s['nome'] == 'Dinheiro')
+        self.assertAlmostEqual(dinheiro['calculado'], 200.0, places=2)
+        pix = next(s for s in saldo if s['nome'] == 'PIX')
+        self.assertAlmostEqual(pix['calculado'], 100.0, places=2)
