@@ -1,6 +1,7 @@
 /** @odoo-module */
 import { PaymentScreen } from "@point_of_sale/app/screens/payment_screen/payment_screen";
 import { patch } from "@web/core/utils/patch";
+import { ask } from "@point_of_sale/app/store/make_awaitable_dialog";
 
 /**
  * Avalia se o cliente pode comprar a prazo dentro do limite configurado.
@@ -73,8 +74,7 @@ patch(PaymentScreen.prototype, {
         );
 
         if (hasPayLater) {
-            // ── Credit-limit check (non-blocking) ────────────────────────────
-            let limiteMsg = null;
+            // ── Credit-limit check (modal pré-validate) ──────────────────────
             const partner = order.get_partner();
             if (partner) {
                 try {
@@ -101,21 +101,44 @@ patch(PaymentScreen.prototype, {
                         ["x_limite_prazo"]
                     );
 
-                    // 3. Pure helper: avalia limite e monta a mensagem.
-                    //    Ticket 01 mantém comportamento externo idêntico ao atual:
-                    //    só excedido gera notification (sem_limite será modal no ticket 02).
+                    // 3. Pure helper: avalia limite e monta a mensagem
                     const result = _checkLimitePrazo(
                         partner,
                         orderTotal,
                         partnerData,
                         employees
                     );
-                    if (result.tipo === "excedido") {
-                        limiteMsg = result.msg;
+
+                    // 4. Modal bloqueante ANTES de super.validateOrder().
+                    //    Cancelar aborta a venda; prosseguir segue o fluxo normal.
+                    if (result.tipo === "excedido" || result.tipo === "sem_limite") {
+                        const confirmed = await ask(this.dialog, {
+                            title:
+                                result.tipo === "excedido"
+                                    ? "⚠️ Limite a Prazo Excedido"
+                                    : "⚠️ Cliente Sem Limite a Prazo",
+                            body: result.msg,
+                            confirmLabel: "Prosseguir mesmo assim",
+                            cancelLabel: "Cancelar",
+                        });
+                        if (!confirmed) {
+                            // Operador cancelou — aborta a validação
+                            return;
+                        }
                     }
                 } catch (err) {
-                    // Never block the sale due to a limit-check failure
+                    // Offline/ORM failure — nunca bloquear a venda por falha de
+                    // checagem de limite. Avisa e prossegue (degradação graceful).
                     console.warn("[LIMITE-CREDITO] Erro ao verificar limite:", err);
+                    const notif =
+                        this.notification ||
+                        (this.env.services && this.env.services.notification);
+                    if (notif && typeof notif.add === "function") {
+                        notif.add("Não foi possível verificar limite a prazo.", {
+                            type: "warning",
+                            sticky: false,
+                        });
+                    }
                 }
             }
             // ── End credit-limit check ────────────────────────────────────────
@@ -125,27 +148,9 @@ patch(PaymentScreen.prototype, {
             console.log(
                 "[AUTO-INVOICE] pay_later detectado — pedido marcado como to_invoice=true."
             );
-
-            // Store the message to show after super.validateOrder (after ui.unblock)
-            this._limiteMsg = limiteMsg;
         }
 
         await super.validateOrder(...arguments);
-
-        // Show limit warning AFTER the loading screen is gone
-        if (this._limiteMsg) {
-            setTimeout(() => {
-                const notif =
-                    this.notification ||
-                    (this.env.services && this.env.services.notification);
-                if (notif && typeof notif.add === "function") {
-                    notif.add(this._limiteMsg, { type: "warning", sticky: false });
-                } else {
-                    console.warn("[LIMITE-CREDITO]", this._limiteMsg);
-                }
-                this._limiteMsg = null;
-            }, 500);
-        }
     },
 });
 
