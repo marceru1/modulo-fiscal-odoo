@@ -145,10 +145,43 @@ patch(Navbar.prototype, {
             break;
         }
 
-        // ── 5. Confirmar pagamento com o valor digitado ────────────────────────
+        // ── 5. Selecionar a forma de pagamento (DEC-001) ───────────────────────
+        // Métodos configurados no caixa, excluindo pay_later (DEC-003):
+        // recebimento de fatura não gera NFC-e, então não usa os métodos fiscais.
+        const paymentMethods = this.pos.payment_methods.filter(
+            (pm) => pm.type !== "pay_later"
+        );
+
+        if (paymentMethods.length === 0) {
+            this.notification.add(
+                "Nenhuma forma de pagamento disponível no caixa.",
+                { type: "warning" }
+            );
+            return;
+        }
+
+        const methodItems = paymentMethods.map((pm) => ({
+            id: pm.id,
+            label: pm.name,
+            item: pm,
+        }));
+
+        const selectedMethodItem = await makeAwaitable(this.dialog, SelectionPopup, {
+            title: "Forma de Pagamento",
+            list: methodItems,
+        });
+
+        if (!selectedMethodItem) {
+            // Operador cancelou a seleção do método
+            return;
+        }
+
+        const selectedMethod = selectedMethodItem;
+
+        // ── 6. Confirmar pagamento com valor + método + fatura ─────────────────
         const confirmed = await ask(this.dialog, {
             title: "Confirmar Recebimento",
-            body: `Confirma o pagamento de ${formatCurrency(amount)} da fatura ${selectedInvoice.name}? (Saldo em aberto: ${formatCurrency(amountResidual)})`,
+            body: `Confirma o pagamento de ${formatCurrency(amount)} via ${selectedMethod.name} da fatura ${selectedInvoice.name}? (Saldo em aberto: ${formatCurrency(amountResidual)})`,
             confirmText: "Confirmar",
             cancelText: "Cancelar",
         });
@@ -157,7 +190,7 @@ patch(Navbar.prototype, {
             return;
         }
 
-        // ── 6. Chamar o backend para criar e reconciliar o account.payment ────
+        // ── 7. Chamar o backend para criar e reconciliar o account.payment ────
         let response;
         try {
             this.env.services.ui.block({ message: "Registrando recebimento..." });
@@ -168,9 +201,10 @@ patch(Navbar.prototype, {
                     [this.pos.session.id],
                     selectedInvoice.id,
                     Math.round(amount * 100) / 100,
-                    // DEC-001: sem seletor explícito de método no fluxo atual — passa ''.
-                    // O comprovante exibirá o nome do método quando o seletor for adicionado.
+                    // payment_method_name (legado, mantido para compat retrógrada)
                     "",
+                    // payment_method_id (novo, DEC-001): int do método escolhido
+                    selectedMethod.id,
                 ]
             );
         } catch (e) {
@@ -184,7 +218,7 @@ patch(Navbar.prototype, {
             this.env.services.ui.unblock();
         }
 
-        // ── 7. Exibir resultado ──────────────────────────────────────────────────
+        // ── 8. Exibir resultado ──────────────────────────────────────────────────
         if (response && response.success) {
             // DEC-002: popup de sucesso com "Reimprimir" em vez de notification
             // (notification não tem ação secundária).
