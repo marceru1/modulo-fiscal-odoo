@@ -871,6 +871,9 @@ class PosSession(models.Model):
         # DEC-001: resolve o metodo de pagamento. payment_method_id (int) tem
         # prioridade; payment_method_name (str) e o fallback legado. Um id
         # inexistente cai no fallback sem quebrar o recebimento.
+        # Nota: se o frontend passar ambos (payment_method_name + id invalido),
+        # o nome legado vence silenciosamente — intencional, coberto por
+        # test_payment_method_id_invalido.
         payment_method = self.env['pos.payment.method'].browse(payment_method_id) if payment_method_id else self.env['pos.payment.method']
         if payment_method.exists():
             payment_method_name = payment_method.name

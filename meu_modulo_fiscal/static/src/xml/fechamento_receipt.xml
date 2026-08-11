@@ -108,9 +108,11 @@
                         <div class="fechamento-linha" style="font-size: 10px; color: #555;">
                             <span><t t-esc="rec.data"/></span>
                         </div>
-                        <!-- Forma de pagamento (DEC-001: preenchida pelo backend via ticket 01) -->
+                        <!-- Forma de pagamento (DEC-001: preenchida pelo backend via ticket 01).
+                             t-out para padronizar com o template server-side FechamentoReport
+                             (t-esc é deprecated no QWeb server-side). Seguro: escapa por default. -->
                         <div class="fechamento-linha" style="font-size: 10px; color: #555;">
-                            <span>FORMA: <t t-esc="rec.forma_pagamento or '—'"/></span>
+                            <span>FORMA: <t t-out="rec.forma_pagamento or '—'"/></span>
                         </div>
                     </t>
                 </div>
