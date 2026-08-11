@@ -287,6 +287,11 @@ Grillar o usuário até todo galho da árvore de decisão estar resolvido. NÃO 
 - Afeta o fluxo offline/contingência?
 - Muda o layout do DANFE?
 
+**Reuso (SEMPRE perguntar):**
+- Existe componente/patch/helper existente no projeto que pode ser reutilizado em vez de reescrever? (ex: NumberPopup, SelectionPopup, templates de recibo, helpers de formatação, `valor_popup_helper`, patches de `confirm_popup.js`, `print_fix.js`)
+- Antes de propor código novo, explorar `meu_modulo_fiscal/static/src/` e `models/` procurando algo similar que já resolve o problema
+- Se existir, a spec deve dizer REUTILIZAR em vez de reescrever — registrar no ADR qual componente foi reutilizado e por quê
+
 **Edge cases:**
 - Múltiplos métodos de pagamento?
 - Offline/contingência?
