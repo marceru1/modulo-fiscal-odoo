@@ -201,11 +201,11 @@ Isso cria um checkout isolado em `/Users/marceloC/orca/workspaces/my_addons/<fea
 
 ```bash
 orca terminal create --worktree branch:<feature-slug> --title "fiscal-coder" \
-  --command "rtk ollama launch claude --model deepseek-v4-flash:cloud --yes -- --dangerously-skip-permissions -p 'Carrega a skill fiscal-coder e implementa os tickets em .agents/tickets/<feature-slug>/ um por um com TDD. Le a spec em .agents/specs/<feature-slug>.md. PULA verificacao de ambiente (Odoo nao roda local) — vai direto pra implementacao lendo os arquivos do modulo. NAO faca push nem abra PR. Ao terminar, escreve um relatorio em .agents/code-reports/<feature-slug>.md com: resumo do que fez, arquivos alterados, decisoes tecnicas, testes rodados, e pontos de atencao pro reviewer.'" \
+  --command "rtk ollama launch claude --model deepseek-v4-flash:cloud --yes -- 'Carrega a skill fiscal-coder e implementa os tickets em .agents/tickets/<feature-slug>/ um por um com TDD. Le a spec em .agents/specs/<feature-slug>.md. PULA verificacao de ambiente (Odoo nao roda local) — vai direto pra implementacao lendo os arquivos do modulo. NAO faca push nem abra PR. Ao terminar, escreve um relatorio em .agents/code-reports/<feature-slug>.md com: resumo do que fez, arquivos alterados, decisoes tecnicas, testes rodados, e pontos de atencao pro reviewer.'" \
   --focus
 ```
 
-O Claude Code abre na worktree com DeepSeek e o prompt ja vem completo — implementa tickets com TDD, commita local, e gera relatorio em `.agents/code-reports/<feature-slug>.md` pra ser passado pro reviewer. Sub-skills `source-driven-development` e `doubt-driven-development` disparam automatic.
+O Claude Code abre na worktree com DeepSeek em MODO INTERATIVO — o prompt ja vem enviado, e o usuario aceita as permissoes de escrita manualmente no terminal (y/Enter). Implementa tickets com TDD, commita local, e gera relatorio em `.agents/code-reports/<feature-slug>.md` pra ser passado pro reviewer. Sub-skills `source-driven-development` e `doubt-driven-development` disparam automatic.
 
 3. Push + PR (`<feature-slug>` → dev)
 
@@ -213,11 +213,11 @@ O Claude Code abre na worktree com DeepSeek e o prompt ja vem completo — imple
 
 ```bash
 orca terminal create --worktree branch:<feature-slug> --title "fiscal-reviewer" \
-  --command "rtk ollama launch claude --model kimi-k2.7-code:cloud --yes -- --dangerously-skip-permissions -p 'Carrega a skill fiscal-reviewer. Le o relatorio do coder em .agents/code-reports/<feature-slug>.md. Revisa o diff desde dev com git diff dev...HEAD nos 5 eixos (Correctness, Readability, Architecture, Security, Performance). Salva o relatorio em .agents/reviews/<feature-slug>-<data>.md. NAO faca push nem abra PR.'" \
+  --command "rtk ollama launch claude --model kimi-k2.7-code:cloud --yes -- 'Carrega a skill fiscal-reviewer. Le o relatorio do coder em .agents/code-reports/<feature-slug>.md. Revisa o diff desde dev com git diff dev...HEAD nos 5 eixos (Correctness, Readability, Architecture, Security, Performance). Salva o relatorio em .agents/reviews/<feature-slug>-<data>.md. NAO faca push nem abra PR.'" \
   --focus
 ```
 
-O Claude Code abre com Kimi K2.7 e o prompt ja vem completo — le o relatorio do coder, revisa o diff nos 5 eixos, e salva o relatorio. Sub-skill `code-simplification` dispara se achar smell.
+O Claude Code abre com Kimi K2.7 em MODO INTERATIVO — o prompt ja vem enviado, e o usuario aceita as permissoes manualmente. Le o relatorio do coder, revisa o diff nos 5 eixos, e salva o relatorio. Sub-skill `code-simplification` dispara se achar smell.
 
 5. Se reviewer achar problemas → corrige no mesmo terminal do coder, commita, pusha
 
