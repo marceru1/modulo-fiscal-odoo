@@ -49,13 +49,12 @@
             'meu_modulo_fiscal/static/src/js/cash_move_popup_patch.js',
             'meu_modulo_fiscal/static/src/js/fechamento_button.js',
             'meu_modulo_fiscal/static/src/xml/fechamento_button.xml',
+            # simplificar-fechamento: remove inputs "Counted" de bank/PIX do popup
+            'meu_modulo_fiscal/static/src/xml/fechamento_simplificar.xml',
             'meu_modulo_fiscal/static/src/xml/fechamento_receipt.xml',
             'meu_modulo_fiscal/static/src/xml/comprovante_parcial_receipt.xml',
             'meu_modulo_fiscal/static/src/js/recebimento_button.js',
             'meu_modulo_fiscal/static/src/xml/recebimento_button.xml',
-            # pay_later (A Prazo): input "Counted" no popup de fechamento de caixa
-            'meu_modulo_fiscal/static/src/js/fechamento_pay_later_input.js',
-            'meu_modulo_fiscal/static/src/xml/fechamento_pay_later_input.xml',
 
         ],
         'web.assets_web': [

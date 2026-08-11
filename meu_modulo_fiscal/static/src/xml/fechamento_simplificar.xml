@@ -1,0 +1,35 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<templates id="template" xml:space="preserve">
+
+    <!--
+        Simplifica o fechamento de caixa: remove os campos de input "Counted"
+        para métodos não-dinheiro (bank: cartão, PIX) do ClosePosPopup.
+
+        O template nativo renderiza dois blocos que iteram
+        `props.non_cash_payment_methods`:
+          1. Overview (nome + valor + counted + diferença) — mantido, pois o
+             relatório e o overview continuam mostrando todos os métodos.
+          2. Inputs "Counted" (bloco com <Input>) — removido. O operador só
+             digita o valor do dinheiro; bank/PIX entram automáticos.
+
+        O XPath usa a presença do componente <Input> como âncora, o que
+        distingue o bloco de inputs do bloco de overview (que não tem <Input>).
+        O state.payments para bank continua populado pelo getInitialState()
+        nativo (counted = pm.amount), então canConfirm() e getDifference()
+        seguem funcionando sem patch JS.
+
+        ⚠️ ACOPLAMENTO COM O TEMPLATE NATIVO: este XPath depende da estrutura
+        do template nativo do Odoo 18 (dois blocos t-foreach sobre
+        non_cash_payment_methods, o segundo contendo <Input>). Se o Odoo
+        reestruturar o template, o XPath pode parar de casar (o bloco de
+        inputs volta a aparecer) ou casar o bloco errado. Ao atualizar o Odoo,
+        validar que o popup continua sem inputs de bank/PIX. ADR DEC-001
+        escolheu replace (sem código morto) em vez de d-none; o trade-off é
+        exatamente esta fragilidade de herança.
+    -->
+    <t t-name="meu_modulo.ClosePosPopupSimplificar" t-inherit="point_of_sale.ClosePosPopup" t-inherit-mode="extension">
+        <xpath expr="//div[@t-foreach='props.non_cash_payment_methods' and .//Input]" position="replace">
+        </xpath>
+    </t>
+
+</templates>
