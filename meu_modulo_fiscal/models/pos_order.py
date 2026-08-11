@@ -646,8 +646,8 @@ class PosSession(models.Model):
         identificacao['qtd_cupons'] = qtd_vendas
         vendas_prazo, total_vendas_prazo = self._get_vendas_prazo(orders)
         sangrias, suprimentos, total_sangrias, total_suprimentos = self._get_sangrias_suprimentos(cash_details)
-        recebimentos, total_recebimentos = self._get_recebimentos()
-        saldo_detalhado = self._calc_saldo_detalhado(metodos_pagamento)
+        recebimentos, total_recebimentos, recebimentos_por_metodo = self._get_recebimentos()
+        saldo_detalhado = self._calc_saldo_detalhado(metodos_pagamento, recebimentos_por_metodo)
 
         # === SALDO DE MOVIMENTAÇÃO ===
         entradas = total_vendas + (identificacao['fundo_caixa'] or 0.0) + total_suprimentos + total_recebimentos
@@ -742,43 +742,67 @@ class PosSession(models.Model):
         botão Recebimento no PDV.
 
         Returns:
-            tuple(list[dict], float): lista de recebimentos e total.
+            tuple(list[dict], float, dict[str, float]): lista de recebimentos,
+            total e breakdown por método de pagamento (nome → soma). O dict
+            ``recebimentos_por_metodo`` alimenta o SALDO DETALHADO (DEC-005).
         """
         recebimentos = []
+        recebimentos_por_metodo = {}
         for payment in self.bank_payment_ids.filtered(
             lambda p: p.payment_type == 'inbound' and p.partner_type == 'customer'
                       and p.memo and 'Recebimento PDV' in p.memo
         ):
+            # Lazy-safe: pagamentos antigos sem x_payment_method_id caem em '—'
+            forma_pagamento = payment.x_payment_method_id.name or '—'
             recebimentos.append({
                 'cliente': payment.partner_id.name or '',
                 'data': payment.date.strftime('%d/%m/%Y %H:%M') if payment.date else '',
                 'valor': payment.amount,
                 'memo': payment.memo or '',
+                'forma_pagamento': forma_pagamento,
             })
+            recebimentos_por_metodo[forma_pagamento] = (
+                recebimentos_por_metodo.get(forma_pagamento, 0.0) + payment.amount
+            )
         total_recebimentos = sum(r['valor'] for r in recebimentos)
-        return recebimentos, total_recebimentos
+        return recebimentos, total_recebimentos, recebimentos_por_metodo
 
-    def _calc_saldo_detalhado(self, metodos_pagamento):
+    def _calc_saldo_detalhado(self, metodos_pagamento, recebimentos_por_metodo=None):
         """Calcula o saldo detalhado por método de pagamento.
 
-        Calculado/Sistema = valor do sistema.
+        Calculado/Sistema = vendas + recebimentos por método.
         Informado = 0 (operador preenche na hora — por enquanto 0).
         Diferença = informado - calculado = -calculado (por enquanto).
 
         Args:
             metodos_pagamento: lista de dicts com 'nome' e 'valor'.
+            recebimentos_por_metodo: dict nome do método → soma dos
+                recebimentos (default {}).
 
         Returns:
             list[dict]: saldo detalhado por método.
         """
-        saldo_detalhado = []
+        recebimentos_por_metodo = recebimentos_por_metodo or {}
+        vendas_por_metodo = {}
         for metodo in metodos_pagamento:
-            valor_sistema = metodo['valor']
+            nome = metodo['nome']
+            vendas_por_metodo[nome] = vendas_por_metodo.get(nome, 0.0) + metodo['valor']
+
+        # DEC-006: união dos métodos de vendas e de recebimentos. Preserva a
+        # ordem de metodos_pagamento (cash primeiro) e anexa métodos que só
+        # aparecem em recebimentos (ex: só PIX em recebimentos, sem venda PIX).
+        nomes = list(vendas_por_metodo) + [
+            n for n in recebimentos_por_metodo if n not in vendas_por_metodo
+        ]
+
+        saldo_detalhado = []
+        for nome in nomes:
+            calculado = vendas_por_metodo.get(nome, 0.0) + recebimentos_por_metodo.get(nome, 0.0)
             saldo_detalhado.append({
-                'nome': metodo['nome'],
-                'calculado': valor_sistema,
+                'nome': nome,
+                'calculado': calculado,
                 'informado': 0.0,
-                'diferenca': 0.0 - valor_sistema,
+                'diferenca': 0.0 - calculado,
             })
         return saldo_detalhado
 
@@ -795,7 +819,7 @@ class PosSession(models.Model):
             'target': 'new',
         }
 
-    def create_recebimento(self, invoice_id, amount=None, payment_method_name=''):
+    def create_recebimento(self, invoice_id, amount=None, payment_method_name='', payment_method_id=None):
         """Cria um recebimento (account.payment inbound) para uma fatura
         especifica, reconciliando automaticamente o pagamento com a fatura.
         Usado pelo botao Recebimento no PDV.
@@ -805,8 +829,13 @@ class PosSession(models.Model):
             amount: float - valor a receber (opcional). Se None, usa o
                 valor residual da fatura (comportamento legado).
             payment_method_name: str - nome do metodo de pagamento exibido
-                no comprovante (DEC-001). Vem do frontend sem validacao
-                fiscal; default '' (backward-compatible).
+                no comprovante (DEC-001). Fallback legado quando
+                ``payment_method_id`` nao e informado.
+            payment_method_id: int - ID do pos.payment.method escolhido no
+                PDV (DEC-001). Tem prioridade sobre ``payment_method_name``:
+                o backend resolve o nome via ORM e persiste o Many2one no
+                account.payment. Se invalido/inexistente, cai no fallback
+                (nao quebra o recebimento).
 
         Returns:
             dict with success/message. Em caso de sucesso, inclui a chave
@@ -841,6 +870,16 @@ class PosSession(models.Model):
                 'message': 'Valor superior ao saldo da fatura (R$ %.2f)' % invoice.amount_residual,
             }
 
+        # DEC-001: resolve o metodo de pagamento. payment_method_id (int) tem
+        # prioridade; payment_method_name (str) e o fallback legado. Um id
+        # inexistente cai no fallback sem quebrar o recebimento.
+        # Nota: se o frontend passar ambos (payment_method_name + id invalido),
+        # o nome legado vence silenciosamente — intencional, coberto por
+        # test_payment_method_id_invalido.
+        payment_method = self.env['pos.payment.method'].browse(payment_method_id) if payment_method_id else self.env['pos.payment.method']
+        if payment_method.exists():
+            payment_method_name = payment_method.name
+
         partner = invoice.partner_id
         partner_id = partner.id
 
@@ -860,6 +899,7 @@ class PosSession(models.Model):
             'date': fields.Date.context_today(self),
             'memo': memo,
             'pos_session_id': self.id,
+            'x_payment_method_id': payment_method.id if payment_method.exists() else False,
         })
         payment.action_post()
 
