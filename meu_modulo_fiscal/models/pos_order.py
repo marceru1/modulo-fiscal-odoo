@@ -646,8 +646,8 @@ class PosSession(models.Model):
         identificacao['qtd_cupons'] = qtd_vendas
         vendas_prazo, total_vendas_prazo = self._get_vendas_prazo(orders)
         sangrias, suprimentos, total_sangrias, total_suprimentos = self._get_sangrias_suprimentos(cash_details)
-        recebimentos, total_recebimentos = self._get_recebimentos()
-        saldo_detalhado = self._calc_saldo_detalhado(metodos_pagamento)
+        recebimentos, total_recebimentos, recebimentos_por_metodo = self._get_recebimentos()
+        saldo_detalhado = self._calc_saldo_detalhado(metodos_pagamento, recebimentos_por_metodo)
 
         # === SALDO DE MOVIMENTAÇÃO ===
         entradas = total_vendas + (identificacao['fundo_caixa'] or 0.0) + total_suprimentos + total_recebimentos
@@ -740,43 +740,65 @@ class PosSession(models.Model):
         botão Recebimento no PDV.
 
         Returns:
-            tuple(list[dict], float): lista de recebimentos e total.
+            tuple(list[dict], float, dict[str, float]): lista de recebimentos,
+            total e breakdown por método de pagamento (nome → soma). O dict
+            ``recebimentos_por_metodo`` alimenta o SALDO DETALHADO (DEC-005).
         """
         recebimentos = []
+        recebimentos_por_metodo = {}
         for payment in self.bank_payment_ids.filtered(
             lambda p: p.payment_type == 'inbound' and p.partner_type == 'customer'
                       and p.memo and 'Recebimento PDV' in p.memo
         ):
+            # Lazy-safe: pagamentos antigos sem x_payment_method_id caem em '—'
+            forma_pagamento = payment.x_payment_method_id.name or '—'
             recebimentos.append({
                 'cliente': payment.partner_id.name or '',
                 'data': payment.date.strftime('%d/%m/%Y %H:%M') if payment.date else '',
                 'valor': payment.amount,
                 'memo': payment.memo or '',
+                'forma_pagamento': forma_pagamento,
             })
+            recebimentos_por_metodo[forma_pagamento] = (
+                recebimentos_por_metodo.get(forma_pagamento, 0.0) + payment.amount
+            )
         total_recebimentos = sum(r['valor'] for r in recebimentos)
-        return recebimentos, total_recebimentos
+        return recebimentos, total_recebimentos, recebimentos_por_metodo
 
-    def _calc_saldo_detalhado(self, metodos_pagamento):
+    def _calc_saldo_detalhado(self, metodos_pagamento, recebimentos_por_metodo=None):
         """Calcula o saldo detalhado por método de pagamento.
 
-        Calculado/Sistema = valor do sistema.
+        Calculado/Sistema = vendas + recebimentos por método.
         Informado = 0 (operador preenche na hora — por enquanto 0).
         Diferença = informado - calculado = -calculado (por enquanto).
 
         Args:
             metodos_pagamento: lista de dicts com 'nome' e 'valor'.
+            recebimentos_por_metodo: dict nome do método → soma dos
+                recebimentos (default {}).
 
         Returns:
             list[dict]: saldo detalhado por método.
         """
-        saldo_detalhado = []
+        recebimentos_por_metodo = recebimentos_por_metodo or {}
+        vendas_por_metodo = {}
         for metodo in metodos_pagamento:
-            valor_sistema = metodo['valor']
+            nome = metodo['nome']
+            vendas_por_metodo[nome] = vendas_por_metodo.get(nome, 0.0) + metodo['valor']
+
+        # DEC-006: itera a união dos métodos de vendas e de recebimentos para
+        # cobrir o caso onde um método só aparece em recebimentos (ex: só PIX
+        # em recebimentos, sem venda PIX na sessão).
+        nomes = set(vendas_por_metodo) | set(recebimentos_por_metodo)
+
+        saldo_detalhado = []
+        for nome in nomes:
+            calculado = vendas_por_metodo.get(nome, 0.0) + recebimentos_por_metodo.get(nome, 0.0)
             saldo_detalhado.append({
-                'nome': metodo['nome'],
-                'calculado': valor_sistema,
+                'nome': nome,
+                'calculado': calculado,
                 'informado': 0.0,
-                'diferenca': 0.0 - valor_sistema,
+                'diferenca': 0.0 - calculado,
             })
         return saldo_detalhado
 
