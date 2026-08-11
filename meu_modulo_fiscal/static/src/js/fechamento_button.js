@@ -70,11 +70,12 @@ patch(ClosePosPopup.prototype, {
             }
         }
 
-        // Non-cash (bank methods que têm campo counted)
+        // Non-cash (bank + pay_later): usa o valor calculado do sistema.
+        // Os inputs "Counted" foram removidos do popup (fechamento_simplificar.xml),
+        // então o operador não digita mais esses valores. O pm.amount é o valor
+        // real das transações — INFORMADO = CALCULADO, DIFERENÇA = 0 no relatório.
         for (const pm of this.props.non_cash_payment_methods) {
-            if (payments[pm.id] && this.env.utils.isValidFloat(payments[pm.id].counted)) {
-                result[pm.name] = parseFloat(payments[pm.id].counted);
-            }
+            result[pm.name] = pm.amount ?? 0;
         }
 
         return result;
