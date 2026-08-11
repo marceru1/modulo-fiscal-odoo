@@ -26,6 +26,13 @@ const SOURCE_PATH = path.join(
 const source = fs.readFileSync(SOURCE_PATH, "utf8");
 
 // Extrai o corpo do método _getCountedValues() do arquivo-fonte real.
+//
+// ⚠️ FRÁGIL A FORMATAÇÃO: o regex casa o primeiro `\n\s*\},` após a abertura
+// do método. Se _getCountedValues() ganhar um bloco aninhado que termine em
+// `},` antes do fim (ex.: um if com callback), a captura para cedo e o teste
+// fica verde sobre um corpo parcial, sem erro. Ao reformatar o método em
+// fechamento_button.js, rodar este teste — se ele passar sem cobrir o caso
+// novo, o regex pode ter capturado o corpo errado.
 const match = source.match(/_getCountedValues\(\)\s*\{([\s\S]*?)\n\s*\},/);
 assert(match, "Não encontrou o método _getCountedValues() em fechamento_button.js");
 const methodBody = match[1];

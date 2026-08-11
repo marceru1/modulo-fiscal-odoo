@@ -678,8 +678,10 @@ class PosSession(models.Model):
     def _get_vendas_prazo(self, orders):
         """Coleta as vendas a prazo (pay_later) da sessão.
 
-        O core filtra pay_later do closing_control_data, então buscamos
-        direto nos pedidos.
+        No Odoo 18.0 o core NÃO filtra pay_later de non_cash_payment_methods
+        no get_closing_control_data — pay_later aparece no saldo detalhado e no
+        popup de fechamento. Buscamos direto nos pedidos para detalhar por
+        cliente (o closing_control_data só agrega o total por método).
 
         Args:
             orders: recordset de pos.order já fechadas da sessão.
