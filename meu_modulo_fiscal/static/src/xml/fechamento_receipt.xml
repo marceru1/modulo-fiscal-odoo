@@ -140,6 +140,24 @@
                 </div>
             </t>
 
+            <!-- Dinheiro em caixa (vendas em dinheiro − sangrias) — RF-01/RF-03.
+                 Valor líquido vindo do backend (dinheiro_liquido), não o bruto
+                 de metodos_pagamento. Linha de sangria só se total_sangrias > 0. -->
+            <div class="danfe-separador"></div>
+            <div class="pagamento-titulo">DINHEIRO EM CAIXA</div>
+            <div class="totais-section">
+                <t t-if="data.total_sangrias > 0">
+                    <div class="fechamento-linha">
+                        <span>SANGRIAS(S)</span>
+                        <span class="total-valor">- <t t-esc="formatCurrency(data.total_sangrias).replace('R$', '').trim()"/></span>
+                    </div>
+                </t>
+                <div class="fechamento-linha-total">
+                    <span>DINHEIRO</span>
+                    <span class="total-valor"><t t-esc="formatCurrency(data.dinheiro_liquido).replace('R$', '').trim()"/></span>
+                </div>
+            </div>
+
             <!-- Entradas (Cash In) -->
             <t t-if="data.suprimentos.length > 0">
                 <div class="danfe-separador"></div>
