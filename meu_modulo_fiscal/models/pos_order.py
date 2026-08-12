@@ -654,6 +654,14 @@ class PosSession(models.Model):
         saidas = total_sangrias
         saldo_caixa = entradas - saidas
 
+        # === DINHEIRO EM CAIXA (RF-01) ===
+        # Dinheiro líquido esperado na gaveta: vendas em dinheiro − sangrias.
+        # O front-end (popup/relatório) usa este valor em vez do bruto de
+        # metodos_pagamento — é o que a spec chama de "saldo_caixa" no exemplo
+        # (100 − 30 = 70). Diferente do saldo_caixa acima, que inclui fundo,
+        # suprimentos, recebimentos e vendas de outros métodos.
+        dinheiro_liquido = self._calc_dinheiro_liquido(cash_details, total_sangrias)
+
         return {
             'empresa': empresa,
             'identificacao': identificacao,
@@ -667,6 +675,7 @@ class PosSession(models.Model):
             'total_suprimentos': total_suprimentos,
             'recebimentos': recebimentos,
             'total_recebimentos': total_recebimentos,
+            'dinheiro_liquido': dinheiro_liquido,
             'saldo_movimentacao': {
                 'entradas': entradas,
                 'saidas': saidas,
@@ -736,6 +745,24 @@ class PosSession(models.Model):
         total_sangrias = sum(s['valor'] for s in sangrias)
         total_suprimentos = sum(s['valor'] for s in suprimentos)
         return sangrias, suprimentos, total_sangrias, total_suprimentos
+
+    def _calc_dinheiro_liquido(self, cash_details, total_sangrias):
+        """Dinheiro líquido esperado na gaveta = vendas em dinheiro − sangrias.
+
+        Diferente do ``saldo_caixa`` (que inclui fundo de caixa, suprimentos,
+        recebimentos e vendas de outros métodos), este é especificamente o
+        dinheiro físico: o que entrou em vendas à vista menos o que foi
+        retirado em sangrias (RF-01/RF-05).
+
+        Args:
+            cash_details: dict com os detalhes de dinheiro (default_cash_details).
+            total_sangrias: float com o total retirado em sangrias.
+
+        Returns:
+            float: dinheiro líquido esperado na gaveta.
+        """
+        dinheiro_bruto = cash_details.get('payment_amount', 0.0) if cash_details else 0.0
+        return dinheiro_bruto - total_sangrias
 
     def _get_recebimentos(self):
         """Coleta os recebimentos (account.payment inbound) criados pelo
