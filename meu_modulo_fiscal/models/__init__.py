@@ -1,3 +1,7 @@
+from . import x_prazo_movimentacao
+from . import hr_employee
+from . import account_payment
+from . import pos_payment_method
 from . import campos_fiscais
 from . import recursos_variantes
 from . import pos_order

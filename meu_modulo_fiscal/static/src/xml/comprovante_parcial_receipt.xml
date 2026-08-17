@@ -1,0 +1,81 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<templates id="template" xml:space="preserve">
+
+    <!--
+        Comprovante de Pagamento Parcial — impresso na térmica ao confirmar
+        um recebimento via botão "Pagar Fatura" no PDV (DEC-003).
+
+        data = {
+            empresa: { nome, cnpj, endereco_linha1, endereco_linha2 },
+            comprovante: { fatura, valor_pago, forma_pagamento, data_hora,
+                           numero_pdv, operador },
+        }
+        NÃO exibe saldo restante (fora do escopo da feature).
+    -->
+    <t t-name="meu_modulo.ComprovanteParcialReceipt">
+        <div class="pos-receipt">
+
+            <!-- Cabeçalho da empresa -->
+            <div class="danfe-header">
+                <div class="emitente-nome">
+                    <t t-esc="data.empresa.nome ? data.empresa.nome.toUpperCase() : ''"/>
+                </div>
+                <div class="emitente-endereco">
+                    <t t-esc="data.empresa.endereco_linha1 ? data.empresa.endereco_linha1.toUpperCase() : ''"/>
+                </div>
+                <div class="emitente-endereco">
+                    <t t-esc="data.empresa.endereco_linha2 ? data.empresa.endereco_linha2.toUpperCase() : ''"/>
+                </div>
+                <div class="emitente-dados">
+                    <span>CNPJ: <t t-esc="data.empresa.cnpj"/></span>
+                </div>
+            </div>
+
+            <div class="danfe-separador"></div>
+
+            <div class="danfe-tipo">
+                COMPROVANTE DE PAGAMENTO
+            </div>
+            <div class="danfe-separador"></div>
+
+            <!-- Identificação do pagamento -->
+            <div class="totais-section">
+                <div class="fechamento-linha">
+                    <span>FATURA</span>
+                    <span class="total-valor"><t t-esc="data.comprovante.fatura"/></span>
+                </div>
+                <div class="fechamento-linha">
+                    <span>DATA/HORA</span>
+                    <span class="total-valor"><t t-esc="data.comprovante.data_hora"/></span>
+                </div>
+                <div class="fechamento-linha">
+                    <span>OPERADOR</span>
+                    <span class="total-valor"><t t-esc="data.comprovante.operador"/></span>
+                </div>
+                <div class="fechamento-linha">
+                    <span>Nº PDV</span>
+                    <span class="total-valor"><t t-esc="data.comprovante.numero_pdv"/></span>
+                </div>
+            </div>
+
+            <div class="danfe-separador"></div>
+
+            <!-- Forma de pagamento (DEC-001: preenchida pelo backend via
+                 create_recebimento — ticket 01. Sem seletor no v1, vinha '—'.) -->
+            <div class="fechamento-linha-total">
+                <span>FORMA DE PAGAMENTO</span>
+                <span class="total-valor"><t t-esc="data.comprovante.forma_pagamento || '—'"/></span>
+            </div>
+
+            <!-- Valor pago em destaque -->
+            <div class="fechamento-linha-total" style="font-size: 14px;">
+                <span>VALOR PAGO</span>
+                <span class="total-valor"><t t-esc="formatCurrency(data.comprovante.valor_pago)"/></span>
+            </div>
+
+            <div class="danfe-separador"></div>
+
+        </div>
+    </t>
+
+</templates>

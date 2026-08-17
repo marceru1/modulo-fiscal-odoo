@@ -10,6 +10,16 @@
                     <setting string="Formas de Pagamento Fiscais" help="Selecione as formas de pagamento que devem disparar a emissão automática de NFC-e via Middleware.">
                         <field name="pos_x_fiscal_payment_method_ids" widget="many2many_checkboxes" domain="[('id', 'in', pos_payment_method_ids)]" readonly="pos_has_active_session"/>
                     </setting>
+                    <!-- I7: parâmetros do middleware migrados de os.environ para ir.config_parameter -->
+                    <setting string="URL do Middleware" id="middleware_url_setting" help="URL base do Middleware Laravel (Focus NFe). Lida em runtime via Configuração Técnica — não exige restart do Odoo.">
+                        <field name="middleware_url"/>
+                    </setting>
+                    <setting string="Webhook Secret" id="webhook_secret_setting" help="Shared secret enviado no header X-Webhook-Token. Deixe vazio se o middleware estiver em rede interna sem domínio público.">
+                        <field name="webhook_secret"/>
+                    </setting>
+                    <setting string="Timeout Webhook (s)" id="webhook_timeout_setting" help="Timeout em segundos para o webhook do middleware. Default: 5.">
+                        <field name="webhook_timeout"/>
+                    </setting>
                 </block>
             </xpath>
         </field>

@@ -1,0 +1,16 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<templates id="template" xml:space="preserve">
+
+    <t t-name="meu_modulo.ClosePosPopupFechamento" t-inherit="point_of_sale.ClosePosPopup" t-inherit-mode="extension">
+        <xpath expr="//button[@t-on-click='downloadSalesReport']" position="after">
+            <button class="button btn btn-secondary"
+                t-att-class="this.ui.isSmall ? 'w-100' : 'btn-lg ms-auto'"
+                t-on-click="showFechamento"
+                title="Imprimir relatório de fechamento de caixa">
+                Fechamento
+                <i t-if="!this.ui.isSmall" class="fa fa-print" role="img"/>
+            </button>
+        </xpath>
+    </t>
+
+</templates>
