@@ -97,22 +97,23 @@
                     <span class="total-label">QTD. TOTAL DE ITENS</span>
                     <span class="total-valor"><t t-esc="props.data.danfe_totais.qtd_itens"/></span>
                 </div>
-                <div class="total-linha" style="display: flex; justify-content: space-between;">
-                    <span class="total-label">VALOR TOTAL R$</span>
-                    <span class="total-valor"><t t-esc="props.formatCurrency(props.data.danfe_totais.valor_total).replace('R$', '').trim()"/></span>
-                </div>
-                <div class="total-linha" style="display: flex; justify-content: space-between;">
-                    <span class="total-label">ACRÉSCIMO</span>
-                    <span class="total-valor">0,00</span>
-                </div>
-                <div class="total-linha" style="display: flex; justify-content: space-between;">
-                    <span class="total-label">DESCONTO</span>
-                    <span class="total-valor"><t t-esc="props.formatCurrency(props.data.danfe_totais.desconto_total).replace('R$', '').trim()"/></span>
-                </div>
-                <div class="total-linha" style="display: flex; justify-content: space-between;">
-                    <span class="total-label">VALOR A PAGAR R$</span>
-                    <span class="total-valor"><t t-esc="props.formatCurrency(props.data.danfe_totais.valor_total).replace('R$', '').trim()"/></span>
-                </div>
+                
+                <t t-if="props.data.x_amount_other_value and props.data.x_amount_other_value > 0 or props.data.danfe_totais.desconto_total and props.data.danfe_totais.desconto_total > 0">
+                    <t t-if="props.data.x_amount_other_value and props.data.x_amount_other_value > 0">
+                        <div class="total-linha" style="display: flex; justify-content: space-between;">
+                            <span class="total-label">ACRÉSCIMO</span>
+                            <span class="total-valor"><t t-esc="props.formatCurrency(props.data.x_amount_other_value || 0).replace('R$', '').trim()"/></span>
+                        </div>
+                    </t>
+                    <t t-if="props.data.danfe_totais.desconto_total and props.data.danfe_totais.desconto_total > 0">
+                        <div class="total-linha" style="display: flex; justify-content: space-between;">
+                            <span class="total-label">DESCONTO</span>
+                            <span class="total-valor"><t t-esc="props.formatCurrency(props.data.danfe_totais.desconto_total).replace('R$', '').trim()"/></span>
+                        </div>
+                    </t>
+                </t>
+                
+                <t t-set="valor_a_pagar" t-value="(props.data.danfe_totais.valor_total || 0) + (props.data.x_amount_other_value || 0) - (props.data.danfe_totais.desconto_total || 0)"/>
 
                 <t t-foreach="props.data.danfe_totais.metodos" t-as="pgto" t-key="pgto.metodo_nome">
                     <div class="pagamento-linha" style="display: flex; justify-content: space-between;">
@@ -120,8 +121,9 @@
                         <span class="pagamento-valor"><t t-esc="props.formatCurrency(pgto.metodo_valor).replace('R$', '').trim()"/></span>
                     </div>
                 </t>
+                
                 <!-- Troco -->
-                <t t-set="troco" t-value="props.data.danfe_totais.metodos.reduce((acc, p) => acc + p.metodo_valor, 0) - props.data.danfe_totais.valor_total"/>
+                <t t-set="troco" t-value="props.data.danfe_totais.metodos.reduce((acc, p) => acc + p.metodo_valor, 0) - valor_a_pagar"/>
                 <t t-if="troco > 0.009">
                     <div class="pagamento-linha" style="display: flex; justify-content: space-between;">
                         <span class="pagamento-metodo">TROCO</span>
@@ -129,20 +131,27 @@
                     </div>
                 </t>
 
-                <div class="danfe-separador" style="border-bottom: 1px dashed #000; margin: 4px 0;"></div>
-                
-                <div class="valor-informado" style="display: flex; justify-content: space-between;">
-                    <span>VALOR INFORMADO</span>
-                    <t t-set="total_informado" t-value="props.data.danfe_totais.metodos.reduce((acc, p) => acc + p.metodo_valor, 0)"/>
-                    <span><t t-esc="props.formatCurrency(total_informado).replace('R$', '').trim()"/></span>
+                <div class="total-linha" style="display: flex; justify-content: space-between;">
+                    <span class="total-label">VALOR TOTAL R$</span>
+                    <span class="total-valor"><t t-esc="props.formatCurrency(props.data.danfe_totais.valor_total).replace('R$', '').trim()"/></span>
                 </div>
+                
+                <div class="total-linha" style="display: flex; justify-content: space-between; font-weight: bold;">
+                    <span class="total-label">VALOR A PAGAR R$</span>
+                    <span class="total-valor"><t t-esc="props.formatCurrency(valor_a_pagar).replace('R$', '').trim()"/></span>
+                </div>
+
+                <t t-if="props.data.x_cliente_prazo">
+                    <div class="danfe-separador" style="border-bottom: 1px dashed #000; margin: 4px 0;"></div>
+                    <div style="margin-top: 4px; margin-bottom: 4px; font-weight: bold; font-size: 11px;">CLIENTE: <t t-esc="props.data.x_cliente_prazo"/></div>
+                </t>
+
+                <div class="danfe-separador" style="border-bottom: 1px dashed #000; margin: 4px 0;"></div>
 
             </div>
 
-            <div class="danfe-separador" style="border-bottom: 1px dashed #000; margin: 4px 0;"></div>
-
             <div class="fiscal-section" style="text-align: center; font-family: 'Inconsolata', monospace; font-size: 12px;">
-                
+
                 <t t-if="props.data.x_fiscal and (props.data.x_fiscal.status === 'autorizado' or props.data.x_fiscal.status === 'contingencia')">
                     
                     <t t-if="props.data.x_fiscal.offline">
@@ -160,6 +169,7 @@
                     <div style="margin: 2px 0;">Via Consumidor</div>
                     
                     <div style="margin: 2px 0;">Consulte pela Chave de Acesso em</div>
+                    <!-- TODO: vir de company.x_uf_codigo -->
                     <div style="margin: 2px 0;">http://www.nfce.sefaz.am.gov.br/consumidor/</div>
 
                     <div style="margin: 4px 0;">CHAVE DE ACESSO</div>
@@ -194,6 +204,7 @@
 
                     <div class="danfe-separador" style="border-bottom: 1px dashed #000; margin: 4px 0;"></div>
 
+                    <!-- TODO: calcular via IBPT/NCM -->
                     <div style="display: flex; justify-content: space-between; font-size: 11px;">
                         <span>Tributos Totais e Incidentes (Lei Federal 12.741/2012)</span>
                         <span>(0,14%)</span>

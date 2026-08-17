@@ -23,11 +23,13 @@ class ProductTemplate(models.Model):
     # CAMPOS DE ORGANIZAÇÃO DE ESTOQUE (SPED)
     # ==========================================================
     
+    # TODO: migrar para Many2one em tabela própria configurável
     x_departamento = fields.Selection(
         [('0', 'Não definido')],
         string="Departamento", default='0'
     )
 
+    # TODO: migrar para Many2one em tabela própria configurável
     x_fornecedor = fields.Selection(
         [('0', 'Não definido')],
         string="Fornecedor", default='0'
@@ -45,6 +47,7 @@ class ProductTemplate(models.Model):
         string="Tipo de Item (SPED)", default='00', help="Classificação do produto conforme tabela SPED Fiscal Brasileiro"
     )
 
+    # TODO: migrar para Many2one em tabela própria configurável
     x_genero = fields.Selection(
         [('0', 'Não definido')],
         string="Gênero do Item", default='0'
@@ -55,7 +58,7 @@ class ProductTemplate(models.Model):
     # ==========================================================
 
     x_ncm_id = fields.Many2one(
-        'br.ncm', string='Código NCM', required=True,
+        'br.ncm', string='Código NCM',
         help="Nomenclatura Comum do Mercosul - Obrigatório e central para calcular tributos da NF-e/NFC-e"
     )
 
@@ -74,6 +77,7 @@ class ProductTemplate(models.Model):
         string="Origem (NF-e)", required=True, default='0', help="Origem da mercadoria (Nacional/Importada) que ditará as alíquotas de ICMS."
     )
 
+    # TODO: migrar para Many2one em tabela br.cfop (similar ao br.ncm já criado)
     x_cfop = fields.Selection(
         [
             ('5101', '5.101 - Venda de produção do estabelecimento'),

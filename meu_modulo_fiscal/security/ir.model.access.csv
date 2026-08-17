@@ -1,2 +1,4 @@
 id,name,model_id:id,group_id:id,perm_read,perm_write,perm_create,perm_unlink
 access_br_ncm,br.ncm,model_br_ncm,,1,1,1,1
+access_x_prazo_movimentacao_user,access_x_prazo_movimentacao_user,model_x_prazo_movimentacao,base.group_user,1,1,1,1
+access_x_prazo_movimentacao_manager,access_x_prazo_movimentacao_manager,model_x_prazo_movimentacao,hr.group_hr_user,1,1,1,1

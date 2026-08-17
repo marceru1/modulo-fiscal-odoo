@@ -1,0 +1,63 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+
+    <!-- Inherit hr.employee form: add 'Conta A Prazo' tab after Settings -->
+    <record id="view_employee_form_prazo" model="ir.ui.view">
+        <field name="name">hr.employee.form.prazo</field>
+        <field name="model">hr.employee</field>
+        <field name="inherit_id" ref="hr.view_employee_form"/>
+        <field name="arch" type="xml">
+            <xpath expr="//page[@name='hr_settings']" position="after">
+                <page name="conta_prazo" string="Conta A Prazo" groups="hr.group_hr_user">
+                    <group>
+                        <group string="Limites">
+                            <field name="x_limite_prazo"/>
+                            <field name="x_saldo_prazo" readonly="1"/>
+                        </group>
+                    </group>
+                    <separator string="Histórico de Movimentações"/>
+                    <field name="x_historico_prazo_ids" nolabel="1"/>
+                </page>
+            </xpath>
+        </field>
+    </record>
+
+    <!-- Standalone list view for x.prazo.movimentacao -->
+    <record id="view_x_prazo_movimentacao_list" model="ir.ui.view">
+        <field name="name">x.prazo.movimentacao.list</field>
+        <field name="model">x.prazo.movimentacao</field>
+        <field name="arch" type="xml">
+            <list>
+                <field name="data"/>
+                <field name="tipo"/>
+                <field name="valor"/>
+                <field name="pos_reference"/>
+                <field name="employee_id"/>
+                <field name="partner_id"/>
+            </list>
+        </field>
+    </record>
+
+    <!-- Search view for employee A Prazo -->
+    <record id="view_employee_search_prazo" model="ir.ui.view">
+        <field name="name">hr.employee.search.prazo</field>
+        <field name="model">hr.employee</field>
+        <field name="arch" type="xml">
+            <search>
+                <field name="name"/>
+                <field name="department_id"/>
+            </search>
+        </field>
+    </record>
+
+    <!-- Action and menu to open the employee list with A Prazo view -->
+    <record id="action_employee_prazo_list" model="ir.actions.act_window">
+        <field name="name">Contas A Prazo</field>
+        <field name="res_model">hr.employee</field>
+        <field name="view_mode">list,form</field>
+        <field name="search_view_id" ref="view_employee_search_prazo"/>
+    </record>
+
+    <menuitem id="menu_employee_prazo" name="Contas A Prazo" parent="hr.menu_hr_root" sequence="20" action="action_employee_prazo_list" groups="hr.group_hr_user"/>
+
+</odoo>

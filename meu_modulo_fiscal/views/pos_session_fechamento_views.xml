@@ -1,0 +1,247 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+
+    <!-- ============================================================ -->
+    <!-- 1. Extende a form view de pos.session para adicionar o botão -->
+    <!-- ============================================================ -->
+    <record id="view_pos_session_form_fechamento" model="ir.ui.view">
+        <field name="name">pos.session.form.fechamento</field>
+        <field name="model">pos.session</field>
+        <field name="inherit_id" ref="point_of_sale.view_pos_session_form"/>
+        <field name="arch" type="xml">
+            <xpath expr="//header/field[@name='state']" position="before">
+                <button name="action_print_fechamento"
+                        type="object"
+                        string="Imprimir Fechamento"
+                        class="oe_highlight"
+                        invisible="state != 'closed'"/>
+            </xpath>
+        </field>
+    </record>
+
+    <!-- ============================================================ -->
+    <!-- 2. Template QWeb (backend) do relatório de fechamento.        -->
+    <!--    Renderizado server-side pelo controller /pos/fechamento/.  -->
+    <!--    Usa bracket notation (data['chave']) — QWeb server-side    -->
+    <!--    não suporta attribute access em dicts.                     -->
+    <!-- ============================================================ -->
+    <template id="FechamentoReport" name="meu_modulo.FechamentoReport">
+        <html lang="pt-BR">
+            <head>
+                <meta charset="utf-8"/>
+                <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+                <title>Fechamento de Caixa</title>
+                <!-- I3: CSS compartilhado — antes era <style> inline duplicado.
+                     Agora referencia o arquivo único static/src/css/fechamento.css. -->
+                <link rel="stylesheet" href="/meu_modulo_fiscal/static/src/css/fechamento.css"/>
+                <style>
+                    /* Apenas regras específicas do QWeb server-side (não no arquivo compartilhado) */
+                    body { margin: 0; padding: 0; background: #fff; }
+                </style>
+            </head>
+            <body>
+                <div class="pos-receipt">
+
+                    <!-- Cabeçalho da empresa -->
+                    <div class="danfe-header">
+                        <div class="emitente-nome">
+                            <t t-out="(data['empresa']['nome'] or '').upper()"/>
+                        </div>
+                        <div class="emitente-endereco">
+                            <t t-out="(data['empresa']['endereco_linha1'] or '').upper()"/>
+                        </div>
+                        <div class="emitente-endereco">
+                            <t t-out="(data['empresa']['endereco_linha2'] or '').upper()"/>
+                        </div>
+                        <div class="emitente-dados">
+                            <span>CNPJ: <t t-out="data['empresa']['cnpj']"/></span>
+                            <span>    IE: <t t-out="data['empresa']['ie']"/></span>
+                        </div>
+                    </div>
+
+                    <div class="danfe-separador"></div>
+
+                    <!-- Identificação do fechamento -->
+                    <div class="danfe-tipo">
+                        FECHAMENTO DE CAIXA
+                    </div>
+                    <div class="danfe-separador"></div>
+
+                    <div class="totais-section">
+                        <div class="fechamento-linha">
+                            <span>USUARIO.........................</span>
+                            <span class="total-valor"><t t-out="data['identificacao']['usuario']"/></span>
+                        </div>
+                        <div class="fechamento-linha">
+                            <span>ABERTURA............</span>
+                            <span class="total-valor"><t t-out="data['identificacao']['data_abertura']"/></span>
+                        </div>
+                        <div class="fechamento-linha">
+                            <span>FECHAMENTO..........</span>
+                            <span class="total-valor"><t t-out="data['identificacao']['data_fechamento']"/></span>
+                        </div>
+                        <div class="fechamento-linha">
+                            <span>FUNDO DE CAIXA(F)...............</span>
+                            <span class="total-valor"><t t-out="format_currency(data['identificacao']['fundo_caixa']).replace('R$', '').strip()"/></span>
+                        </div>
+                    </div>
+
+                    <div class="danfe-separador"></div>
+
+                    <!-- Vendas por método -->
+                    <div class="pagamento-titulo">VENDAS(V)</div>
+                    <div class="totais-section">
+                        <t t-foreach="data['metodos_pagamento']" t-as="metodo">
+                            <div class="fechamento-linha">
+                                <span><t t-out="metodo['nome']"/></span>
+                                <span class="total-valor"><t t-out="format_currency(metodo['valor']).replace('R$', '').strip()"/></span>
+                            </div>
+                        </t>
+                    </div>
+                    <div class="fechamento-linha-total">
+                        <span>TOTAL</span>
+                        <span class="total-valor"><t t-out="format_currency(data['total_vendas']).replace('R$', '').strip()"/></span>
+                    </div>
+
+                    <!-- Vendas a Prazo (pay_later) -->
+                    <t t-if="data['vendas_prazo'] and len(data['vendas_prazo']) &gt; 0">
+                        <div class="danfe-separador"></div>
+                        <div class="pagamento-titulo">VENDAS A PRAZO</div>
+                        <div class="totais-section">
+                            <t t-foreach="data['vendas_prazo']" t-as="prazo">
+                                <div class="fechamento-linha">
+                                    <span><t t-out="prazo['cliente']"/></span>
+                                    <span class="total-valor"><t t-out="format_currency(prazo['valor']).replace('R$', '').strip()"/></span>
+                                </div>
+                                <div class="fechamento-linha" style="font-size: 10px; color: #555;">
+                                    <span><t t-out="prazo['data']"/></span>
+                                </div>
+                            </t>
+                        </div>
+                        <div class="fechamento-linha-total">
+                            <span>TOTAL</span>
+                            <span class="total-valor"><t t-out="format_currency(data['total_vendas_prazo']).replace('R$', '').strip()"/></span>
+                        </div>
+                    </t>
+
+                    <!-- Recebimentos (account.payment inbound) -->
+                    <t t-if="data['recebimentos'] and len(data['recebimentos']) &gt; 0">
+                        <div class="danfe-separador"></div>
+                        <div class="pagamento-titulo">RECEBIMENTOS(R)</div>
+                        <div class="totais-section">
+                            <t t-foreach="data['recebimentos']" t-as="rec">
+                                <div class="fechamento-linha">
+                                    <span><t t-out="rec['cliente']"/></span>
+                                    <span class="total-valor"><t t-out="format_currency(rec['valor']).replace('R$', '').strip()"/></span>
+                                </div>
+                                <!-- Data/hora do recebimento (igual ao bloco VENDAS A PRAZO) -->
+                                <div class="fechamento-linha" style="font-size: 10px; color: #555;">
+                                    <span><t t-out="rec['data']"/></span>
+                                </div>
+                                <!-- Forma de pagamento (DEC-001: preenchida pelo backend via ticket 01) -->
+                                <div class="fechamento-linha" style="font-size: 10px; color: #555;">
+                                    <span>FORMA: <t t-out="rec['forma_pagamento'] or '—'"/></span>
+                                </div>
+                            </t>
+                        </div>
+                        <div class="fechamento-linha-total">
+                            <span>TOTAL</span>
+                            <span class="total-valor"><t t-out="format_currency(data['total_recebimentos']).replace('R$', '').strip()"/></span>
+                        </div>
+                    </t>
+
+                    <!-- Sangrias (Cash Out) -->
+                    <t t-if="data['sangrias'] and len(data['sangrias']) &gt; 0">
+                        <div class="danfe-separador"></div>
+                        <div class="pagamento-titulo">SANGRIAS(S)</div>
+                        <div class="totais-section">
+                            <t t-foreach="data['sangrias']" t-as="sangria">
+                                <div class="fechamento-linha">
+                                    <span><t t-out="sangria['motivo']"/></span>
+                                    <span class="total-valor"><t t-out="format_currency(sangria['valor']).replace('R$', '').strip()"/></span>
+                                </div>
+                            </t>
+                        </div>
+                        <div class="fechamento-linha-total">
+                            <span>TOTAL</span>
+                            <span class="total-valor"><t t-out="format_currency(data['total_sangrias']).replace('R$', '').strip()"/></span>
+                        </div>
+                    </t>
+
+                    <!-- Entradas (Cash In / Suprimentos) -->
+                    <t t-if="data['suprimentos'] and len(data['suprimentos']) &gt; 0">
+                        <div class="danfe-separador"></div>
+                        <div class="pagamento-titulo">ENTRADAS(I)</div>
+                        <div class="totais-section">
+                            <t t-foreach="data['suprimentos']" t-as="supr">
+                                <div class="fechamento-linha">
+                                    <span><t t-out="supr['motivo']"/></span>
+                                    <span class="total-valor"><t t-out="format_currency(supr['valor']).replace('R$', '').strip()"/></span>
+                                </div>
+                            </t>
+                        </div>
+                        <div class="fechamento-linha-total">
+                            <span>TOTAL</span>
+                            <span class="total-valor"><t t-out="format_currency(data['total_suprimentos']).replace('R$', '').strip()"/></span>
+                        </div>
+                    </t>
+
+                    <!-- Saldo de movimentação -->
+                    <div class="danfe-separador"></div>
+                    <div class="pagamento-titulo">SALDO DE MOVIMENTACAO DO DIA</div>
+                    <div class="totais-section">
+                        <div class="fechamento-linha">
+                            <span>ENTRADAS(F+V+I):</span>
+                            <span class="total-valor"><t t-out="format_currency(data['saldo_movimentacao']['entradas']).replace('R$', '').strip()"/></span>
+                        </div>
+                        <div class="fechamento-linha">
+                            <span>SAIDAS(S):</span>
+                            <span class="total-valor"><t t-out="format_currency(data['saldo_movimentacao']['saidas']).replace('R$', '').strip()"/></span>
+                        </div>
+                    </div>
+                    <div class="fechamento-linha-total">
+                        <span>SALDO DO CAIXA:</span>
+                        <span class="total-valor"><t t-out="format_currency(data['saldo_movimentacao']['saldo']).replace('R$', '').strip()"/></span>
+                    </div>
+
+                    <!-- Saldo detalhado -->
+                    <div class="danfe-separador"></div>
+                    <div class="pagamento-titulo">SALDO DETALHADO DO CAIXA</div>
+                    <t t-foreach="data['saldo_detalhado']" t-as="saldo">
+                        <div class="totais-section">
+                            <div class="fechamento-linha">
+                                <span><t t-out="saldo['nome']"/></span>
+                                <span class="total-valor"><t t-out="format_currency(saldo['calculado']).replace('R$', '').strip()"/></span>
+                            </div>
+                            <div class="fechamento-linha">
+                                <span>INFORMADO</span>
+                                <span class="total-valor"><t t-out="format_currency(saldo['informado']).replace('R$', '').strip()"/></span>
+                            </div>
+                            <div class="fechamento-linha">
+                                <span>DIFERENCA</span>
+                                <span class="total-valor"><t t-out="format_currency(saldo['diferenca']).replace('R$', '').strip()"/></span>
+                            </div>
+                        </div>
+                    </t>
+
+                    <!-- Assinatura -->
+                    <div class="danfe-separador"></div>
+                    <div class="assinatura-area">
+                        <div class="assinatura-linha">
+                            ASSINATURA
+                        </div>
+                    </div>
+
+                </div>
+
+                <!-- Auto-print ao carregar a página -->
+                <script>
+                    window.addEventListener('load', function () {
+                        setTimeout(function () { window.print(); }, 250);
+                    });
+                </script>
+            </body>
+        </html>
+    </template>
+
+</odoo>
