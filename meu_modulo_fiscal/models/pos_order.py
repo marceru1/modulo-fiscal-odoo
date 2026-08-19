@@ -649,17 +649,25 @@ class PosSession(models.Model):
         recebimentos, total_recebimentos, recebimentos_por_metodo = self._get_recebimentos()
         saldo_detalhado = self._calc_saldo_detalhado(metodos_pagamento, recebimentos_por_metodo)
 
-        # === SALDO DE MOVIMENTAÇÃO ===
-        entradas = total_vendas + (identificacao['fundo_caixa'] or 0.0) + total_suprimentos + total_recebimentos
-        saidas = total_sangrias
-        saldo_caixa = entradas - saidas
+        # === MOVIMENTAÇÃO TOTAL (todos os métodos — auditoria) ===
+        # Soma tudo que entrou/saiu na sessão, independente do meio de pagamento
+        # (cartão, PIX, a prazo incluídos). Exibido na seção "MOVIMENTAÇÃO TOTAL"
+        # do recibo, SEM a palavra "CAIXA" — não é o dinheiro físico da gaveta.
+        mov_total_entradas = total_vendas + (identificacao['fundo_caixa'] or 0.0) + total_suprimentos + total_recebimentos
+        mov_total_saidas = total_sangrias
+        mov_total_saldo = mov_total_entradas - mov_total_saidas
 
-        # === DINHEIRO EM CAIXA (RF-01) ===
-        # Dinheiro líquido esperado na gaveta: vendas em dinheiro − sangrias.
-        # O front-end (popup/relatório) usa este valor em vez do bruto de
-        # metodos_pagamento — é o que a spec chama de "saldo_caixa" no exemplo
-        # (100 − 30 = 70). Diferente do saldo_caixa acima, que inclui fundo,
-        # suprimentos, recebimentos e vendas de outros métodos.
+        # === DINHEIRO EM CAIXA / SALDO DO CAIXA (RF-01) ===
+        # Gaveta física = fundo + vendas em dinheiro + suprimentos +
+        # recebimentos em dinheiro − sangrias. Exclui cartão/PIX/a prazo (esses
+        # não ficam na gaveta). É o "SALDO DO CAIXA" que o operador confere.
+        # `dinheiro_liquido` (vendas em dinheiro − sangrias) é o subtotal líquido
+        # de vendas, exibido na seção "DINHEIRO EM CAIXA" (RF-01/RF-03).
+        fundo_caixa = identificacao['fundo_caixa'] or 0.0
+        saldo_caixa_dinheiro = self._calc_saldo_caixa_dinheiro(
+            cash_details, total_sangrias, total_suprimentos,
+            recebimentos_por_metodo, fundo_caixa,
+        )
         dinheiro_liquido = self._calc_dinheiro_liquido(cash_details, total_sangrias)
 
         return {
@@ -677,9 +685,14 @@ class PosSession(models.Model):
             'total_recebimentos': total_recebimentos,
             'dinheiro_liquido': dinheiro_liquido,
             'saldo_movimentacao': {
-                'entradas': entradas,
-                'saidas': saidas,
-                'saldo': saldo_caixa,
+                'entradas': saldo_caixa_dinheiro['entradas'],
+                'saidas': saldo_caixa_dinheiro['saidas'],
+                'saldo': saldo_caixa_dinheiro['saldo'],
+            },
+            'movimentacao_total': {
+                'entradas': mov_total_entradas,
+                'saidas': mov_total_saidas,
+                'saldo': mov_total_saldo,
             },
             'saldo_detalhado': saldo_detalhado,
         }
@@ -763,6 +776,52 @@ class PosSession(models.Model):
         """
         dinheiro_bruto = cash_details.get('payment_amount', 0.0) if cash_details else 0.0
         return dinheiro_bruto - total_sangrias
+
+    def _calc_saldo_caixa_dinheiro(self, cash_details, total_sangrias,
+                                    total_suprimentos, recebimentos_por_metodo,
+                                    fundo_caixa):
+        """Saldo do caixa físico (gaveta) = fundo + vendas em dinheiro +
+        suprimentos + recebimentos em dinheiro − sangrias.
+
+        Exclui cartão/PIX/a prazo — esses meios não ficam na gaveta. É o
+        "SALDO DO CAIXA" que o operador confere no fechamento (RF-01/RF-05).
+
+        Diferente do ``saldo_movimentacao`` antigo (que somava TODOS os métodos
+        e por isso inflava o caixa com vendas de cartão), este é só dinheiro
+        físico. O total todos-os-métodos continua disponível no payload como
+        ``movimentacao_total`` (auditoria).
+
+        Recebimentos em dinheiro são casados pela chave ``cash_details.name``
+        em ``recebimentos_por_metodo``. FRÁGIL: ``recebimentos_por_metodo`` é
+        keyado por ``x_payment_method_id.name`` (namespace diferente do método
+        de dinheiro do POS). Se o nome não bater (ex.: método POS renomeado),
+        cai em ``0.0`` — conservativo: prefere subestimar a gaveta a inflá-la.
+        O recebimento continua visível na seção RECEBIMENTOS e em
+        ``movimentacao_total``; só a atribuição à gaveta é conservativa.
+
+        Args:
+            cash_details: dict default_cash_details (payment_amount = vendas $).
+            total_sangrias: float retirado em sangrias.
+            total_suprimentos: float entrado em suprimentos (sempre dinheiro).
+            recebimentos_por_metodo: dict nome do método → soma de recebimentos.
+            fundo_caixa: float do fundo de caixa de abertura.
+
+        Returns:
+            dict: ``{entradas, saidas, saldo, vendas_dinheiro, receb_dinheiro}``.
+            Offline-safe (RF-04): função pura, sem RPC.
+        """
+        vendas_dinheiro = cash_details.get('payment_amount', 0.0) if cash_details else 0.0
+        nome_dinheiro = cash_details.get('name', 'Dinheiro') if cash_details else 'Dinheiro'
+        receb_dinheiro = recebimentos_por_metodo.get(nome_dinheiro, 0.0)
+        entradas = (fundo_caixa or 0.0) + vendas_dinheiro + total_suprimentos + receb_dinheiro
+        saidas = total_sangrias
+        return {
+            'entradas': entradas,
+            'saidas': saidas,
+            'saldo': entradas - saidas,
+            'vendas_dinheiro': vendas_dinheiro,
+            'receb_dinheiro': receb_dinheiro,
+        }
 
     def _get_recebimentos(self):
         """Coleta os recebimentos (account.payment inbound) criados pelo

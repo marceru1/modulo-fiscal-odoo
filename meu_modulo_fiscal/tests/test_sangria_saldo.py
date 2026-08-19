@@ -11,6 +11,12 @@ class TestSangriaSaldo(TransactionCase):
 
     O seam de teste é o helper ``_calc_dinheiro_liquido`` (cálculo puro) e o
     contrato de ``get_fechamento_data`` (a chave existe no payload).
+
+    Cobertura adicional (fix SALDO DO CAIXA): ``_calc_saldo_caixa_dinheiro``
+    (gaveta física = fundo + vendas em dinheiro + suprimentos + recebimentos
+    em dinheiro − sangrias, excluindo cartão/PIX/a prazo) e o contrato do
+    payload ``saldo_movimentacao`` (gaveta) + ``movimentacao_total`` (auditoria
+    todos-os-métodos).
     """
 
     def setUp(self):
@@ -78,3 +84,67 @@ class TestSangriaSaldo(TransactionCase):
         dados = self.pos_session.get_fechamento_data()
         self.assertIn('dinheiro_liquido', dados)
         self.assertIsInstance(dados['dinheiro_liquido'], float)
+
+    # ── Caso 6: contrato — saldo_movimentacao (gaveta) + movimentacao_total ─
+    def test_get_fechamento_data_expoe_saldo_e_movimentacao_total(self):
+        """O payload deve ter saldo_movimentacao (gaveta física, só dinheiro)
+        com saldo float, e movimentacao_total (todos os métodos, auditoria)
+        como dict com entradas/saidas/saldo float."""
+        dados = self.pos_session.get_fechamento_data()
+        # Gaveta física
+        self.assertIn('saldo_movimentacao', dados)
+        self.assertIsInstance(dados['saldo_movimentacao']['saldo'], float)
+        # Auditoria todos-os-métodos
+        self.assertIn('movimentacao_total', dados)
+        mov = dados['movimentacao_total']
+        self.assertIsInstance(mov['entradas'], float)
+        self.assertIsInstance(mov['saidas'], float)
+        self.assertIsInstance(mov['saldo'], float)
+
+    # ── Helper _calc_saldo_caixa_dinheiro (gaveta física) ───────────────────
+    # Cenário do bug: vendas em dinheiro 100 + cartão 50 + sangria 30.
+    # O cartão NÃO entra na gaveta → SALDO DO CAIXA = 70, não 120.
+
+    def test_saldo_caixa_exclui_cartao(self):
+        """Cartão/PIX nunca entram na gaveta: 100 dinheiro − 30 sangria = 70."""
+        result = self.pos_session._calc_saldo_caixa_dinheiro(
+            self._cash_details(100.0), 30.0, 0.0, {}, 0.0,
+        )
+        self.assertAlmostEqual(result['saldo'], 70.0, places=2)
+        self.assertAlmostEqual(result['vendas_dinheiro'], 100.0, places=2)
+
+    def test_saldo_caixa_inclui_fundo_suprimentos_receb_dinheiro(self):
+        """fundo 10 + vendas 100 + supr 20 + receb dinheiro 15 − sangria 30 = 115."""
+        result = self.pos_session._calc_saldo_caixa_dinheiro(
+            self._cash_details(100.0), 30.0, 20.0, {'Dinheiro': 15.0}, 10.0,
+        )
+        self.assertAlmostEqual(result['entradas'], 145.0, places=2)
+        self.assertAlmostEqual(result['saidas'], 30.0, places=2)
+        self.assertAlmostEqual(result['saldo'], 115.0, places=2)
+        self.assertAlmostEqual(result['receb_dinheiro'], 15.0, places=2)
+
+    def test_saldo_caixa_recebimento_nome_diferente_fallback_zero(self):
+        """Se o nome do método de dinheiro não bate em recebimentos_por_metodo,
+        o recebimento em dinheiro cai em 0 (conservativo). Documenta a fragilidade
+        do match por nome (DEC: namespaces diferentes)."""
+        cash = {'name': 'Cash', 'payment_amount': 100.0}
+        result = self.pos_session._calc_saldo_caixa_dinheiro(
+            cash, 30.0, 0.0, {'Dinheiro': 15.0}, 0.0,
+        )
+        self.assertAlmostEqual(result['receb_dinheiro'], 0.0, places=2)
+        self.assertAlmostEqual(result['saldo'], 70.0, places=2)
+
+    def test_saldo_caixa_negativo_sangria_maior_que_vendas(self):
+        """Sangria > vendas → gaveta negativa (válida, sem clamp)."""
+        result = self.pos_session._calc_saldo_caixa_dinheiro(
+            self._cash_details(50.0), 80.0, 0.0, {}, 0.0,
+        )
+        self.assertAlmostEqual(result['saldo'], -30.0, places=2)
+
+    def test_saldo_caixa_sem_cash_details(self):
+        """Sem cash_details → vendas_dinheiro 0, saldo = fundo+supr+receb − sangrias."""
+        result = self.pos_session._calc_saldo_caixa_dinheiro(
+            {}, 10.0, 0.0, {}, 0.0,
+        )
+        self.assertAlmostEqual(result['vendas_dinheiro'], 0.0, places=2)
+        self.assertAlmostEqual(result['saldo'], -10.0, places=2)

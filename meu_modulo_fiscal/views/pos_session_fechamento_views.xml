@@ -182,7 +182,7 @@
                             </div>
                         </t>
                         <div class="fechamento-linha-total">
-                            <span>DINHEIRO</span>
+                            <span>DINHEIRO LIQUIDO (V-S)</span>
                             <span class="total-valor"><t t-out="format_currency(data['dinheiro_liquido']).replace('R$', '').strip()"/></span>
                         </div>
                     </div>
@@ -205,12 +205,14 @@
                         </div>
                     </t>
 
-                    <!-- Saldo de movimentação -->
+                    <!-- Saldo do caixa físico (gaveta) — só dinheiro, exclui cartão/PIX/a prazo.
+                         entradas = fundo + vendas em dinheiro + suprimentos + recebimentos em dinheiro;
+                         saidas = sangrias; saldo = dinheiro físico esperado na gaveta. -->
                     <div class="danfe-separador"></div>
-                    <div class="pagamento-titulo">SALDO DE MOVIMENTACAO DO DIA</div>
+                    <div class="pagamento-titulo">SALDO DE DINHEIRO DO DIA</div>
                     <div class="totais-section">
                         <div class="fechamento-linha">
-                            <span>ENTRADAS(F+V+I):</span>
+                            <span>ENTRADAS(F+VD+I+R):</span>
                             <span class="total-valor"><t t-out="format_currency(data['saldo_movimentacao']['entradas']).replace('R$', '').strip()"/></span>
                         </div>
                         <div class="fechamento-linha">
@@ -221,6 +223,25 @@
                     <div class="fechamento-linha-total">
                         <span>SALDO DO CAIXA:</span>
                         <span class="total-valor"><t t-out="format_currency(data['saldo_movimentacao']['saldo']).replace('R$', '').strip()"/></span>
+                    </div>
+
+                    <!-- Movimentação total (todos os métodos — auditoria). NÃO é a gaveta:
+                         inclui cartão/PIX/a prazo. Rótulo sem a palavra "CAIXA". -->
+                    <div class="danfe-separador"></div>
+                    <div class="pagamento-titulo">MOVIMENTACAO TOTAL (TODOS METODOS)</div>
+                    <div class="totais-section">
+                        <div class="fechamento-linha">
+                            <span>ENTRADAS(F+V+I+R):</span>
+                            <span class="total-valor"><t t-out="format_currency(data['movimentacao_total']['entradas']).replace('R$', '').strip()"/></span>
+                        </div>
+                        <div class="fechamento-linha">
+                            <span>SAIDAS(S):</span>
+                            <span class="total-valor"><t t-out="format_currency(data['movimentacao_total']['saidas']).replace('R$', '').strip()"/></span>
+                        </div>
+                    </div>
+                    <div class="fechamento-linha-total">
+                        <span>SALDO DE MOVIMENTACAO:</span>
+                        <span class="total-valor"><t t-out="format_currency(data['movimentacao_total']['saldo']).replace('R$', '').strip()"/></span>
                     </div>
 
                     <!-- Saldo detalhado -->

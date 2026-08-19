@@ -60,13 +60,44 @@ function assertSangriaCondicional(name, source) {
     );
 }
 
+function assertSaldoCaixaEGaveta(name, source) {
+    // O "SALDO DO CAIXA" deve existir (gaveta física) e ser bindado em
+    // saldo_movimentacao.saldo (agora só dinheiro, exclui cartão/PIX).
+    assert(
+        source.includes("SALDO DO CAIXA"),
+        `${name}: deve conter a linha "SALDO DO CAIXA" (gaveta física)`
+    );
+    assert(
+        source.includes("saldo_movimentacao"),
+        `${name}: o SALDO DO CAIXA deve vir de saldo_movimentacao (gaveta física)`
+    );
+}
+
+function assertMovimentacaoTotal(name, source) {
+    // Auditoria todos-os-métodos (cartão/PIX/a prazo incluídos), rótulo sem "CAIXA".
+    assert(
+        source.includes("MOVIMENTACAO TOTAL"),
+        `${name}: deve conter a seção "MOVIMENTACAO TOTAL" (auditoria todos-os-métodos)`
+    );
+    assert(
+        source.includes("movimentacao_total"),
+        `${name}: a seção deve referenciar data.movimentacao_total`
+    );
+    assert(
+        !/SALDO DO CAIXA/.test(source.split("MOVIMENTACAO TOTAL")[1] || ""),
+        `${name}: a seção MOVIMENTACAO TOTAL não deve usar a palavra "CAIXA"`
+    );
+}
+
 // ── Caso 1: popup (FechamentoReceipt) ─────────────────────────────────────
 {
     const source = readTemplate("popup");
     assertHasDinheiroEmCaixa("popup", source);
     assertUsaDinheiroLiquido("popup", source);
     assertSangriaCondicional("popup", source);
-    console.log("✓ Popup (FechamentoReceipt): seção DINHEIRO EM CAIXA com dinheiro_liquido + sangria condicional");
+    assertSaldoCaixaEGaveta("popup", source);
+    assertMovimentacaoTotal("popup", source);
+    console.log("✓ Popup (FechamentoReceipt): DINHEIRO EM CAIXA + SALDO DO CAIXA (gaveta) + MOVIMENTACAO TOTAL (auditoria)");
 }
 
 // ── Caso 2: relatório (FechamentoReport) ──────────────────────────────────
@@ -75,7 +106,9 @@ function assertSangriaCondicional(name, source) {
     assertHasDinheiroEmCaixa("report", source);
     assertUsaDinheiroLiquido("report", source);
     assertSangriaCondicional("report", source);
-    console.log("✓ Relatório (FechamentoReport): seção DINHEIRO EM CAIXA com dinheiro_liquido + sangria condicional");
+    assertSaldoCaixaEGaveta("report", source);
+    assertMovimentacaoTotal("report", source);
+    console.log("✓ Relatório (FechamentoReport): DINHEIRO EM CAIXA + SALDO DO CAIXA (gaveta) + MOVIMENTACAO TOTAL (auditoria)");
 }
 
 // ── Caso 3: consistência popup × relatório (AC-02) ────────────────────────
@@ -88,6 +121,17 @@ function assertSangriaCondicional(name, source) {
         "Popup e relatório devem usar o mesmo campo dinheiro_liquido (AC-02)"
     );
     console.log("✓ Consistência: popup e relatório usam o mesmo campo dinheiro_liquido");
+}
+
+// ── Caso 4: consistência MOVIMENTACAO TOTAL popup × relatório ─────────────
+{
+    const popup = readTemplate("popup");
+    const report = readTemplate("report");
+    assert(
+        popup.includes("movimentacao_total") && report.includes("movimentacao_total"),
+        "Popup e relatório devem usar o mesmo campo movimentacao_total (auditoria)"
+    );
+    console.log("✓ Consistência: popup e relatório usam o mesmo campo movimentacao_total");
 }
 
 console.log("\nTodos os testes passaram ✓");
