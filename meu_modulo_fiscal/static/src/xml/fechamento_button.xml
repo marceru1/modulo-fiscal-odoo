@@ -30,10 +30,10 @@
             props.default_cash_details). Não conflita com fechamento_simplificar.xml
             (que alvo o bloco t-foreach de non_cash com <Input>).
         -->
-        <xpath expr="//div[hasclass('d-flex') and hasclass('w-100') and .//Input[contains(@tModel, 'props.default_cash_details')]]" position="attributes">
+        <xpath expr="//div[contains(@class, 'd-flex') and contains(@class, 'w-100') and .//Input[contains(@tModel, 'props.default_cash_details')]]" position="attributes">
             <attribute name="t-att-class">{'pe-none opacity-50': state.valor_confirmado}</attribute>
         </xpath>
-        <xpath expr="//div[hasclass('d-flex') and hasclass('w-100') and .//Input[contains(@tModel, 'props.default_cash_details')]]" position="after">
+        <xpath expr="//div[contains(@class, 'd-flex') and contains(@class, 'w-100') and .//Input[contains(@tModel, 'props.default_cash_details')]]" position="after">
             <button class="btn btn-secondary w-100 mt-1"
                 t-on-click="confirmValorDinheiro"
                 t-if="!state.valor_confirmado">
