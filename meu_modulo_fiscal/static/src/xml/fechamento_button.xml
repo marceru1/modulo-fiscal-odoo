@@ -2,15 +2,51 @@
 <templates id="template" xml:space="preserve">
 
     <t t-name="meu_modulo.ClosePosPopupFechamento" t-inherit="point_of_sale.ClosePosPopup" t-inherit-mode="extension">
+
+        <!-- Botão "Fechamento" (imprimir relatório custom) após o nativo "Daily Sale".
+             Desabilitado até o operador confirmar o valor do dinheiro (DEC-001/DEC-003). -->
         <xpath expr="//button[@t-on-click='downloadSalesReport']" position="after">
             <button class="button btn btn-secondary"
                 t-att-class="this.ui.isSmall ? 'w-100' : 'btn-lg ms-auto'"
+                t-att-disabled="!state.valor_confirmado"
                 t-on-click="showFechamento"
                 title="Imprimir relatório de fechamento de caixa">
                 Fechamento
                 <i t-if="!this.ui.isSmall" class="fa fa-print" role="img"/>
             </button>
         </xpath>
+
+        <!--
+            lock-dinheiro-pos-impressao: confirmar o valor do dinheiro antes de
+            imprimir/fechar (DEC-001/DEC-003).
+
+            1. Trava o campo de dinheiro quando valor_confirmado é true.
+               O <Input> do Odoo 18 não aceita prop `disabled` (schema de props
+               fechado) — DEC-005: usa pe-none (pointer-events: none) +
+               opacity-50 (visual de disabled) no wrapper do campo.
+            2. Botão "Confirmar Valor" ao lado do campo — some após confirmar.
+
+            Âncora: div flex que contém o <Input> do dinheiro (tModel referencia
+            props.default_cash_details). Não conflita com fechamento_simplificar.xml
+            (que alvo o bloco t-foreach de non_cash com <Input>).
+        -->
+        <xpath expr="//div[hasclass('d-flex') and hasclass('w-100') and .//Input[contains(@tModel, 'props.default_cash_details')]]" position="attributes">
+            <attribute name="t-att-class">{'pe-none opacity-50': state.valor_confirmado}</attribute>
+        </xpath>
+        <xpath expr="//div[hasclass('d-flex') and hasclass('w-100') and .//Input[contains(@tModel, 'props.default_cash_details')]]" position="after">
+            <button class="btn btn-secondary w-100 mt-1"
+                t-on-click="confirmValorDinheiro"
+                t-if="!state.valor_confirmado">
+                Confirmar Valor
+            </button>
+        </xpath>
+
+        <!-- Botão nativo "Close Register": desabilitado até confirmar o valor.
+             Mantém o canConfirm() nativo (todos os counted válidos). -->
+        <xpath expr="//button[@t-on-click='confirm']" position="attributes">
+            <attribute name="t-att-disabled">!state.valor_confirmado || !canConfirm()</attribute>
+        </xpath>
+
     </t>
 
 </templates>

@@ -6,6 +6,22 @@ import { parseFloat } from "@web/views/fields/parsers";
 import { printFallback } from "./receipt_print_helper";
 
 patch(ClosePosPopup.prototype, {
+    // lock-dinheiro-pos-impressao: o operador deve confirmar o valor do
+    // dinheiro antes de imprimir/fechar. State em memória apenas (DEC-002) —
+    // reabrir o popup reseta e exige nova confirmação.
+    // Sem cash_control não há valor de dinheiro a confirmar → já "confirmado",
+    // para não travar os botões de uma sessão sem controle de caixa.
+    getInitialState() {
+        const state = super.getInitialState(...arguments);
+        state.valor_confirmado = !this.pos.config.cash_control;
+        return state;
+    },
+
+    // Trava o valor confirmado. Sem RPC, sem persistência (DEC-002).
+    confirmValorDinheiro() {
+        this.state.valor_confirmado = true;
+    },
+
     async showFechamento() {
         console.log("[FECHAMENTO] Coletando dados do fechamento...");
 
