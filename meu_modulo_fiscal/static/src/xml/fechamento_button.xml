@@ -20,20 +20,18 @@
             lock-dinheiro-pos-impressao: confirmar o valor do dinheiro antes de
             imprimir/fechar (DEC-001/DEC-003).
 
-            1. Trava o campo de dinheiro quando valor_confirmado é true.
-               O <Input> do Odoo 18 não aceita prop `disabled` (schema de props
-               fechado) — DEC-005: usa pe-none (pointer-events: none) +
-               opacity-50 (visual de disabled) no wrapper do campo.
-            2. Botão "Confirmar Valor" ao lado do campo — some após confirmar.
-
-            Âncora: div flex que contém o <Input> do dinheiro (tModel referencia
-            props.default_cash_details). Não conflita com fechamento_simplificar.xml
-            (que alvo o bloco t-foreach de non_cash com <Input>).
+            Âncora: o botão t-on-click="autoFillCashCount" é único no template
+            nativo e está dentro da div que envolve o Input do dinheiro.
+            Usamos o pai desse botão (a div d-flex w-100) como alvo.
         -->
-        <xpath expr="//div[contains(@class, 'd-flex') and contains(@class, 'w-100') and .//Input[contains(@tModel, 'props.default_cash_details')]]" position="attributes">
+
+        <!-- Trava visual no wrapper do Input de dinheiro (pai do botão autoFillCashCount) -->
+        <xpath expr="//button[@t-on-click='autoFillCashCount']/.." position="attributes">
             <attribute name="t-att-class">{'pe-none opacity-50': state.valor_confirmado}</attribute>
         </xpath>
-        <xpath expr="//div[contains(@class, 'd-flex') and contains(@class, 'w-100') and .//Input[contains(@tModel, 'props.default_cash_details')]]" position="after">
+
+        <!-- Botão "Confirmar Valor" após o wrapper do Input -->
+        <xpath expr="//button[@t-on-click='autoFillCashCount']/.." position="after">
             <button class="btn btn-secondary w-100 mt-1"
                 t-on-click="confirmValorDinheiro"
                 t-if="!state.valor_confirmado">
