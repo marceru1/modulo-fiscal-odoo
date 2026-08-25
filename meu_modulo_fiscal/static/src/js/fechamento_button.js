@@ -18,18 +18,10 @@ patch(ClosePosPopup.prototype, {
     },
 
     // Trava o valor confirmado. Sem RPC, sem persistência (DEC-002).
-    // Aplica pe-none + opacity-50 no wrapper do Input de dinheiro via DOM
-    // (o <Input> do Odoo 18 não aceita prop disabled — DEC-005).
+    // A trava visual (pe-none + opacity-50) é aplicada via t-att-class
+    // no template XML (XPath //div[contains(@class, 'mt-1')]).
     confirmValorDinheiro() {
         this.state.valor_confirmado = true;
-        // Encontra o label "Cash Count" e trava a div irmã (wrapper do Input)
-        const label = this.el?.querySelector("label.form-label");
-        if (label && label.textContent.includes("Cash Count")) {
-            const inputWrapper = label.nextElementSibling;
-            if (inputWrapper) {
-                inputWrapper.classList.add("pe-none", "opacity-50");
-            }
-        }
     },
 
     async showFechamento() {

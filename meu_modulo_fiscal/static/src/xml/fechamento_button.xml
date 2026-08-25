@@ -19,18 +19,19 @@
         <!--
             lock-dinheiro-pos-impressao: confirmar o valor do dinheiro.
 
-            Âncora: o label "Cash Count" (único no template nativo, linha 62).
-            O botão "Confirmar Valor" é inserido DEPOIS do label.
-            Aparece entre o label e a div do Input de dinheiro.
-
-            Sem /.. ou following-sibling — XPath simples que só usa
-            contains(text(), ...) que funciona em qualquer browser.
+            Âncora do botão: label "Cash Count" (único no template, funciona).
+            Âncora da trava: div com class "mt-1" (única no template nativo —
+            é a div que envolve o Input do dinheiro). t-att-class adiciona
+            pe-none + opacity-50 quando valor_confirmado é true.
         -->
 
+        <!-- Trava visual no wrapper do Input de dinheiro (div única com mt-1) -->
+        <xpath expr="//div[contains(@class, 'mt-1')]" position="attributes">
+            <attribute name="t-att-class">{'pe-none opacity-50': state.valor_confirmado}</attribute>
+        </xpath>
+
         <!-- Botão "Confirmar Valor" após o label "Cash Count".
-             Some após clicar (t-if). A trava do Input é feita via JS
-             no confirmValorDinheiro() (adiciona pe-none + opacity-50
-             no wrapper do Input — DEC-005). -->
+             Some após clicar (t-if). -->
         <xpath expr="//label[contains(text(), 'Cash Count')]" position="after">
             <button class="btn btn-secondary w-100 mb-2"
                 t-on-click="confirmValorDinheiro"
