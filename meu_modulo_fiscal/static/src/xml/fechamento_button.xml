@@ -27,14 +27,16 @@
             contains(text(), ...) que funciona em qualquer browser.
         -->
 
-        <!-- Botão "Confirmar Valor" após o label "Cash Count" -->
+        <!-- Botão "Confirmar Valor" após o label "Cash Count".
+             Some após clicar (t-if). A trava do Input é feita via JS
+             no confirmValorDinheiro() (adiciona pe-none + opacity-50
+             no wrapper do Input — DEC-005). -->
         <xpath expr="//label[contains(text(), 'Cash Count')]" position="after">
-            <div t-if="!state.valor_confirmado" class="w-100 mb-2">
-                <button class="btn btn-secondary w-100"
-                    t-on-click="confirmValorDinheiro">
-                    Confirmar Valor
-                </button>
-            </div>
+            <button class="btn btn-secondary w-100 mb-2"
+                t-on-click="confirmValorDinheiro"
+                t-if="!state.valor_confirmado">
+                Confirmar Valor
+            </button>
         </xpath>
 
         <!-- Botão nativo "Close Register": desabilitado até confirmar o valor.
