@@ -9,6 +9,7 @@
         'product',
         'point_of_sale',
         'hr',
+        'stock',
     ],
     'data': [
         'data/br.ncm.csv',
@@ -59,6 +60,11 @@
         ],
         'web.assets_web': [
             'meu_modulo_fiscal/static/src/js/user_menu_cleanup.js',
+        ],
+        # impressao-transferencia-interna: print dialog A4 do delivery slip
+        # (stock.picking internal/incoming) em vez de download de PDF.
+        'web.assets_backend': [
+            'meu_modulo_fiscal/static/src/js/picking_print_helper.js',
         ],
     },
     'installable': True,
