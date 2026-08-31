@@ -66,7 +66,8 @@ class PosOrder(models.Model):
             'meu_modulo_fiscal.webhook_timeout'
         )
         try:
-            return float(param) if param is not None and param != '' else 5
+            valor = float(param) if param is not None and param != '' else 5
+            return max(valor, 1)  # mínimo 1s, nunca 0 (requests rejeita timeout <= 0)
         except (ValueError, TypeError):
             return 5
 
