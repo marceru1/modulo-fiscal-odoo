@@ -25,6 +25,7 @@ class ResConfigSettings(models.TransientModel):
     # N10: timeout configurável do webhook (default 5s, valor histórico hardcoded)
     webhook_timeout = fields.Float(
         string='Timeout do Webhook (segundos)',
+        default=5.0,
         config_parameter='meu_modulo_fiscal.webhook_timeout',
         help='Tempo máximo (em segundos) para aguardar resposta do Middleware '
              'ao despachar uma venda via webhook. Default: 5 segundos.',
