@@ -31,7 +31,7 @@ class ResCompany(models.Model):
     # TODO: derivar default de x_uf_codigo se migrar para multi-estado
     x_url_qrcode_homolog = fields.Char(
         string="URL QR Code (Homologação)",
-        default="https://homnfce.sefaz.am.gov.br/nfce/qrcode",
+        default="https://sistemas.sefaz.am.gov.br/nfceweb-hom/consultarNFCe.jsp",
         help="URL Sefaz para consulta QRCode em homologação."
     )
 
