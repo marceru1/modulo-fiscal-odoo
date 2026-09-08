@@ -345,6 +345,10 @@ class PosOrder(models.Model):
                 # TODO: tornar configurável se suportar NF-e (55) no futuro
                 'modelo': '65',
             },
+            # Booleano top-level que indica se a venda exige NFC-e.
+            # Diferente da chave 'fiscal' acima (dados SEFAZ aninhados).
+            # Backward-compat: middleware trata ausência como True.
+            'is_fiscal': bool(self.x_confirmacao_venda),
             'confirmacao_venda': bool(self.x_confirmacao_venda),
             'contingencia': {
                 'ativa': bool(self.x_fiscal_offline),
@@ -359,9 +363,10 @@ class PosOrder(models.Model):
         res = super(PosOrder, self).action_pos_order_paid()
 
         for order in self:
+            # Todas as vendas disparam o webhook (fiscais e não-fiscais).
+            # O middleware decide o fluxo via is_fiscal (backward-compat).
             if not order.x_confirmacao_venda:
-                _logger.info(f'[ODOO -> MIDDLEWARE] Venda {order.pos_reference} finalizada sem NFC-e (não fiscal).')
-                continue
+                _logger.info(f'[ODOO -> MIDDLEWARE] Venda não-fiscal {order.pos_reference} — is_fiscal=False. Webhook será enviado sem emissão de NFC-e.')
 
             try:
                 payload = order._prepare_nfce_payload()
