@@ -653,7 +653,10 @@ class PosSession(models.Model):
         vendas_prazo, total_vendas_prazo = self._get_vendas_prazo(orders)
         sangrias, suprimentos, total_sangrias, total_suprimentos = self._get_sangrias_suprimentos(cash_details)
         recebimentos, total_recebimentos, recebimentos_por_metodo = self._get_recebimentos()
-        saldo_detalhado = self._calc_saldo_detalhado(metodos_pagamento, recebimentos_por_metodo)
+        saldo_detalhado = self._calc_saldo_detalhado(
+            metodos_pagamento, recebimentos_por_metodo,
+            cash_details, total_sangrias,
+        )
 
         # === MOVIMENTAÇÃO TOTAL (todos os métodos — auditoria) ===
         # Soma tudo que entrou/saiu na sessão, independente do meio de pagamento
@@ -859,10 +862,15 @@ class PosSession(models.Model):
         total_recebimentos = sum(r['valor'] for r in recebimentos)
         return recebimentos, total_recebimentos, recebimentos_por_metodo
 
-    def _calc_saldo_detalhado(self, metodos_pagamento, recebimentos_por_metodo=None):
+    def _calc_saldo_detalhado(self, metodos_pagamento, recebimentos_por_metodo=None,
+                              cash_details=None, total_sangrias=0.0):
         """Calcula o saldo detalhado por método de pagamento.
 
         Calculado/Sistema = vendas + recebimentos por método.
+        No método Dinheiro, o calculado é reduzido pelas sangrias
+        (vendas em dinheiro − sangrias = dinheiro_liquido), para que a
+        diferença exibida no SALDO DETALHADO DO CAIXA não mostre a sangria
+        como se fosse falta de dinheiro.
         Informado = 0 (operador preenche na hora — por enquanto 0).
         Diferença = informado - calculado = -calculado (por enquanto).
 
@@ -870,6 +878,8 @@ class PosSession(models.Model):
             metodos_pagamento: lista de dicts com 'nome' e 'valor'.
             recebimentos_por_metodo: dict nome do método → soma dos
                 recebimentos (default {}).
+            cash_details: dict com 'name' do método de dinheiro (default None).
+            total_sangrias: float com total retirado em sangrias (default 0.0).
 
         Returns:
             list[dict]: saldo detalhado por método.
@@ -887,9 +897,15 @@ class PosSession(models.Model):
             n for n in recebimentos_por_metodo if n not in vendas_por_metodo
         ]
 
+        nome_dinheiro = cash_details.get('name', 'Dinheiro') if cash_details else 'Dinheiro'
+        total_sangrias = total_sangrias or 0.0
+
         saldo_detalhado = []
         for nome in nomes:
             calculado = vendas_por_metodo.get(nome, 0.0) + recebimentos_por_metodo.get(nome, 0.0)
+            # No método Dinheiro, desconta as sangrias do valor calculado.
+            if nome == nome_dinheiro and total_sangrias:
+                calculado -= total_sangrias
             saldo_detalhado.append({
                 'nome': nome,
                 'calculado': calculado,
