@@ -10,6 +10,20 @@
 // TODO: eliminar quando o fallback suportar carregar assets externos na
 // window nova (aí a fonte única passa a ser static/src/css/fechamento.css).
 const RECEIPT_CSS = `
+    /* Inconsolata — mesma fonte do cupom do consumidor final (POS).
+       O bundle do POS declara este @font-face em
+       point_of_sale/static/src/scss/pos.scss, mas o fallback abre uma window
+       nova (about:blank) que NÃO herda o bundle: sem esta declaração o browser
+       cai em 'Courier New', que imprime visivelmente mais fina/apagada na
+       térmica. URL absoluta porque about:blank não resolve caminho relativo.
+       Espelhado em static/src/css/fechamento.css (fonte única do CSS). */
+    @font-face {
+        font-family: 'Inconsolata';
+        src: url('/point_of_sale/static/src/fonts/Inconsolata.otf') format('opentype');
+        font-weight: normal;
+        font-style: normal;
+    }
+
     .pos-receipt {
         font-family: 'Inconsolata', 'Courier New', monospace;
         font-size: 12px;
@@ -17,6 +31,9 @@ const RECEIPT_CSS = `
         width: 72mm;
         margin: 0 auto;
         padding: 1mm 3mm;
+        /* Sem isto o browser "otimiza" o preto para a térmica e clareia o texto */
+        -webkit-print-color-adjust: exact;
+        print-color-adjust: exact;
     }
     .danfe-header { text-align: center; margin-bottom: 8px; }
     .emitente-nome { font-weight: bold; font-size: 13px; margin-bottom: 3px; }
@@ -96,6 +113,7 @@ export function printFallback(el, title = "Recibo") {
     win.document.write(`
         <html>
         <head>
+            <meta charset="utf-8">
             <title>${title}</title>
             <style>${RECEIPT_CSS}</style>
         </head>
@@ -104,8 +122,20 @@ export function printFallback(el, title = "Recibo") {
     `);
     win.document.close();
     win.focus();
-    setTimeout(() => {
+    // Espera a fonte estar carregada antes de imprimir: imprimir com a webfont
+    // ainda pendente faz o browser usar Courier New (texto mais fino/apagado
+    // na térmica). Fallback de 1s caso document.fonts não exista.
+    const disparar = () => {
         win.print();
         win.close();
-    }, 250);
+    };
+    const fontsReady = win.document.fonts && win.document.fonts.ready;
+    if (fontsReady) {
+        Promise.race([
+            win.document.fonts.ready,
+            new Promise((r) => setTimeout(r, 1000)),
+        ]).then(() => setTimeout(disparar, 100));
+    } else {
+        setTimeout(disparar, 250);
+    }
 }

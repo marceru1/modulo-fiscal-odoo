@@ -8,10 +8,26 @@
  *
  * Agora este arquivo é a fonte única. Referenciado via <link> nos templates QWeb
  * (server-side) e carregado como asset do POS para o frontend OWL.
- * No JS (fechamento_button.js) a const RECEIPT_CSS ainda é mantida temporariamente
- * porque o fallback de impressão abre uma window nova que não herda os assets do
- * bundle — ver comentário de débito técnico naquele arquivo.
+ * No JS (receipt_print_helper.js) a const RECEIPT_CSS ainda é mantida
+ * temporariamente porque o fallback de impressão abre uma window nova que não
+ * herda os assets do bundle — ver comentário de débito técnico naquele arquivo.
+ * Ao mudar regra de fonte/aqui, espelhar no RECEIPT_CSS.
  */
+
+/*
+ * Inconsolata — mesma fonte do cupom do consumidor final.
+ * O bundle do POS declara este @font-face em pos.scss, mas esta folha também é
+ * carregada via <link> na página standalone do relatório server-side
+ * (/pos/fechamento/<id>), que NÃO tem o bundle: sem a declaração aqui o browser
+ * cai em 'Courier New', que sai visivelmente mais fino/apagado na térmica.
+ * URL absoluta (não relativa) para resolver nos dois contextos.
+ */
+@font-face {
+    font-family: 'Inconsolata';
+    src: url('/point_of_sale/static/src/fonts/Inconsolata.otf') format('opentype');
+    font-weight: normal;
+    font-style: normal;
+}
 
 .pos-receipt {
     font-family: 'Inconsolata', 'Courier New', monospace;
@@ -20,6 +36,9 @@
     width: 72mm;
     margin: 0 auto;
     padding: 1mm 3mm;
+    /* Sem isto o browser "otimiza" o preto para a térmica e clareia o texto */
+    -webkit-print-color-adjust: exact;
+    print-color-adjust: exact;
 }
 .danfe-header { text-align: center; margin-bottom: 8px; }
 .emitente-nome { font-weight: bold; font-size: 13px; margin-bottom: 3px; }
