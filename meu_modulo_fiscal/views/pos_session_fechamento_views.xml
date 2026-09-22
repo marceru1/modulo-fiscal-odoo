@@ -168,25 +168,6 @@
                         </div>
                     </t>
 
-                    <!-- Dinheiro em caixa (vendas em dinheiro − sangrias) — RF-01/RF-03.
-                         Valor líquido vindo do backend (dinheiro_liquido), não o bruto
-                         de metodos_pagamento. Linha de sangria só se total_sangrias > 0.
-                         Espelha a seção do popup (FechamentoReceipt) — AC-02. -->
-                    <div class="danfe-separador"></div>
-                    <div class="pagamento-titulo">DINHEIRO EM CAIXA</div>
-                    <div class="totais-section">
-                        <t t-if="data['total_sangrias'] &gt; 0">
-                            <div class="fechamento-linha">
-                                <span>SANGRIAS(S)</span>
-                                <span class="total-valor">- <t t-out="format_currency(data['total_sangrias']).replace('R$', '').strip()"/></span>
-                            </div>
-                        </t>
-                        <div class="fechamento-linha-total">
-                            <span>DINHEIRO LIQUIDO (V-S)</span>
-                            <span class="total-valor"><t t-out="format_currency(data['dinheiro_liquido']).replace('R$', '').strip()"/></span>
-                        </div>
-                    </div>
-
                     <!-- Entradas (Cash In / Suprimentos) -->
                     <t t-if="data['suprimentos'] and len(data['suprimentos']) &gt; 0">
                         <div class="danfe-separador"></div>
@@ -204,26 +185,6 @@
                             <span class="total-valor"><t t-out="format_currency(data['total_suprimentos']).replace('R$', '').strip()"/></span>
                         </div>
                     </t>
-
-                    <!-- Saldo do caixa físico (gaveta) — só dinheiro, exclui cartão/PIX/a prazo.
-                         entradas = fundo + vendas em dinheiro + suprimentos + recebimentos em dinheiro;
-                         saidas = sangrias; saldo = dinheiro físico esperado na gaveta. -->
-                    <div class="danfe-separador"></div>
-                    <div class="pagamento-titulo">SALDO DE DINHEIRO DO DIA</div>
-                    <div class="totais-section">
-                        <div class="fechamento-linha">
-                            <span>ENTRADAS(F+VD+I+R):</span>
-                            <span class="total-valor"><t t-out="format_currency(data['saldo_movimentacao']['entradas']).replace('R$', '').strip()"/></span>
-                        </div>
-                        <div class="fechamento-linha">
-                            <span>SAIDAS(S):</span>
-                            <span class="total-valor"><t t-out="format_currency(data['saldo_movimentacao']['saidas']).replace('R$', '').strip()"/></span>
-                        </div>
-                    </div>
-                    <div class="fechamento-linha-total">
-                        <span>SALDO DO CAIXA:</span>
-                        <span class="total-valor"><t t-out="format_currency(data['saldo_movimentacao']['saldo']).replace('R$', '').strip()"/></span>
-                    </div>
 
                     <!-- Movimentação total (todos os métodos — auditoria). NÃO é a gaveta:
                          inclui cartão/PIX/a prazo. Rótulo sem a palavra "CAIXA". -->
