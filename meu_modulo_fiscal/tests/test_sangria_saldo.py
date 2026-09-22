@@ -148,3 +148,23 @@ class TestSangriaSaldo(TransactionCase):
         )
         self.assertAlmostEqual(result['vendas_dinheiro'], 0.0, places=2)
         self.assertAlmostEqual(result['saldo'], -10.0, places=2)
+
+    # ── Caso 11: saldo detalhado do dinheiro desconta sangria ────────────────
+    def test_saldo_detalhado_dinheiro_desconta_sangria(self):
+        """Vendas em dinheiro 100 − sangria 30 → calculado do dinheiro = 70."""
+        metodos = [{'nome': 'Dinheiro', 'valor': 100.0}]
+        saldo = self.pos_session._calc_saldo_detalhado(
+            metodos,
+            recebimentos_por_metodo={},
+            cash_details=self._cash_details(100.0),
+            total_sangrias=30.0,
+        )
+        self.assertEqual(len(saldo), 1)
+        self.assertAlmostEqual(saldo[0]['calculado'], 70.0, places=2)
+        self.assertAlmostEqual(saldo[0]['diferenca'], -70.0, places=2)
+
+    def test_saldo_detalhado_dinheiro_sem_sangria(self):
+        """Sem sangria → calculado do dinheiro continua bruto de vendas."""
+        metodos = [{'nome': 'Dinheiro', 'valor': 100.0}]
+        saldo = self.pos_session._calc_saldo_detalhado(metodos)
+        self.assertAlmostEqual(saldo[0]['calculado'], 100.0, places=2)
