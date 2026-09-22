@@ -140,24 +140,6 @@
                 </div>
             </t>
 
-            <!-- Dinheiro em caixa (vendas em dinheiro − sangrias) — RF-01/RF-03.
-                 Valor líquido vindo do backend (dinheiro_liquido), não o bruto
-                 de metodos_pagamento. Linha de sangria só se total_sangrias > 0. -->
-            <div class="danfe-separador"></div>
-            <div class="pagamento-titulo">DINHEIRO EM CAIXA</div>
-            <div class="totais-section">
-                <t t-if="data.total_sangrias > 0">
-                    <div class="fechamento-linha">
-                        <span>SANGRIAS(S)</span>
-                        <span class="total-valor">- <t t-esc="formatCurrency(data.total_sangrias).replace('R$', '').trim()"/></span>
-                    </div>
-                </t>
-                <div class="fechamento-linha-total">
-                    <span>DINHEIRO LIQUIDO (V-S)</span>
-                    <span class="total-valor"><t t-esc="formatCurrency(data.dinheiro_liquido).replace('R$', '').trim()"/></span>
-                </div>
-            </div>
-
             <!-- Entradas (Cash In) -->
             <t t-if="data.suprimentos.length > 0">
                 <div class="danfe-separador"></div>
@@ -175,26 +157,6 @@
                     <span class="total-valor"><t t-esc="formatCurrency(data.total_suprimentos).replace('R$', '').trim()"/></span>
                 </div>
             </t>
-
-            <!-- Saldo do caixa físico (gaveta) — só dinheiro, exclui cartão/PIX/a prazo.
-                 entradas = fundo + vendas em dinheiro + suprimentos + recebimentos em dinheiro;
-                 saidas = sangrias; saldo = dinheiro físico esperado na gaveta. -->
-            <div class="danfe-separador"></div>
-            <div class="pagamento-titulo">SALDO DE DINHEIRO DO DIA</div>
-            <div class="totais-section">
-                <div class="fechamento-linha">
-                    <span>ENTRADAS(F+VD+I+R):</span>
-                    <span class="total-valor"><t t-esc="formatCurrency(data.saldo_movimentacao.entradas).replace('R$', '').trim()"/></span>
-                </div>
-                <div class="fechamento-linha">
-                    <span>SAIDAS(S):</span>
-                    <span class="total-valor"><t t-esc="formatCurrency(data.saldo_movimentacao.saidas).replace('R$', '').trim()"/></span>
-                </div>
-            </div>
-            <div class="fechamento-linha-total">
-                <span>SALDO DO CAIXA:</span>
-                <span class="total-valor"><t t-esc="formatCurrency(data.saldo_movimentacao.saldo).replace('R$', '').trim()"/></span>
-            </div>
 
             <!-- Movimentação total (todos os métodos — auditoria). NÃO é a gaveta:
                  inclui cartão/PIX/a prazo. Rótulo sem a palavra "CAIXA". -->
@@ -219,10 +181,14 @@
             <div class="danfe-separador"></div>
             <div class="pagamento-titulo">SALDO DETALHADO DO CAIXA</div>
             <t t-foreach="data.saldo_detalhado" t-as="saldo" t-key="saldo.nome">
+                <!-- Na linha do dinheiro, o valor calculado no saldo detalhado
+                     deve ser vendas em dinheiro − sangrias (dinheiro_liquido). -->
+                <t t-set="calculado" t-value="saldo.nome === 'Dinheiro' ? data.dinheiro_liquido : saldo.calculado"/>
+                <t t-set="diferenca" t-value="saldo.informado - calculado"/>
                 <div class="totais-section">
                     <div class="fechamento-linha">
                         <span><t t-esc="saldo.nome"/></span>
-                        <span class="total-valor"><t t-esc="formatCurrency(saldo.calculado).replace('R$', '').trim()"/></span>
+                        <span class="total-valor"><t t-esc="formatCurrency(calculado).replace('R$', '').trim()"/></span>
                     </div>
                     <div class="fechamento-linha">
                         <span>INFORMADO</span>
@@ -230,7 +196,7 @@
                     </div>
                     <div class="fechamento-linha">
                         <span>DIFERENCA</span>
-                        <span class="total-valor"><t t-esc="formatCurrency(saldo.diferenca).replace('R$', '').trim()"/></span>
+                        <span class="total-valor"><t t-esc="formatCurrency(diferenca).replace('R$', '').trim()"/></span>
                     </div>
                 </div>
             </t>
