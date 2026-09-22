@@ -63,9 +63,14 @@ class FechamentoReportController(http.Controller):
         )
         # O template QWeb é XML válido (sem DOCTYPE); prependemos o DOCTYPE
         # para gerar uma página HTML5 completa e válida para impressão.
+        # str() antes de concatenar é obrigatório: _render() devolve
+        # markupsafe.Markup, e 'str + Markup' faz o Markup ESCAPAR o lado
+        # esquerdo — o DOCTYPE saía como '&lt;!DOCTYPE html&gt;' e era impresso
+        # literalmente no topo do cupom. str() desembrulha o Markup sem
+        # escapar o conteúdo já renderizado (que é confiável).
         if isinstance(html, bytes):
             html = html.decode('utf-8')
-        html = '<!DOCTYPE html>\n' + html
+        html = '<!DOCTYPE html>\n' + str(html)
         return request.make_response(html.encode('utf-8'), headers=[
             ('Content-Type', 'text/html; charset=utf-8'),
         ])
