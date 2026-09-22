@@ -181,10 +181,14 @@
             <div class="danfe-separador"></div>
             <div class="pagamento-titulo">SALDO DETALHADO DO CAIXA</div>
             <t t-foreach="data.saldo_detalhado" t-as="saldo" t-key="saldo.nome">
+                <!-- Na linha do dinheiro, o valor calculado no saldo detalhado
+                     deve ser vendas em dinheiro − sangrias (dinheiro_liquido). -->
+                <t t-set="calculado" t-value="saldo.nome === 'Dinheiro' ? data.dinheiro_liquido : saldo.calculado"/>
+                <t t-set="diferenca" t-value="saldo.informado - calculado"/>
                 <div class="totais-section">
                     <div class="fechamento-linha">
                         <span><t t-esc="saldo.nome"/></span>
-                        <span class="total-valor"><t t-esc="formatCurrency(saldo.calculado).replace('R$', '').trim()"/></span>
+                        <span class="total-valor"><t t-esc="formatCurrency(calculado).replace('R$', '').trim()"/></span>
                     </div>
                     <div class="fechamento-linha">
                         <span>INFORMADO</span>
@@ -192,7 +196,7 @@
                     </div>
                     <div class="fechamento-linha">
                         <span>DIFERENCA</span>
-                        <span class="total-valor"><t t-esc="formatCurrency(saldo.diferenca).replace('R$', '').trim()"/></span>
+                        <span class="total-valor"><t t-esc="formatCurrency(diferenca).replace('R$', '').trim()"/></span>
                     </div>
                 </div>
             </t>

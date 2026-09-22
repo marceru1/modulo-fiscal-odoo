@@ -95,6 +95,22 @@ function assertSaldoDetalhadoDoCaixa(name, source) {
     );
 }
 
+function assertDinheiroUsaDinheiroLiquidoNoSaldoDetalhado(name, source) {
+    const idx = source.indexOf("SALDO DETALHADO DO CAIXA");
+    assert(idx !== -1, `${name}: seção SALDO DETALHADO DO CAIXA deve existir`);
+    const bloco = source.slice(idx);
+    assert(
+        bloco.includes("dinheiro_liquido"),
+        `${name}: a linha do dinheiro no saldo detalhado deve usar data.dinheiro_liquido (vendas em dinheiro − sangrias)`
+    );
+    const condicionalPopup = /saldo\.nome === ['"]Dinheiro['"]/.test(bloco);
+    const condicionalReport = /saldo\[['"]nome['"]\] == ['"]Dinheiro['"]/.test(bloco);
+    assert(
+        condicionalPopup || condicionalReport,
+        `${name}: deve identificar o método Dinheiro no saldo detalhado para aplicar dinheiro_liquido`
+    );
+}
+
 function assertAssinatura(name, source) {
     assert(
         source.includes("ASSINATURA"),
@@ -110,6 +126,7 @@ function assertAssinatura(name, source) {
     assertSangriasPropriaCondicional("popup", source);
     assertMovimentacaoTotal("popup", source);
     assertSaldoDetalhadoDoCaixa("popup", source);
+    assertDinheiroUsaDinheiroLiquidoNoSaldoDetalhado("popup", source);
     assertAssinatura("popup", source);
     console.log("✓ Popup (FechamentoReceipt): seções removidas + SANGRIAS(S) + MOVIMENTACAO TOTAL + SALDO DETALHADO + ASSINATURA");
 }
@@ -122,6 +139,7 @@ function assertAssinatura(name, source) {
     assertSangriasPropriaCondicional("report", source);
     assertMovimentacaoTotal("report", source);
     assertSaldoDetalhadoDoCaixa("report", source);
+    assertDinheiroUsaDinheiroLiquidoNoSaldoDetalhado("report", source);
     assertAssinatura("report", source);
     console.log("✓ Relatório (FechamentoReport): seções removidas + SANGRIAS(S) + MOVIMENTACAO TOTAL + SALDO DETALHADO + ASSINATURA");
 }
@@ -138,7 +156,11 @@ function assertAssinatura(name, source) {
         popup.includes("SALDO DETALHADO DO CAIXA") && report.includes("SALDO DETALHADO DO CAIXA"),
         "Popup e relatório devem manter a seção SALDO DETALHADO DO CAIXA"
     );
-    console.log("✓ Consistência: popup e relatório mantêm MOVIMENTACAO TOTAL e SALDO DETALHADO DO CAIXA");
+    assert(
+        popup.includes("dinheiro_liquido") && report.includes("dinheiro_liquido"),
+        "Popup e relatório devem usar data.dinheiro_liquido na linha do dinheiro do saldo detalhado"
+    );
+    console.log("✓ Consistência: popup e relatório mantêm MOVIMENTACAO TOTAL e SALDO DETALHADO DO CAIXA (dinheiro_liquido no Dinheiro)");
 }
 
 console.log("\nTodos os testes passaram ✓");
