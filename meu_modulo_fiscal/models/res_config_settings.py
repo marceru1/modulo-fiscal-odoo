@@ -3,11 +3,6 @@ from odoo import fields, models
 class ResConfigSettings(models.TransientModel):
     _inherit = 'res.config.settings'
 
-    pos_x_fiscal_payment_method_ids = fields.Many2many(
-        related='pos_config_id.x_fiscal_payment_method_ids',
-        readonly=False,
-    )
-
     # I7: parâmetros do middleware lidos em runtime via ir.config_parameter.
     # Substituem o cache estático de os.environ do pos_order.py.
     middleware_url = fields.Char(
@@ -25,8 +20,8 @@ class ResConfigSettings(models.TransientModel):
     # N10: timeout configurável do webhook (default 5s, valor histórico hardcoded)
     webhook_timeout = fields.Float(
         string='Timeout do Webhook (segundos)',
-        default=5.0,
         config_parameter='meu_modulo_fiscal.webhook_timeout',
+        default=5.0,
         help='Tempo máximo (em segundos) para aguardar resposta do Middleware '
              'ao despachar uma venda via webhook. Default: 5 segundos.',
     )

@@ -1,9 +1,11 @@
 /** @odoo-module */
 import { useService } from "@web/core/utils/hooks";
+import { makeAwaitable } from "@point_of_sale/app/store/make_awaitable_dialog";
+import { SelectionPopup } from "@point_of_sale/app/utils/input_popups/selection_popup";
+import { TextInputPopup } from "@point_of_sale/app/utils/input_popups/text_input_popup";
 import { _t } from "@web/core/l10n/translation";
 import { PaymentScreen } from "@point_of_sale/app/screens/payment_screen/payment_screen";
 import { patch } from "@web/core/utils/patch";
-// import { TextInputPopup } from "@point_of_sale/app/utils/input_popups/text_input_popup";  // REMOVIDO: Email dialog removido do fluxo PDV
 import { emitirContingencia } from "./fiscal_contingencia";
 
 patch(PaymentScreen.prototype, {
@@ -104,48 +106,54 @@ patch(PaymentScreen.prototype, {
     },
 
     async validateOrder(isForceValidate) {
-        console.log("Validando venda... Verificando formas de pagamento fiscais.");
+        console.log("Validando venda... Perguntando ao operador se emite NFC-e.");
 
         const order = this.pos.get_order();
-        
-        // IDs de formas de pagamento configuradas como fiscais para este caixa.
-        const fiscalMethods = this.pos.session._fiscal_payment_method_ids;
-        let hasFiscalPayment;
 
-        if (!fiscalMethods || fiscalMethods.length === 0) {
-            // Nenhuma checkbox configurada: não emite NFC-e
-            console.log("⚠️ [FISCAL] Nenhuma forma de pagamento fiscal detectada/marcada nas configurações. Pulando NFC-e.");
-            hasFiscalPayment = false;
+        // ============================================
+        // DECISÃO PELO OPERADOR (popup de confirmação)
+        // ============================================
+        const confirmed = await makeAwaitable(this.dialog, SelectionPopup, {
+            title: _t("Deseja confirmar a venda?"),
+            list: [
+                { id: 1, label: _t("Sim"), item: true },
+                { id: 0, label: _t("Não"), item: false },
+            ],
+        });
+
+        // Se o operador fechar o popup (ESC/clique fora), makeAwaitable resolve
+        // com undefined. Tratamos como recusa: finaliza a venda direto no recibo,
+        // sem NFC-e (mesmo comportamento de clicar "Não").
+        const emitirNfce = confirmed === true;
+        order.x_confirmacao_venda = emitirNfce;
+
+        if (confirmed === undefined) {
+            console.log("⏩ Popup fechado (ESC/clique fora) — venda NÃO FISCAL, pulando NFC-e.");
+        } else if (emitirNfce) {
+            console.log("✅ Operador confirmou — NFC-e será emitida.");
         } else {
-            hasFiscalPayment = false;
-
-            const payArray = order.payment_ids || [];
-
-            for (const line of payArray) {
-                const methodId = line.payment_method_id?.id;
-                if (methodId && fiscalMethods.includes(methodId)) {
-                    hasFiscalPayment = true;
-                    break;
-                }
-            }
+            console.log("⏩ Operador recusou — venda NÃO FISCAL, pulando NFC-e.");
         }
 
         // ============================================
-        // DECISÃO AUTOMÁTICA (baseada nas checkboxes)
+        // CPF NA NOTA (obrigatório quando emite NFC-e)
         // ============================================
-        order.x_confirmacao_venda = hasFiscalPayment;
-
-        if (hasFiscalPayment) {
-            console.log("✅ Venda FISCAL detectada — NFC-e será emitida.");
-        } else {
-            console.log("⏩ Venda NÃO FISCAL — pulando emissão de NFC-e.");
+        if (emitirNfce) {
+            const cpf = await makeAwaitable(this.dialog, TextInputPopup, {
+                title: _t("Informe o CPF do cliente"),
+                placeholder: "Digite apenas números",
+                startingValue: order.x_cpf_nota || "",
+                rows: 1,
+            });
+            const cpfLimpo = (cpf || "").replace(/\D/g, "");
+            order.x_cpf_nota = cpfLimpo;
         }
 
 
         // ============================================
         // CONTINGÊNCIA IMEDIATA (Offline)
         // ============================================
-        if (hasFiscalPayment && !navigator.onLine) {
+        if (emitirNfce && !navigator.onLine) {
             console.log("Detectado modo offline! Emitindo em contingência.");
             const seedFromSession = this.pos.session._ultimo_numero_contingencia || 0;
             const dados = await emitirContingencia(order, this.pos.company, this.pos.config.id, seedFromSession, this.env.services.orm);
