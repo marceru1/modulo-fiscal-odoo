@@ -7,9 +7,6 @@
         <field name="arch" type="xml">
             <xpath expr="//block[@id='pos_payment_section']" position="after">
                 <block title="Configuração Fiscal NFC-e" id="pos_fiscal_test_section">
-                    <setting string="Formas de Pagamento Fiscais" help="Selecione as formas de pagamento que devem disparar a emissão automática de NFC-e via Middleware.">
-                        <field name="pos_x_fiscal_payment_method_ids" widget="many2many_checkboxes" domain="[('id', 'in', pos_payment_method_ids)]" readonly="pos_has_active_session"/>
-                    </setting>
                     <!-- I7: parâmetros do middleware migrados de os.environ para ir.config_parameter -->
                     <setting string="URL do Middleware" id="middleware_url_setting" help="URL base do Middleware Laravel (Focus NFe). Lida em runtime via Configuração Técnica — não exige restart do Odoo.">
                         <field name="middleware_url"/>
