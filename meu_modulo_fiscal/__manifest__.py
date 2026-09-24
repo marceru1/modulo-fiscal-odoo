@@ -43,6 +43,10 @@
             'meu_modulo_fiscal/static/src/xml/desconto_button.xml',
             'meu_modulo_fiscal/static/src/js/desconto_popup.js',
             'meu_modulo_fiscal/static/src/js/print_fix.js',
+            # validacao-cpf-popup: popup de CPF com validação client-side (bloqueia
+            # Apply/ENTER com CPF inválido — evita rejeição da SEFAZ via Focus NFe)
+            'meu_modulo_fiscal/static/src/js/cpf_input_popup.js',
+            'meu_modulo_fiscal/static/src/xml/cpf_input_popup.xml',
             # I3: helper compartilhado de impressão térmica (fallback window.print)
             'meu_modulo_fiscal/static/src/js/receipt_print_helper.js',
             # recibo-sangria-impresso: template antes do patch (patch usa renderToElement)

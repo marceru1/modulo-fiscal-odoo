@@ -1,0 +1,34 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<templates id="template" xml:space="preserve">
+
+    <!--
+        Popup de CPF com validação client-side (venda de consumidor final permitida
+        em branco). Bloqueia Apply/ENTER com CPF inválido — evita rejeição da SEFAZ
+        via Focus NFe ("CPF do destinatario invalido").
+    -->
+    <t t-name="meu_modulo_fiscal.CpfInputPopup">
+        <Dialog title="props.title">
+            <input
+                type="text"
+                inputmode="numeric"
+                class="form-control form-control-lg mx-auto"
+                t-model="state.inputValue"
+                t-ref="input"
+                t-att-placeholder="props.placeholder"
+                t-on-keydown="onKeydown"
+                t-on-input="onInput"
+                t-att-class="{ 'is-invalid': state.erro }"
+            />
+            <div t-if="state.erro" class="text-danger mt-2 text-center" t-esc="state.erro"/>
+            <t t-set-slot="footer">
+                <button
+                    class="btn btn-primary btn-lg lh-lg o-default-button"
+                    t-on-click="confirm"
+                    t-att-disabled="confirmDisabled"
+                >Confirmar</button>
+                <button class="btn btn-secondary btn-lg lh-lg o-default-button" t-on-click="close">Cancelar</button>
+            </t>
+        </Dialog>
+    </t>
+
+</templates>
