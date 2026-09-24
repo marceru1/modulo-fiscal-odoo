@@ -1,8 +1,7 @@
 /** @odoo-module */
-import { PaymentScreen } from "@point_of_sale/app/screens/payment_screen/payment_screen";
 import { patch } from "@web/core/utils/patch";
 import { useService } from "@web/core/utils/hooks";
-import { TextInputPopup } from "@point_of_sale/app/utils/input_popups/text_input_popup";
+import { CpfInputPopup } from "./cpf_input_popup";
 
 patch(PaymentScreen.prototype, {
     
@@ -16,12 +15,9 @@ patch(PaymentScreen.prototype, {
      * Invoca um Modal (TextInputPopup) nativo do Odoo para capturar inputs rápidos.
      */
     async clickCpfButton() {
-        this.dialog.add(TextInputPopup, {
+        this.dialog.add(CpfInputPopup, {
             title: "Informe o CPF",
             placeholder: "Digite apenas números",
-            startingValue: "",
-            rows: 1,
-
             getPayload: (cpf) => {
                 // Remove pontuações ou traços indesejados antes de mandar pro Odoo Python
                 const cpf_clean = cpf.replace(/\D/g, "");

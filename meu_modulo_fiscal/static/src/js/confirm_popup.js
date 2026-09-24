@@ -2,7 +2,7 @@
 import { useService } from "@web/core/utils/hooks";
 import { makeAwaitable } from "@point_of_sale/app/store/make_awaitable_dialog";
 import { SelectionPopup } from "@point_of_sale/app/utils/input_popups/selection_popup";
-import { TextInputPopup } from "@point_of_sale/app/utils/input_popups/text_input_popup";
+import { CpfInputPopup } from "./cpf_input_popup";
 import { _t } from "@web/core/l10n/translation";
 import { PaymentScreen } from "@point_of_sale/app/screens/payment_screen/payment_screen";
 import { patch } from "@web/core/utils/patch";
@@ -139,11 +139,10 @@ patch(PaymentScreen.prototype, {
         // CPF NA NOTA (obrigatório quando emite NFC-e)
         // ============================================
         if (emitirNfce) {
-            const cpf = await makeAwaitable(this.dialog, TextInputPopup, {
+            const cpf = await makeAwaitable(this.dialog, CpfInputPopup, {
                 title: _t("Informe o CPF do cliente"),
                 placeholder: "Digite apenas números",
                 startingValue: order.x_cpf_nota || "",
-                rows: 1,
             });
             const cpfLimpo = (cpf || "").replace(/\D/g, "");
             order.x_cpf_nota = cpfLimpo;
