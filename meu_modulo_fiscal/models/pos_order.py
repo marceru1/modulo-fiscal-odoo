@@ -412,15 +412,6 @@ class PosConfig(models.Model):
     _inherit = 'pos.config'
 
 
-    x_fiscal_payment_method_ids = fields.Many2many(
-        'pos.payment.method',
-        'pos_config_fiscal_payment_rel',
-        'config_id',
-        'payment_method_id',
-        string='Formas de pagamento fiscais',
-        help='Formas de pagamento que vao disparar emissao de nfce'
-    )
-
     x_contingencia_ultimo_numero = fields.Integer(
         string='Último Nº Contingência',
         default=0,
@@ -577,10 +568,6 @@ class PosSession(models.Model):
             '[CONTINGENCIA-SEED] Caixa ID=%d | Série=%s | HWM=%d | Scan=%d | Seed final=%d',
             config.id, serie_contingencia, hwm, ultimo_do_scan, ultimo_numero
         )
-
-        for session in result['data']:
-            if session['id'] == self.id:
-                session['_fiscal_payment_method_ids'] = self.config_id.x_fiscal_payment_method_ids.ids
 
         return result
 
