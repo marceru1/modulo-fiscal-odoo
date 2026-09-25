@@ -11,6 +11,7 @@
         <xpath expr="//img[hasclass('pos-logo')]" position="attributes">
             <attribute name="src">/meu_modulo_fiscal/static/src/img/logo_lojas20.png</attribute>
             <attribute name="alt">Lojas 20+</attribute>
+            <attribute name="height">56</attribute>
         </xpath>
     </t>
 
