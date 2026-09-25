@@ -52,7 +52,11 @@ registry.category("ir.actions.report handlers").add(
         }
         const ids = action.context?.active_ids || [];
         if (!ids.length) {
-            return; // sem registros — cai no handler default
+            // Sem picking salvo: nosso handler pula (não há o que imprimir).
+            // Se o core seguir com o download default sem docids (ex.: URL
+            // /odoo/action-308/new), ele mesmo estoura lxml ParserError
+            // "Document is empty" — bug do core, fora do nosso escopo.
+            return;
         }
         // D2: só intercepta internal/incoming. RPC para ler picking_type_code.
         let records;

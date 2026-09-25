@@ -1,10 +1,30 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <templates id="template" xml:space="preserve">
 
+    <!--
+        Sobrescreve a row nativa [Cliente | Invoice] da PaymentScreenButtons.
+
+        O Odoo original usa flex-sm-row com Customer (w-100 w-md-50) e Invoice
+        (w-100 w-md-50). Escondemos Invoice via payment_buttons_cleanup.xml e
+        queremos Cliente/Acréscimo/Desconto lado a lado com tamanhos iguais.
+        Como a estrutura original não prevê três botões, substituímos a div
+        interna por uma grid consistente. O node substituído é apenas a row de
+        botões fixos (não a .payment-buttons), minimizando risco de quebrar
+        outros módulos.
+    -->
     <t t-inherit="point_of_sale.PaymentScreenButtons" t-inherit-mode="extension">
-        <xpath expr="//button[contains(@class, 'partner-button')]" position="after">
-            <div class="d-flex flex-row gap-2 w-100 mt-1" name="acrescimo_desconto_row">
-                <button class="button btn btn-light btn-lg d-flex justify-content-between align-items-baseline flex-fill lh-lg"
+        <xpath expr="//div[contains(@class, 'payment-buttons')]/div[contains(@class, 'flex-sm-row')]" position="replace">
+            <div class="d-grid payment-buttons-main-row gap-2 w-100" name="acrescimo_desconto_row">
+                <button class="button partner-button btn btn-light btn-lg lh-lg text-truncate"
+                    t-att-class="{ 'highlight text-action': currentOrder.get_partner() }"
+                    t-on-click="() => this.pos.selectPartner()">
+                    <i class="fa fa-user me-2" role="img" title="Customer" />
+                    <span class="partner-name">
+                        <t t-if="currentOrder.get_partner()" t-esc="currentOrder.get_partner().name"/>
+                        <t t-else="">Cliente</t>
+                    </span>
+                </button>
+                <button class="button btn btn-light btn-lg d-flex justify-content-between align-items-baseline lh-lg"
                     t-on-click="clickAcrescimoButton">
                     <span><i class="fa fa-plus-circle me-2" />Acréscimo</span>
                     <t t-if="currentOrder.x_amount_other_value">
