@@ -134,6 +134,21 @@ Editar o campo `status` no frontmatter do `.md`:
 - Review passou → `testing`
 - Mergeiado em dev → `done`
 
+### Documentação do projeto (Obsidian vault)
+
+Vault: `/Users/marceloC/Library/Mobile Documents/iCloud~md~obsidian/Documents/brain`
+
+- **Mapa do módulo (comece por aqui):** `01_Projects/Odoo 18/01 - Odoo ERP/Odoo 18 - Mapa do Modulo.md`
+- **Home do projeto:** `01_Projects/Odoo 18/Odoo 18 - Home.md`
+- **Wiki:** `wiki/entities/odoo-18.md` · `wiki/entities/middleware-nfc-e.md` · `wiki/entities/vps-inventario-2026-09-24.md`
+
+**Regras da fronteira:**
+
+- O vault é conhecimento durável (arquitetura, decisões, mapas). Spec/tickets/code-reports ficam no `.agents/` deste repo — nunca espelhar handoff/reports no vault.
+- O agente de coding NÃO escreve no vault. Quem fecha o ciclo (handoff → vault) é o Hermes, no fim da task.
+- Antes de propor código novo: ler o Mapa do Módulo e conferir o que já existe (reuso).
+- Segredos nunca no vault nem nos relatórios.
+
 ### Pre-grill (antes de abrir o agy)
 
 O Hermes faz 3 perguntas rapidas pra montar o prompt com contexto maximo:
