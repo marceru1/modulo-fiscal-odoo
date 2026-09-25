@@ -32,6 +32,7 @@ export class CpfInputPopup extends Component {
         this.state = useState({
             inputValue: this.props.startingValue || "",
             erro: "",
+            confirmado: false,
         });
         this.inputRef = useRef("input");
         onMounted(this.onMounted);
@@ -48,10 +49,29 @@ export class CpfInputPopup extends Component {
         return this.state.inputValue.trim() === "" || validarCpf(this.cpfLimpo);
     }
     get confirmDisabled() {
-        return !this.cpfValido;
+        return !this.cpfValido || this.state.confirmado;
+    }
+    get feedback() {
+        const limpo = this.cpfLimpo;
+        if (limpo.length === 0) return ""; // consumidor final, sem identificação
+        if (limpo.length < 11) {
+            return {
+                type: "info",
+                msg: `Faltam ${11 - limpo.length} dígito(s)...`,
+            };
+        }
+        if (validarCpf(limpo)) {
+            return { type: "ok", msg: "CPF válido" };
+        }
+        return { type: "erro", msg: "CPF inválido (confira os números)" };
     }
 
     onInput() {
+        // Máscara visual XXX.XXX.XXX-XX (só dígitos, cap em 11).
+        const formatado = formatarCpf(this.state.inputValue);
+        if (formatado !== this.state.inputValue) {
+            this.state.inputValue = formatado;
+        }
         // Mensagem some assim que o operador corrige o valor.
         if (this.state.erro && this.cpfValido) {
             this.state.erro = "";
@@ -73,7 +93,14 @@ export class CpfInputPopup extends Component {
 
     confirm() {
         if (this.confirmDisabled) return;
+        this.state.confirmado = true; // trava duplo-clique / ENTER repetido
         this.props.getPayload(this.state.inputValue);
+        this.props.close();
+    }
+
+    recusarCpf() {
+        this.state.confirmado = true;
+        this.props.getPayload(""); // consumidor final, sem CPF na nota
         this.props.close();
     }
 
@@ -109,4 +136,23 @@ export function validarCpf(cpf) {
     resto = (soma * 10) % 11;
     if (resto === 10) resto = 0;
     return resto === parseInt(cpf.charAt(10), 10);
+}
+
+/**
+ * Máscara progressiva XXX.XXX.XXX-XX enquanto o operador digita.
+ * Filtra não-dígitos e trava em 11 (o CPF não cresce além disso).
+ * Retorna "" para null/undefined.
+ */
+export function formatarCpf(valor) {
+    if (!valor) return "";
+    const digitos = String(valor).replace(/\D/g, "").slice(0, 11);
+    let out = digitos;
+    if (digitos.length > 9) {
+        out = `${digitos.slice(0, 3)}.${digitos.slice(3, 6)}.${digitos.slice(6, 9)}-${digitos.slice(9)}`;
+    } else if (digitos.length > 6) {
+        out = `${digitos.slice(0, 3)}.${digitos.slice(3, 6)}.${digitos.slice(6)}`;
+    } else if (digitos.length > 3) {
+        out = `${digitos.slice(0, 3)}.${digitos.slice(3)}`;
+    }
+    return out;
 }
