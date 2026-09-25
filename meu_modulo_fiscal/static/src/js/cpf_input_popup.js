@@ -66,12 +66,15 @@ export class CpfInputPopup extends Component {
         return { type: "erro", msg: "CPF inválido (confira os números)" };
     }
 
-    onInput() {
+    onInput(ev) {
         // Máscara visual XXX.XXX.XXX-XX (só dígitos, cap em 11).
-        const formatado = formatarCpf(this.state.inputValue);
-        if (formatado !== this.state.inputValue) {
-            this.state.inputValue = formatado;
+        // Feito manualmente (sem t-model) pra não depender da ordem dos
+        // listeners do Owl e sincronizar o DOM na hora.
+        const formatado = formatarCpf(ev.target.value);
+        if (formatado !== ev.target.value) {
+            ev.target.value = formatado;
         }
+        this.state.inputValue = formatado;
         // Mensagem some assim que o operador corrige o valor.
         if (this.state.erro && this.cpfValido) {
             this.state.erro = "";
