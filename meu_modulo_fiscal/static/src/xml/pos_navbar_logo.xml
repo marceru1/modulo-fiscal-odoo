@@ -1,0 +1,17 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<templates id="template" xml:space="preserve">
+
+    <!-- Troca a logo do Odoo pela do Grupo 20+ na navbar do POS.
+         Source-driven: o img é hardcoded em
+         addons/point_of_sale/static/src/app/navbar/navbar.xml:9-11
+         (template point_of_sale.Navbar). position="attributes" preserva o
+         t-on-click de debug e o resto do DOM — replace quebraria.
+         Mesmo padrão de herança já usado em recebimento_button.xml. -->
+    <t t-name="meu_modulo.PosNavbarLogo" t-inherit="point_of_sale.Navbar" t-inherit-mode="extension">
+        <xpath expr="//img[hasclass('pos-logo')]" position="attributes">
+            <attribute name="src">/meu_modulo_fiscal/static/src/img/logo_lojas20.png</attribute>
+            <attribute name="alt">Lojas 20+</attribute>
+        </xpath>
+    </t>
+
+</templates>
