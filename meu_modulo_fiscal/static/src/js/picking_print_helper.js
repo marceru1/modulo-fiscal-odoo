@@ -27,9 +27,16 @@
  *     é "stock.picking" — a spec original assumia report_name == model).
  *   - URL do PDF: getReportUrl(action, "pdf", ...) →
  *     /report/pdf/stock.report_deliveryslip/<ids>.
+ *   - Contexto do usuário: o core importa o singleton `user` de
+ *     "@web/core/user" (action_service.js:8) — `env.services.user` NÃO
+ *     existe no Odoo 18 (fix 2026-09-25: TypeError reading 'context').
+ *   - Tradução: `_t` vem de "@web/core/l10n/translation" — `env._t` também
+ *     não existe no 18 (só em helper legado de teste).
  */
 import { registry } from "@web/core/registry";
 import { getReportUrl } from "@web/webclient/actions/reports/utils";
+import { user } from "@web/core/user";
+import { _t } from "@web/core/l10n/translation";
 
 const DELIVERY_SLIP_REPORT_NAME = "stock.report_deliveryslip";
 const PRINT_TYPES = new Set(["internal", "incoming"]);
@@ -74,15 +81,15 @@ registry.category("ir.actions.report handlers").add(
  * Fallback (D4/F3): notificação Odoo se popup for bloqueado.
  *
  * @param {object} action - action ir.actions.report
- * @param {object} env - ambiente Odoo OWL (env.services.notification, env._t)
+ * @param {object} env - ambiente Odoo OWL (env.services.notification)
  * @returns {true} sempre true — o download default é pulado
  */
 async function _openPickingPrintDialog(action, env) {
-    const url = getReportUrl(action, "pdf", env.services.user.context);
+    const url = getReportUrl(action, "pdf", user.context);
     const win = window.open(url, "_blank");
     if (!win) {
         env.services.notification.add(
-            env._t(
+            _t(
                 "Popup bloqueado. Libere popups ou imprima após restaurar conexão."
             ),
             { type: "warning", sticky: false }
