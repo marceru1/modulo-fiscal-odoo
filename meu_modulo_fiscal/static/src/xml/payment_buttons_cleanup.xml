@@ -1,0 +1,22 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<templates id="template" xml:space="preserve">
+
+    <!--
+        Limpeza de botões da PaymentScreen.
+
+        O botão "CPF / Nota" (que substituía o "Invoice" nativo) foi removido:
+        o CPF é pedido no fluxo de validação (popup CpfInputPopup em
+        confirm_popup.js, quando o operador confirma a venda). Detalhe em
+        commits feat(pdv): valida CPF no popup / feedback em tempo real.
+
+        Aqui só escondemos o botão nativo "Invoice" (js_invoice) com d-none
+        — NÃO usar position="replace", que quebra outros módulos que herdam
+        o node (AGENTS.md, pitfalls).
+    -->
+    <t t-inherit="point_of_sale.PaymentScreenButtons" t-inherit-mode="extension">
+        <xpath expr="//button[hasclass('js_invoice')]" position="attributes">
+            <attribute name="class" add="d-none" separator=" "/>
+        </xpath>
+    </t>
+
+</templates>
