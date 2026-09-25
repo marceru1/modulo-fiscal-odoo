@@ -33,6 +33,8 @@
             'meu_modulo_fiscal/static/src/xml/payment_buttons_cleanup.xml',
             'meu_modulo_fiscal/static/src/xml/order_receipt.xml',
             'meu_modulo_fiscal/static/src/css/order_receipt.css',
+            # I11: iguala altura Cliente/Acréscimo/Desconto na PaymentScreen
+            'meu_modulo_fiscal/static/src/css/payment_screen.css',
             # I3: CSS compartilhado do fechamento de caixa (antes duplicado em 3 lugares)
             'meu_modulo_fiscal/static/src/css/fechamento.css',
             'meu_modulo_fiscal/static/src/xml/acrescimo_button.xml',
