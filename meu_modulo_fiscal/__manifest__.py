@@ -61,6 +61,8 @@
             'meu_modulo_fiscal/static/src/xml/comprovante_parcial_receipt.xml',
             'meu_modulo_fiscal/static/src/js/recebimento_button.js',
             'meu_modulo_fiscal/static/src/xml/recebimento_button.xml',
+            # Logo Grupo 20+ na navbar do POS (override point_of_sale.Navbar)
+            'meu_modulo_fiscal/static/src/xml/pos_navbar_logo.xml',
 
         ],
         'web.assets_web': [
