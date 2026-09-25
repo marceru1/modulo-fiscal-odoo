@@ -5,6 +5,12 @@
         Popup de CPF com validação client-side (venda de consumidor final permitida
         em branco). Bloqueia Apply/ENTER com CPF inválido — evita rejeição da SEFAZ
         via Focus NFe ("CPF do destinatario invalido").
+
+        Feedback em tempo real (a cada tecla):
+          - digitando:  "Faltam N dígito(s)..."
+          - 11 dígitos válidos:  "CPF válido" (verde)
+          - 11 dígitos inválidos: "CPF inválido (confira os números)" (vermelho)
+        "Não adicionar CPF" = consumidor final, envia "" e fecha.
     -->
     <t t-name="meu_modulo_fiscal.CpfInputPopup">
         <Dialog title="props.title">
@@ -20,12 +26,14 @@
                 t-att-class="{ 'is-invalid': state.erro }"
             />
             <div t-if="state.erro" class="text-danger mt-2 text-center" t-esc="state.erro"/>
+            <div t-if="!state.erro and feedback" t-att-class="feedback.type === 'ok' ? 'text-success' : feedback.type === 'erro' ? 'text-danger' : 'text-muted'" class="mt-2 text-center" t-esc="feedback.msg"/>
             <t t-set-slot="footer">
                 <button
                     class="btn btn-primary btn-lg lh-lg o-default-button"
                     t-on-click="confirm"
                     t-att-disabled="confirmDisabled"
                 >Confirmar</button>
+                <button class="btn btn-secondary btn-lg lh-lg o-default-button" t-on-click="recusarCpf">Não adicionar CPF</button>
                 <button class="btn btn-secondary btn-lg lh-lg o-default-button" t-on-click="close">Cancelar</button>
             </t>
         </Dialog>
