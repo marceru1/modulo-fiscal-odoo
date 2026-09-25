@@ -1,12 +1,26 @@
-/* PaymentScreen — iguala altura dos botões laterais.
+/* PaymentScreen — iguala os botões laterais.
  *
  * O botão nativo "Cliente" (partner-button) é display:block com ícone e
  * span inline em baselines diferentes: a altura flutua (~49-57px) conforme
  * o estado do conteúdo. Acréscimo/Desconto (nossos, d-flex baseline) ficam
  * em 49px. Altura explícita iguala os três sem clipar conteúdo
  * (conteúdo interno ≈ 47px, verificado scrollHeight == clientHeight).
+ *
+ * Largura: Cliente é full-width da coluna; Acréscimo/Desconto dividiam a
+ * linha (~metade cada). A row vira coluna e os botões esticam a 100% —
+ * os três ficam idênticos (mesma largura e altura, empilhados).
  */
 .payment-buttons button.partner-button,
 .payment-buttons div[name="acrescimo_desconto_row"] > button {
     height: 53px;
+}
+
+.payment-buttons div[name="acrescimo_desconto_row"] {
+    flex-direction: column;
+    gap: 0.25rem;
+}
+
+.payment-buttons div[name="acrescimo_desconto_row"] > button {
+    flex: 0 0 auto;
+    width: 100%;
 }
