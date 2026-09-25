@@ -25,7 +25,7 @@ ncm_61082200,6108.22.00,Calcinhas de fibras sintéticas
 ncm_62121000,6212.10.00,Sutiãs de todos os tipos
 ncm_61159500,6115.95.00,Meias de algodão
 ncm_61159600,6115.96.00,Meias de fibras sintéticas
-ncm_62149090,6214.90.90,Xales, echarpes e lenços
+ncm_62149090,6214.90.90,"Xales, echarpes e lenços"
 ncm_62171000,6217.10.00,Acessórios de vestuário (gravatas/luvas/etc)
 ncm_71171900,7117.19.00,Bijuterias de metais comuns (dourados/prateados sem metal precioso)
 ncm_71179000,7117.90.00,Bijuterias de fantasia (brincos/pulseiras/colares/piranhas)
@@ -46,4 +46,6 @@ ncm_67041900,6704.19.00,Outros artigos de cabelo de matérias têxteis sintétic
 ncm_90041000,9004.10.00,Óculos de sol
 ncm_73269090,7326.90.90,Chaveiros de metal (utilitário/promocional)
 ncm_40169990,4016.99.90,Chaveiros de borracha/PVC emborrachado
-ncm_39269090,3926.90.90,Outras obras de plástico (acessórios diversos, chaveiros de plástico/acrílico)
+ncm_39269090,3926.90.90,"Outras obras de plástico (acessórios diversos, chaveiros de plástico/acrílico)"
+ncm_62129000,6212.90.00,"Suspensórios, ligas e artigos semelhantes de vestuário (outros)"
+ncm_63059000,6305.90.00,"Sacos de quaisquer dimensões, para embalagem, de outras matérias têxteis"
