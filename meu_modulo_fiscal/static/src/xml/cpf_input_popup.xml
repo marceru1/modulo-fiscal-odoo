@@ -18,7 +18,7 @@
                 type="text"
                 inputmode="numeric"
                 class="form-control form-control-lg mx-auto"
-                t-model="state.inputValue"
+                t-att-value="state.inputValue"
                 t-ref="input"
                 t-att-placeholder="props.placeholder"
                 t-on-keydown="onKeydown"
