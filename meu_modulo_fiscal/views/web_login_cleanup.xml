@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <!-- login-limpo: remove o rodapé do form de login herdado do core
+         ("Manage Databases" + "Powered by Odoo").
+         O gerenciador de bancos em si é desativado via list_db = False no odoo.conf. -->
+    <template id="web_login_layout_fiscal"
+              inherit_id="web.login_layout"
+              name="Login: sem rodapé de banco">
+        <xpath expr="//div[@t-if='not disable_footer']" position="replace"/>
+    </template>
+</odoo>
