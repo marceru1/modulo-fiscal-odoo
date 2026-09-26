@@ -20,6 +20,7 @@
         'views/hr_employee_prazo_views.xml',
         'views/account_move_hide_outstanding.xml',
         'views/pos_session_fechamento_views.xml',
+        'views/web_login_cleanup.xml',
     ],
     'assets': {
         'point_of_sale._assets_pos': [

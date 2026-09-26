@@ -30,3 +30,9 @@ log_level = info
 ; Regra geral: workers = (núcleos * 2) + 1
 ; workers = 3
 ; max_cron_threads = 1
+
+; Desativa o gerenciador de bancos (/web/database/manager):
+; as rotas de create/duplicate/restore/backup/delete respondem AccessDenied
+; e a página fica apenas com o aviso "disabled by the administrator".
+; O login continua direto no banco do container (start.sh usa --database $DB_NAME).
+list_db = False
