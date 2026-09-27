@@ -28,8 +28,8 @@ log_level = info
 
 ; Workers (descomente e ajuste conforme a RAM da VPS)
 ; Regra geral: workers = (núcleos * 2) + 1
-; workers = 3
-; max_cron_threads = 1
+workers = 3
+max_cron_threads = 1
 
 ; Desativa o gerenciador de bancos (/web/database/manager):
 ; as rotas de create/duplicate/restore/backup/delete respondem AccessDenied
