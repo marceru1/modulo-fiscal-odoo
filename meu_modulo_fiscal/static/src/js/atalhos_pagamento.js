@@ -52,7 +52,10 @@ export const TECLA_VALIDAR = "enter";
  * @returns {string|null}
  */
 export function letraDoMetodo(indice) {
-    return LETRAS_METODO[indice] || null;
+    if (!Number.isInteger(indice) || indice < 0 || indice >= LETRAS_METODO.length) {
+        return null;
+    }
+    return LETRAS_METODO[indice];
 }
 
 patch(PaymentScreen.prototype, {
@@ -67,6 +70,20 @@ patch(PaymentScreen.prototype, {
      * lista que o template itera, então o badge e a tecla nunca divergem.
      */
     _registrarAtalhosPagamento() {
+        this._registrarLetrasMetodo();
+
+        useHotkey(TECLA_VALIDAR, () => this._validarComEnter());
+
+        // Handlers dos patches de acréscimo/desconto — zero lógica nova aqui.
+        useHotkey(TECLA_ACRESCIMO, () => this.clickAcrescimoButton());
+        useHotkey(TECLA_DESCONTO, () => this.clickDescontoButton());
+    },
+
+    /**
+     * Registra as letras A–E para os métodos de pagamento na ordem de render.
+     * Método 6+ fica sem atalho (limitação documentada na spec).
+     */
+    _registrarLetrasMetodo() {
         this.payment_methods_from_config.forEach((metodo, indice) => {
             const letra = letraDoMetodo(indice);
             if (letra) {
@@ -74,12 +91,6 @@ patch(PaymentScreen.prototype, {
                 useHotkey(letra, () => this.addNewPaymentLine(metodo));
             }
         });
-
-        useHotkey(TECLA_VALIDAR, () => this._validarComEnter());
-
-        // Handlers dos patches de acréscimo/desconto — zero lógica nova aqui.
-        useHotkey(TECLA_ACRESCIMO, () => this.clickAcrescimoButton());
-        useHotkey(TECLA_DESCONTO, () => this.clickDescontoButton());
     },
 
     /**
