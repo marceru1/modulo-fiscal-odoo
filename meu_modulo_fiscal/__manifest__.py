@@ -73,6 +73,11 @@
         # (stock.picking internal/incoming) em vez de download de PDF.
         'web.assets_backend': [
             'meu_modulo_fiscal/static/src/js/picking_print_helper.js',
+            # selo-ambiente-teste: badge "TESTE" no navbar (só renderiza com
+            # env var ODOO_ENV_LABEL setada no container; PROD não recebe).
+            'meu_modulo_fiscal/static/src/js/env_badge.js',
+            'meu_modulo_fiscal/static/src/xml/env_badge.xml',
+            'meu_modulo_fiscal/static/src/css/env_badge.scss',
         ],
     },
     'installable': True,

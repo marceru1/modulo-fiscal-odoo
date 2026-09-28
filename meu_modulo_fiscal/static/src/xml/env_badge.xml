@@ -1,0 +1,18 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<templates xml:space="preserve">
+
+    <!-- Selo de ambiente (badge "TESTE") no navbar do backend.
+         Source-driven: <header class="o_navbar"> é a raiz do template
+         web.NavBar (addons/web/static/src/webclient/navbar/navbar.xml:4-5).
+         position="inside" anexa o selo ao header sem tocar nos filhos
+         (Apps Menu, o_menu_brand, breadcrumbs, systray). PROD: session
+         .environment_label vazio → t-if não renderiza nada. -->
+    <t t-name="meu_modulo.EnvBadge" t-inherit="web.NavBar" t-inherit-mode="extension">
+        <xpath expr="//header[hasclass('o_navbar')]" position="inside">
+            <t t-if="environmentLabel">
+                <span class="o_env_badge o_env_badge_teste" t-esc="environmentLabel"/>
+            </t>
+        </xpath>
+    </t>
+
+</templates>

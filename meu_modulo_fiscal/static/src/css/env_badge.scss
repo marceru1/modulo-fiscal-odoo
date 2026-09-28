@@ -1,0 +1,21 @@
+// Selo de ambiente de teste no navbar — badge laranja discreto.
+// Só renderiza quando environment_label vem preenchido no session_info
+// (env var ODOO_ENV_LABEL do container; PROD não tem a var).
+.o_env_badge {
+    align-self: center;
+    padding: 2px 10px;
+    border-radius: 9999px;
+    font-size: 11px;
+    font-weight: $headings-font-weight;
+    line-height: 1.4;
+    letter-spacing: 0.5px;
+    text-transform: uppercase;
+    white-space: nowrap;
+    user-select: none;
+    pointer-events: none;
+}
+
+.o_env_badge_teste {
+    color: $white;
+    background-color: $orange;
+}
