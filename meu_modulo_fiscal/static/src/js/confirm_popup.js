@@ -1,7 +1,9 @@
 /** @odoo-module */
 import { useService } from "@web/core/utils/hooks";
 import { makeAwaitable } from "@point_of_sale/app/store/make_awaitable_dialog";
-import { SelectionPopup } from "@point_of_sale/app/utils/input_popups/selection_popup";
+// ConfirmSalePopup = subclasse do SelectionPopup com teclas (Enter = Sim,
+// Esc = Não). Os ids dos itens saem de lá para os dois arquivos não divergirem.
+import { ConfirmSalePopup, ID_SIM, ID_NAO } from "./confirm_sale_popup";
 import { CpfInputPopup } from "./cpf_input_popup";
 import { _t } from "@web/core/l10n/translation";
 import { PaymentScreen } from "@point_of_sale/app/screens/payment_screen/payment_screen";
@@ -113,22 +115,23 @@ patch(PaymentScreen.prototype, {
         // ============================================
         // DECISÃO PELO OPERADOR (popup de confirmação)
         // ============================================
-        const confirmed = await makeAwaitable(this.dialog, SelectionPopup, {
+        const confirmed = await makeAwaitable(this.dialog, ConfirmSalePopup, {
             title: _t("Deseja confirmar a venda?"),
             list: [
-                { id: 1, label: _t("Sim"), item: true },
-                { id: 0, label: _t("Não"), item: false },
+                { id: ID_SIM, label: _t("Sim"), item: true },
+                { id: ID_NAO, label: _t("Não"), item: false },
             ],
         });
 
-        // Se o operador fechar o popup (ESC/clique fora), makeAwaitable resolve
+        // Se o operador fechar o popup com clique fora, makeAwaitable resolve
         // com undefined. Tratamos como recusa: finaliza a venda direto no recibo,
-        // sem NFC-e (mesmo comportamento de clicar "Não").
+        // sem NFC-e (mesmo comportamento de clicar "Não" — e do Esc, que resolve
+        // false explicitamente pelo ConfirmSalePopup).
         const emitirNfce = confirmed === true;
         order.x_confirmacao_venda = emitirNfce;
 
         if (confirmed === undefined) {
-            console.log("⏩ Popup fechado (ESC/clique fora) — venda NÃO FISCAL, pulando NFC-e.");
+            console.log("⏩ Popup fechado no clique fora — venda NÃO FISCAL, pulando NFC-e.");
         } else if (emitirNfce) {
             console.log("✅ Operador confirmou — NFC-e será emitida.");
         } else {
@@ -144,6 +147,8 @@ patch(PaymentScreen.prototype, {
                 placeholder: "Digite apenas números",
                 startingValue: order.x_cpf_nota || "",
             });
+            // O Esc do CpfInputPopup manda "" explícito (recusarCpf); o clique
+            // fora resolve undefined e cai no mesmo "" (consumidor final).
             const cpfLimpo = (cpf || "").replace(/\D/g, "");
             order.x_cpf_nota = cpfLimpo;
         }

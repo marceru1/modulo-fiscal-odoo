@@ -26,6 +26,11 @@
         'point_of_sale._assets_pos': [
             'meu_modulo_fiscal/static/src/lib/qrious.js',
             'meu_modulo_fiscal/static/src/js/fiscal_contingencia.js',
+            # atalhos-teclado-pdv: popup de confirmação operável por teclado
+            # (DEC-006: subclasse do SelectionPopup, não patch — patch vazaria
+            # pra todos os popups de seleção do Odoo). JS antes do XML.
+            'meu_modulo_fiscal/static/src/js/confirm_sale_popup.js',
+            'meu_modulo_fiscal/static/src/xml/confirm_sale_popup.xml',
             'meu_modulo_fiscal/static/src/js/confirm_popup.js',
             'meu_modulo_fiscal/static/src/js/auto_invoice_pay_later.js',
             'meu_modulo_fiscal/static/src/js/export_data.js',
@@ -64,6 +69,25 @@
             'meu_modulo_fiscal/static/src/xml/recebimento_button.xml',
             # Logo Grupo 20+ na navbar do POS (override point_of_sale.Navbar)
             'meu_modulo_fiscal/static/src/xml/pos_navbar_logo.xml',
+
+            # filtro-pedidos-pagos-pos: filtros client-side na lista de pedidos
+            # pagos (chips de tipo de pagamento + search "Valor"/"Data / Hora").
+            # JS antes do XML — o template usa os métodos do patch.
+            'meu_modulo_fiscal/static/src/js/filtro_pedidos.js',
+            'meu_modulo_fiscal/static/src/xml/filtro_pedidos.xml',
+
+            # preco-badge-produto-pdv: badge de preço no card do produto
+            # (ProductCard herda + get_price da pricelist da sessão).
+            # JS antes do XML — o template usa o getter do patch.
+            'meu_modulo_fiscal/static/src/js/preco_badge_produto.js',
+            'meu_modulo_fiscal/static/src/xml/preco_badge_produto.xml',
+            'meu_modulo_fiscal/static/src/css/preco_badge_produto.css',
+
+            # atalhos-teclado-pdv: atalhos de teclado na PaymentScreen
+            # (A-E = método, Enter = validar, S = acréscimo, R = desconto).
+            # JS antes do XML — o template usa letraAtalhoMetodo() do patch.
+            'meu_modulo_fiscal/static/src/js/atalhos_pagamento.js',
+            'meu_modulo_fiscal/static/src/xml/atalhos_pagamento.xml',
 
         ],
         'web.assets_web': [

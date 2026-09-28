@@ -32,3 +32,26 @@
         grid-template-columns: 1fr;
     }
 }
+
+/* Atalhos de teclado (atalhos-teclado-pdv): badge com a letra do método no
+ * canto do botão. Absoluto para não mexer no layout do botão em nenhum
+ * breakpoint (no mobile os métodos viram um grid — o badge flutua por cima).
+ * pointer-events: none para o canto do badge continuar clicável.
+ */
+.paymentmethods .paymentmethod {
+    position: relative;
+}
+
+.payment-method-hotkey {
+    position: absolute;
+    top: 0.2rem;
+    right: 0.3rem;
+    padding: 0 0.3rem;
+    border: 1px solid currentColor;
+    border-radius: 0.25rem;
+    font-size: 0.7rem;
+    font-weight: 600;
+    line-height: 1.1;
+    opacity: 0.5;
+    pointer-events: none;
+}

@@ -1,0 +1,12 @@
+/* preco-badge-produto-pdv: badge de preço abaixo do nome no card do produto.
+   .product-content é flex-row no core (nome | qty). flex-direction: column
+   empilha nome → badge → contador do carrinho, sem tocar no DOM do core
+   (article já é position-relative, badges de info/combo intocadas). */
+.product .product-content {
+    flex-direction: column;
+}
+
+.product-price-badge {
+    font-size: 0.95rem;
+    line-height: 1.1;
+}
