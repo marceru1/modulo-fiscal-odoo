@@ -65,6 +65,12 @@
             # Logo Grupo 20+ na navbar do POS (override point_of_sale.Navbar)
             'meu_modulo_fiscal/static/src/xml/pos_navbar_logo.xml',
 
+            # filtro-pedidos-pagos-pos: filtros client-side na lista de pedidos
+            # pagos (chips de tipo de pagamento + search "Valor"/"Data / Hora").
+            # JS antes do XML — o template usa os métodos do patch.
+            'meu_modulo_fiscal/static/src/js/filtro_pedidos.js',
+            'meu_modulo_fiscal/static/src/xml/filtro_pedidos.xml',
+
         ],
         'web.assets_web': [
             'meu_modulo_fiscal/static/src/js/user_menu_cleanup.js',
