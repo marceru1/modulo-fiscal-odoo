@@ -71,6 +71,13 @@
             'meu_modulo_fiscal/static/src/js/filtro_pedidos.js',
             'meu_modulo_fiscal/static/src/xml/filtro_pedidos.xml',
 
+            # preco-badge-produto-pdv: badge de preço no card do produto
+            # (ProductCard herda + get_price da pricelist da sessão).
+            # JS antes do XML — o template usa o getter do patch.
+            'meu_modulo_fiscal/static/src/js/preco_badge_produto.js',
+            'meu_modulo_fiscal/static/src/xml/preco_badge_produto.xml',
+            'meu_modulo_fiscal/static/src/css/preco_badge_produto.css',
+
         ],
         'web.assets_web': [
             'meu_modulo_fiscal/static/src/js/user_menu_cleanup.js',
