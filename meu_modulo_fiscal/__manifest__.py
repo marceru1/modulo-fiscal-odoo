@@ -71,6 +71,12 @@
             'meu_modulo_fiscal/static/src/js/filtro_pedidos.js',
             'meu_modulo_fiscal/static/src/xml/filtro_pedidos.xml',
 
+            # atalhos-teclado-pdv: atalhos de teclado na PaymentScreen
+            # (A-E = método, Enter = validar, S = acréscimo, R = desconto).
+            # JS antes do XML — o template usa letraAtalhoMetodo() do patch.
+            'meu_modulo_fiscal/static/src/js/atalhos_pagamento.js',
+            'meu_modulo_fiscal/static/src/xml/atalhos_pagamento.xml',
+
         ],
         'web.assets_web': [
             'meu_modulo_fiscal/static/src/js/user_menu_cleanup.js',
