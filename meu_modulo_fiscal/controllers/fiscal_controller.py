@@ -14,6 +14,8 @@ _MAXLEN_NUMERO_NOTA = 20
 _MAXLEN_PROTOCOLO = 20
 _MAXLEN_URL_CONSULTA = 500
 _MAXLEN_QRCODE_URL = 500
+_MAXLEN_URL_XML = 500
+_MAXLEN_URL_PDF = 500
 
 
 class FiscalWebhookController(http.Controller):
@@ -87,6 +89,8 @@ class FiscalWebhookController(http.Controller):
                 'protocolo': _MAXLEN_PROTOCOLO,
                 'url_consulta': _MAXLEN_URL_CONSULTA,
                 'qrcode_url': _MAXLEN_QRCODE_URL,
+                'xml_url': _MAXLEN_URL_XML,
+                'danfe_url': _MAXLEN_URL_PDF,
             }
             for campo, max_len in campo_tamanhos.items():
                 valor = fiscal.get(campo, '')
@@ -122,6 +126,8 @@ class FiscalWebhookController(http.Controller):
                 'x_fiscal_serie': fiscal.get('serie', '1'),
                 'x_fiscal_url_consulta': fiscal.get('url_consulta', ''),
                 'x_fiscal_qrcode_url': fiscal.get('qrcode_url', ''),
+                'x_fiscal_url_xml': fiscal.get('xml_url', '') or '',
+                'x_fiscal_url_pdf': fiscal.get('danfe_url', '') or '',
                 'x_fiscal_offline': bool(fiscal.get('is_contingencia', False)),
                 'x_fiscal_qrcode_b64': qrcode_b64, 
             }

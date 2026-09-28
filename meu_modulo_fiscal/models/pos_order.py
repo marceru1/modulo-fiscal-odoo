@@ -527,6 +527,8 @@ class PosSession(models.Model):
             'x_fiscal_chave',
             'x_fiscal_qrcode_url',
             'x_fiscal_url_consulta',
+            'x_fiscal_url_xml',
+            'x_fiscal_url_pdf',
             'x_fiscal_offline',
             'x_fiscal_numero',
             'x_fiscal_serie',
