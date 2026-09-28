@@ -28,9 +28,33 @@ const source = fs.readFileSync(SOURCE_PATH, "utf8");
 // ── Extração do getter ───────────────────────────────────────────────────────
 // Envolve o corpo extraído num object literal com o mesmo getter, para que
 // `this` dentro do corpo aponte para o objeto mockado.
-const match = source.match(/get canRefreshPOS\(\)\s*\{([\s\S]*?)\n\s*\},/);
-assert(match, "Não encontrou o getter canRefreshPOS() em atualizar_button.js");
-const getterBody = match[1];
+function extractGetterBody(src, getterName) {
+    const marker = `get ${getterName}()`;
+    const startIdx = src.indexOf(marker);
+    assert(startIdx !== -1, `Não encontrou o getter ${getterName}() em atualizar_button.js`);
+
+    const braceIdx = src.indexOf("{", startIdx);
+    assert(braceIdx !== -1, `Getter ${getterName}() não possui corpo`);
+
+    let depth = 0;
+    let endIdx = -1;
+    for (let i = braceIdx; i < src.length; i++) {
+        if (src[i] === "{") {
+            depth++;
+        } else if (src[i] === "}") {
+            depth--;
+            if (depth === 0) {
+                endIdx = i;
+                break;
+            }
+        }
+    }
+    assert(endIdx !== -1 && depth === 0, `Corpo do getter ${getterName}() tem chaves desbalanceadas`);
+
+    return src.slice(braceIdx + 1, endIdx);
+}
+
+const getterBody = extractGetterBody(source, "canRefreshPOS");
 
 function buildGetter() {
     const holder = new Function(
