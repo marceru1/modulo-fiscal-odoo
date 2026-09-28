@@ -62,6 +62,11 @@
             'meu_modulo_fiscal/static/src/xml/comprovante_parcial_receipt.xml',
             'meu_modulo_fiscal/static/src/js/recebimento_button.js',
             'meu_modulo_fiscal/static/src/xml/recebimento_button.xml',
+            # botao-atualizar-pdv: item "Atualizar" no menu sanduíche (recupera
+            # tela travada sem F5). O XML ancora no node criado por
+            # recebimento_button.xml — precisa vir DEPOIS dele nesta lista.
+            'meu_modulo_fiscal/static/src/js/atualizar_button.js',
+            'meu_modulo_fiscal/static/src/xml/atualizar_button.xml',
             # Logo Grupo 20+ na navbar do POS (override point_of_sale.Navbar)
             'meu_modulo_fiscal/static/src/xml/pos_navbar_logo.xml',
 
