@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<templates id="template" xml:space="preserve">
+
+    <t t-name="meu_modulo_fiscal.ProductCardPreco" t-inherit="point_of_sale.ProductCard" t-inherit-mode="extension">
+        <!-- Badge de preço: abaixo do nome, dentro do .product-content (mesma
+             flex row do core). position="after" no node do nome — nunca replace. -->
+        <xpath expr="//div[hasclass('product-name')]" position="after">
+            <span class="product-price-badge text-muted fw-semibold my-2" t-esc="priceDisplay" t-if="priceDisplay"/>
+        </xpath>
+    </t>
+
+</templates>

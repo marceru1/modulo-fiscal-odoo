@@ -1,6 +1,7 @@
 /** @odoo-module */
 import { Component, onMounted, useRef, useState } from "@odoo/owl";
 import { Dialog } from "@web/core/dialog/dialog";
+import { useHotkey } from "@web/core/hotkeys/hotkey_hook";
 import { _t } from "@web/core/l10n/translation";
 
 /**
@@ -36,6 +37,15 @@ export class CpfInputPopup extends Component {
         });
         this.inputRef = useRef("input");
         onMounted(this.onMounted);
+
+        // Esc = seguir sem CPF, explícito (DEC-007). Antes o Esc caía no
+        // Dialog.dismiss() -> onClose -> resolve() -> undefined, e o
+        // confirm_popup.js coagia pra "" de qualquer forma — o resultado era o
+        // mesmo, mas o popup não dizia o que queria. Aqui o Esc passa pelo mesmo
+        // recusarCpf() do botão "Não adicionar CPF".
+        // O core já abre exceção ao Esc na proteção de editável
+        // (hotkey_service.js:186), então funciona com o input focado.
+        useHotkey("escape", () => this.recusarCpf());
     }
     onMounted() {
         this.inputRef.el.focus();
