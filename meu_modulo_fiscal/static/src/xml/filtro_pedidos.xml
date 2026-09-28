@@ -1,0 +1,39 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<templates id="template" xml:space="preserve">
+
+    <!-- Chips de tipo de pagamento na lista de pedidos pagos do POS (tab "Pago").
+         Mesmo padrão de herança dos outros XML do módulo (pos_navbar_logo.xml).
+
+         ANCORAGEM (desvio consciente do ticket 03, que pedia position="after"
+         no <SearchBar>): o <SearchBar> vive DENTRO de <div class="controls">,
+         que é grid nomeado no mobile (ticket_screen.scss:58-63,
+         grid-template-areas "buttons pagination" / "search search") e flex SEM
+         wrap no desktop (d-sm-flex). Inserir os chips ali os colocaria na MESMA
+         linha dos controles no desktop — contra o DEC-007, que pede os chips
+         numa linha ABAIXO da SearchBar. Ancorando depois de .controls os chips
+         viram irmãos dentro de .rightpane (d-flex flex-column) e ganham linha
+         própria em todos os breakpoints, sem CSS extra. Os xpaths //SearchBar e
+         //div[hasclass('controls')] são ambos únicos neste template. -->
+    <t t-name="meu_modulo.FiltroPedidosPagosChips"
+       t-inherit="point_of_sale.TicketScreen"
+       t-inherit-mode="extension">
+        <xpath expr="//div[hasclass('controls')]" position="after">
+            <t t-if="state.filter === 'SYNCED'">
+                <!-- Classes numa única t-attf-class: no QWeb, class estático +
+                     t-att-class não somam — o dinâmico sobrescreve o estático
+                     (ir_qweb.py, addAttributes()).
+                     No mobile a linha vira scroll horizontal (flex-nowrap +
+                     overflow-x) para não empilhar muitos métodos. -->
+                <div t-attf-class="payment-filter-chips d-flex gap-2 px-2 pb-2 #{ui.isSmall ? 'flex-nowrap overflow-x-auto' : 'flex-wrap'}">
+                    <t t-foreach="getAvailablePaymentMethods()" t-as="method" t-key="method.id">
+                        <button t-attf-class="btn btn-sm text-nowrap #{state.activePaymentMethodIds.has(method.id) ? 'btn-primary' : 'btn-outline-secondary'}"
+                                t-on-click="() =&gt; this.onTogglePaymentChip(method.id)">
+                            <t t-esc="method.name"/>
+                        </button>
+                    </t>
+                </div>
+            </t>
+        </xpath>
+    </t>
+
+</templates>
