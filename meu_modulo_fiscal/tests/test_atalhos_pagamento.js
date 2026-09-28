@@ -186,15 +186,14 @@ const metodos = (n) => Array.from({ length: n }, (_, i) => ({ id: i + 1, name: "
     console.log("✓ A2: método 6+ sem atalho (null)");
 }
 
-// A3: índice inválido não explode nem vaza letra.
-// (Índice numérico-em-string — "2" — cai na semântica de array do JS e devolve
-// "c"; o chamador real é sempre o índice do t-foreach/forEach, que é number.
-// Não vale um guard de Number.isInteger para um input impossível.)
+// A3: índice inválido ou fora do range não explode nem vaza letra.
+// (Índice numérico-em-string — "2" — agora é rejeitado pelo guard; o chamador
+// real é sempre o índice number do t-foreach/forEach.)
 {
-    for (const indice of [-1, -10, 1.5, undefined, null, {}, [], true]) {
+    for (const indice of [-1, -10, 1.5, "2", undefined, null, {}, [], true]) {
         assert.strictEqual(letraDoMetodo(indice), null, `letraDoMetodo(${indice}) deve ser null`);
     }
-    console.log("✓ A3: índice inválido -> null");
+    console.log("✓ A3: índice inválido/fora do range -> null");
 }
 
 // A4: o badge usa a MESMA fonte do atalho, em maiúscula
