@@ -26,6 +26,11 @@
         'point_of_sale._assets_pos': [
             'meu_modulo_fiscal/static/src/lib/qrious.js',
             'meu_modulo_fiscal/static/src/js/fiscal_contingencia.js',
+            # atalhos-teclado-pdv: popup de confirmação operável por teclado
+            # (DEC-006: subclasse do SelectionPopup, não patch — patch vazaria
+            # pra todos os popups de seleção do Odoo). JS antes do XML.
+            'meu_modulo_fiscal/static/src/js/confirm_sale_popup.js',
+            'meu_modulo_fiscal/static/src/xml/confirm_sale_popup.xml',
             'meu_modulo_fiscal/static/src/js/confirm_popup.js',
             'meu_modulo_fiscal/static/src/js/auto_invoice_pay_later.js',
             'meu_modulo_fiscal/static/src/js/export_data.js',

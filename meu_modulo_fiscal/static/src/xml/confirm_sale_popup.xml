@@ -1,0 +1,34 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<templates id="template" xml:space="preserve">
+
+    <!--
+        Cara do SelectionPopup do core (título, botões Sim/Não, mesmo layout),
+        com uma linha de ajuda de teclado embaixo (DEC-004: descobrir sem
+        treinamento).
+
+        t-inherit-mode="primary" — e NÃO "extension" — por dois motivos:
+        1. "extension" só anexa as operações ao template pai e o assetsbundle.py
+           (471-480) IGNORA o t-name nesse modo; "meu_modulo_fiscal.ConfirmSalePopup"
+           não existiria como template e o popup quebraria na hora de renderizar;
+        2. "extension" alteraria point_of_sale.SelectionPopup GLOBALMENTE, que é
+           exatamente o que a DEC-006 proíbe.
+
+        O expr do xpath é o valor verificado com xmllint sobre o template do core
+        (selection_popup.xml:5 -> 1 nó). position="inside" só acrescenta filho:
+        nada de position="replace", que quebraria o DOM pra outros módulos.
+
+        Os botões Sim/Não NÃO são recriados aqui — vêm inteiros por herança, com
+        os labels já em t-esc (selection_popup.xml:11). Este arquivo só acrescenta
+        a linha de ajuda, que é texto fixo (nenhum dado de usuário, nenhum t-raw).
+    -->
+    <t t-name="meu_modulo_fiscal.ConfirmSalePopup"
+       t-inherit="point_of_sale.SelectionPopup"
+       t-inherit-mode="primary">
+        <xpath expr="//Dialog" position="inside">
+            <div class="text-muted text-center small">
+                <kbd>Enter</kbd> Sim &middot; <kbd>Esc</kbd> Não
+            </div>
+        </xpath>
+    </t>
+
+</templates>
