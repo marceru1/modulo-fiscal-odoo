@@ -36,10 +36,10 @@ function calcularDigitoVerificador(chaveSemDV) {
  *
  * Arquitetura de Série por Caixa:
  * Cada terminal POS usa uma série fiscal exclusiva derivada do seu ID.
- *   posConfigId = 1  → série 601
- *   posConfigId = 2  → série 602
+ *   posConfigId = 1  → série 701
+ *   posConfigId = 2  → série 702
  *   ...
- *   posConfigId = 10 → série 610
+ *   posConfigId = 10 → série 710
  *
  * Vantagem: numeração 100% sequencial por caixa, zero buracos,
  * zero inutilizações necessárias no fim do mês.
@@ -138,18 +138,29 @@ export async function emitirContingencia(order, config, posConfigId, seedFromSes
     const chaveAcesso = chaveSemDV + dv;
 
     let qrcodeUrl = "";
-    const valorTotal = order.get_total_with_tax();
     const versao = '2'; // 2 para QR Code 2.0
 
+    // ── QR Code 2.00 — contingência offline ─────────────────────────────────
+    // Formato v2.00 emitido pelo PDV: chave|versao|tpAmb|cIdToken|cHashQRCode,
+    // com cHashQRCode = SHA-1(chave|versao|tpAmb|cIdToken + CSC).
+    //
+    // LIMITAÇÃO CONHECIDA: o manual (seção 4.3.2) define, para contingência
+    // offline, campos adicionais (dia, valorTotal, digVal). O digVal é o SHA-1
+    // do XML JÁ ASSINADO — indisponível no PDV antes da transmissão, já que a
+    // assinatura é feita pela Focus. Este QR é portanto PROVISÓRIO: serve para
+    // o cupom impresso apontar para a SEFAZ no ambiente certo. A URL
+    // autoritativa chega no retorno da Focus (qrcode_url) e substitui esta.
     if (cscId && cscToken) {
-        // A NT exige que o cIdToken tenha 6 dígitos numéricos (com zeros à esquerda)
+        // A NT exige cIdToken de 6 dígitos no QR Code (zeros à esquerda).
         const cscIdPadded = cscId.padStart(6, '0');
-        
-        const msgHash = `${chaveAcesso}|${versao}|${tpAmb}|${String(valorTotal.toFixed(2)).replace('.', '')}|${cscIdPadded}${cscToken}`;
+
+        const msgHash = `${chaveAcesso}|${versao}|${tpAmb}|${cscIdPadded}${cscToken}`;
         const hash = await sha1(msgHash);
         qrcodeUrl = `${urlBase}?p=${chaveAcesso}|${versao}|${tpAmb}|${cscIdPadded}|${hash.toUpperCase()}`;
     } else {
-        qrcodeUrl = `${urlBase}?p=${chaveAcesso}|${versao}|${tpAmb}|1`;
+        // Sem CSC não há hash possível. URL mínima para o cupom não sair sem QR.
+        console.warn("[CONTINGÊNCIA] CSC não configurado — QR Code sem hash. Configure x_csc_id/x_csc_token antes de emitir em produção.");
+        qrcodeUrl = `${urlBase}?p=${chaveAcesso}|${versao}|${tpAmb}`;
     }
 
     let qrcodeB64 = "";

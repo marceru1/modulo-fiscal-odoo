@@ -172,6 +172,11 @@ patch(PaymentScreen.prototype, {
                     codigo_unico: dados.codigoUnico,
                     data_emissao: dados.dataEmissao,
                     chave_acesso: dados.chaveAcesso,
+                    // QR provisório gerado no PDV. O middleware usa esta URL em
+                    // vez de recriar uma (antes ele descartava e montava a sua,
+                    // com o tpAmb errado). A URL autoritativa ainda chega no
+                    // retorno da Focus após a transmissão.
+                    qrcode_url: dados.qrcodeUrl,
                 })
             });
 
