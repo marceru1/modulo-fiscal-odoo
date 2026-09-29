@@ -136,6 +136,15 @@ class PosOrder(models.Model):
     x_fiscal_offline = fields.Boolean(string='Emitido em Contingência?', default=False, help="Marca se essa NFC-e foi emitida pelo Odoo PDV Offline Mode")
     x_contingencia_payload = fields.Text(string='Payload Contingência Offline', default='', help="Dados JSON gerados offline (numero, serie, codigo_unico)")
 
+    x_fiscal_cancelado = fields.Boolean(
+        string='Cancelado Fiscalmente',
+        default=False,
+        help="Cupom cancelado junto à SEFAZ (evento 110111). Escrito SÓ pelo "
+             "callback do middleware — o operador apenas dispara a solicitação. "
+             "O state do pedido permanece 'invoiced' (DEC-001): este flag é o "
+             "que o fechamento de caixa usa para desconsiderar o valor.",
+    )
+
     @api.model
     def _order_fields(self, ui_order):
         """
@@ -165,6 +174,20 @@ class PosOrder(models.Model):
         if 'x_fiscal_offline' in ui_order:
             vals['x_fiscal_offline'] = bool(ui_order.get('x_fiscal_offline'))
 
+        # x_fiscal_cancelado NÃO entra aqui de propósito (desvio consciente do
+        # ticket 01 da feature cancelar-cupom-nfce-pdv).
+        #
+        # O campo é AUTORADO PELO SERVIDOR: quem escreve True é o callback do
+        # middleware (/api/retorno-fiscal), não o PDV. Sincronizá-lo do ui_order
+        # abriria um caminho de clobber: o cache local do POS carrega o campo
+        # (via _loader_params_pos_order) com o valor de ANTES do cancelamento —
+        # False — e _process_order faz `pos_order.write(order)` do dicionário
+        # inteiro em pedido já existente (pos_order.py:119 do core). Basta um
+        # re-sync desse pedido para o False do browser sobrescrever o True do
+        # servidor, e o cupom cancelado volta a contar no fechamento.
+        #
+        # Nada se perde por não sincronizar: o callback escreve via ORM direto
+        # (pedido.sudo().write), sem passar por _order_fields.
         return vals
 
     def _compute_prices(self):
@@ -407,6 +430,195 @@ class PosOrder(models.Model):
         
         return res
 
+    # ==========================================================
+    # CANCELAMENTO DE CUPOM NA SEFAZ (evento 110111)
+    # ==========================================================
+    @api.model
+    def action_cancelar_nfce(self, pos_reference, justificativa):
+        """Solicita ao middleware o cancelamento da NFC-e de um cupom pago.
+
+        Chamado do PDV (TicketScreen, atalho N) via orm.call. Apenas SOLICITA:
+        quem escreve x_fiscal_cancelado=True é o callback assíncrono do
+        middleware (/api/retorno-fiscal), depois que a SEFAZ aceitar (DEC-004).
+
+        Guards — espelham os do frontend como defesa em profundidade (a SEFAZ
+        é a autoridade final, o middleware é a segunda linha):
+          - justificativa >= 15 chars (mesmo mínimo do FocusNfceService);
+          - pedido existe, x_fiscal_status == 'autorizado' e online;
+          - date_order dentro do prazo de 24h do evento 110111.
+
+        Returns:
+            dict: ``{'success': bool, 'mensagem': str}``. Nunca levanta
+            exceção para o JS — falha de rede/timeout vira ``success=False``
+            com mensagem (o operador precisa ver algo na tela).
+        """
+        justificativa = (justificativa or '').strip()
+        if len(justificativa) < 15:
+            return {
+                'success': False,
+                'mensagem': 'Justificativa deve ter pelo menos 15 caracteres',
+            }
+
+        if not pos_reference:
+            return {'success': False, 'mensagem': 'Pedido não encontrado'}
+
+        pedido = self.sudo().search(
+            [('pos_reference', '=', pos_reference)], limit=1
+        )
+        if not pedido:
+            _logger.warning('[CANCELAR-NFCE] Pedido %s não encontrado.', pos_reference)
+            return {'success': False, 'mensagem': 'Pedido não encontrado'}
+
+        if pedido.x_fiscal_status != 'autorizado':
+            return {
+                'success': False,
+                'mensagem': 'Cupom não está autorizado pela SEFAZ',
+            }
+
+        if pedido.x_fiscal_offline:
+            return {
+                'success': False,
+                'mensagem': 'Cancelamento de cupom em contingência não suportado',
+            }
+
+        if not pedido.date_order:
+            return {'success': False, 'mensagem': 'Data de emissão indisponível'}
+
+        emitido_ha = (fields.Datetime.now() - pedido.date_order).total_seconds()
+        if emitido_ha >= 24 * 3600:
+            return {
+                'success': False,
+                'mensagem': 'Prazo de 24h para cancelamento expirado',
+            }
+
+        # Mesmo padrão de action_pos_order_paid: URL/secret/timeout em runtime
+        # via ir.config_parameter, secret opcional no header X-Webhook-Token.
+        api_url = f"{pedido._get_middleware_url()}/api/odoo/cancelar"
+        payload = {
+            'documento_id': pedido.pos_reference,
+            'justificativa': justificativa,
+            'chave_nfe': pedido.x_fiscal_chave or '',
+        }
+        headers = {'Content-Type': 'application/json', 'Accept': 'application/json'}
+        webhook_secret = pedido._get_webhook_secret()
+        if webhook_secret:
+            headers['X-Webhook-Token'] = webhook_secret
+
+        try:
+            response = requests.post(
+                api_url,
+                data=json.dumps(payload),
+                headers=headers,
+                timeout=pedido._get_webhook_timeout(),
+            )
+        except requests.exceptions.Timeout:
+            _logger.error(
+                '[CANCELAR-NFCE] Timeout ao solicitar cancelamento de %s.', pos_reference
+            )
+            return {
+                'success': False,
+                'mensagem': 'Tempo esgotado ao falar com o middleware. Tente novamente.',
+            }
+        except requests.exceptions.RequestException as e:
+            _logger.error(
+                '[CANCELAR-NFCE] Falha de conexão ao cancelar %s: %s', pos_reference, e
+            )
+            return {
+                'success': False,
+                'mensagem': 'Falha de conexão com o middleware.',
+            }
+        except Exception as e:
+            _logger.error(
+                '[CANCELAR-NFCE] Erro interno ao cancelar %s: %s',
+                pos_reference, e, exc_info=True,
+            )
+            return {
+                'success': False,
+                'mensagem': 'Erro interno ao solicitar o cancelamento.',
+            }
+
+        if 200 <= response.status_code < 300:
+            _logger.info(
+                '[CANCELAR-NFCE] Cancelamento de %s aceito pelo middleware. '
+                'Aguardando callback para marcar o pedido e devolver o estoque.',
+                pos_reference,
+            )
+            return {'success': True, 'mensagem': 'Solicitação de cancelamento enviada'}
+
+        _logger.warning(
+            '[CANCELAR-NFCE] Middleware recusou o cancelamento de %s (%s): %s',
+            pos_reference, response.status_code, response.text[:2000],
+        )
+        try:
+            corpo = response.json()
+        except ValueError:
+            corpo = {}
+        mensagem = corpo.get('error') or corpo.get('mensagem')
+        if not mensagem:
+            mensagem = f'Cancelamento recusado pelo middleware (HTTP {response.status_code})'
+        return {'success': False, 'mensagem': str(mensagem)[:500]}
+
+    def _reverter_estoque_cancelamento(self):
+        """Devolve ao estoque os produtos de um cupom cancelado na SEFAZ.
+
+        Disparado pelo callback do middleware (DEC-004) — nunca pelo clique do
+        operador: se a SEFAZ recusar, o estoque não pode ter voltado.
+
+        API do Odoo 18 (o ticket 03 citava ``create_returns()``, que não existe
+        mais no core):
+          - ``stock.return.picking`` não tem ``create_returns()``;
+          - a entrada pública é ``action_create_returns_all()``, que preenche as
+            quantidades com o total entregue e cria o picking de devolução;
+          - o picking nasce em 'assigned' — sem ``button_validate()`` o estoque
+            NÃO volta. O wizard do core só cria o rascunho e deixa a validação
+            pra tela; aqui não há operador, então validamos na hora.
+
+        Falha aqui NÃO desfaz o cancelamento fiscal (que já ocorreu na SEFAZ):
+        loga warning e segue. Reverter x_fiscal_cancelado seria mentir sobre o
+        fiscal para salvar o estoque.
+        """
+        for order in self:
+            pickings_concluidos = order.picking_ids.filtered(
+                lambda p: p.state == 'done'
+            )
+            if not pickings_concluidos:
+                _logger.info(
+                    '[CANCELAR-ESTOQUE] Pedido %s sem picking concluído — '
+                    'nada a reverter.', order.pos_reference,
+                )
+                continue
+
+            for picking in pickings_concluidos:
+                try:
+                    wizard = self.env['stock.return.picking'].create({
+                        'picking_id': picking.id,
+                    })
+                    action = wizard.action_create_returns_all()
+                    devolucao = self.env['stock.picking'].browse(action['res_id'])
+                    resultado = devolucao.button_validate()
+                    if resultado is not True:
+                        # button_validate devolve uma action quando um wizard de
+                        # pré-validação assume o controle — o que só acontece com
+                        # operador na tela. Sem tratamento automático, o estoque
+                        # segue não revertido.
+                        _logger.warning(
+                            '[CANCELAR-ESTOQUE] Devolução %s de %s exige ação '
+                            'manual (wizard pendente) — estoque NÃO revertido.',
+                            devolucao.name, order.pos_reference,
+                        )
+                        continue
+                    _logger.info(
+                        '[CANCELAR-ESTOQUE] Pedido %s: devolução %s criada e '
+                        'validada a partir de %s.',
+                        order.pos_reference, devolucao.name, picking.name,
+                    )
+                except Exception as e:
+                    _logger.warning(
+                        '[CANCELAR-ESTOQUE] Falha ao reverter estoque de %s '
+                        '(picking %s): %s',
+                        order.pos_reference, picking.name, e, exc_info=True,
+                    )
+
 class PosConfig(models.Model):
     """Extensão do pos.config para persistir o contador de contingência (DEC-011)."""
     _inherit = 'pos.config'
@@ -530,6 +742,7 @@ class PosSession(models.Model):
             'x_fiscal_url_xml',
             'x_fiscal_url_pdf',
             'x_fiscal_offline',
+            'x_fiscal_cancelado',
             'x_fiscal_numero',
             'x_fiscal_serie',
             'x_fiscal_protocolo',
@@ -662,11 +875,17 @@ class PosSession(models.Model):
         # `dinheiro_liquido` (vendas em dinheiro − sangrias) é o subtotal líquido
         # de vendas, exibido na seção "DINHEIRO EM CAIXA" (RF-01/RF-03).
         fundo_caixa = identificacao['fundo_caixa'] or 0.0
+        # Dinheiro dos cupons cancelados na SEFAZ: o core já os somou em
+        # payment_amount (state continua 'invoiced', DEC-001), então o valor
+        # precisa ser subtraído aqui para o cupom sair do caixa (DEC-005).
+        total_cancelado = self._get_dinheiro_cancelado()
         saldo_caixa_dinheiro = self._calc_saldo_caixa_dinheiro(
             cash_details, total_sangrias, total_suprimentos,
-            recebimentos_por_metodo, fundo_caixa,
+            recebimentos_por_metodo, fundo_caixa, total_cancelado,
         )
-        dinheiro_liquido = self._calc_dinheiro_liquido(cash_details, total_sangrias)
+        dinheiro_liquido = self._calc_dinheiro_liquido(
+            cash_details, total_sangrias, total_cancelado,
+        )
 
         return {
             'empresa': empresa,
@@ -757,7 +976,39 @@ class PosSession(models.Model):
         total_suprimentos = sum(s['valor'] for s in suprimentos)
         return sangrias, suprimentos, total_sangrias, total_suprimentos
 
-    def _calc_dinheiro_liquido(self, cash_details, total_sangrias):
+    def _get_dinheiro_cancelado(self):
+        """Total em dinheiro dos cupons cancelados fiscalmente na sessão.
+
+        O core monta ``default_cash_details.payment_amount`` a partir de TODOS
+        os pedidos não-draft/cancel da sessão (``get_closing_control_data`` →
+        ``_get_closed_orders``). Como o cancelamento fiscal NÃO muda o ``state``
+        do pedido (DEC-001), o valor do cupom cancelado continuaria entrando na
+        gaveta. Este helper devolve o quanto precisa ser subtraído para que o
+        cupom "suma como se nunca tivesse sido recebido" (DEC-005).
+
+        Espelha a seleção de método do core: só o PRIMEIRO método de dinheiro
+        da sessão compõe ``payment_amount``. Filtrar por ``type == 'cash'``
+        subtrairia de mais caso o caixa tenha mais de um método de dinheiro
+        cadastrado — o saldo do fechamento ficaria menor que a gaveta real.
+
+        Returns:
+            float: soma dos pagamentos em dinheiro dos pedidos cancelados.
+        """
+        metodos_dinheiro = self.payment_method_ids.filtered(
+            lambda pm: pm.type == 'cash'
+        )
+        if not metodos_dinheiro:
+            return 0.0
+        metodo_padrao = metodos_dinheiro[0]
+        pedidos_cancelados = self._get_closed_orders().filtered(
+            lambda o: o.x_fiscal_cancelado
+        )
+        pagamentos = pedidos_cancelados.payment_ids.filtered(
+            lambda p: p.payment_method_id == metodo_padrao
+        )
+        return sum(pagamentos.mapped('amount'))
+
+    def _calc_dinheiro_liquido(self, cash_details, total_sangrias, total_cancelado=0.0):
         """Dinheiro líquido esperado na gaveta = vendas em dinheiro − sangrias.
 
         Diferente do ``saldo_caixa`` (que inclui fundo de caixa, suprimentos,
@@ -768,16 +1019,20 @@ class PosSession(models.Model):
         Args:
             cash_details: dict com os detalhes de dinheiro (default_cash_details).
             total_sangrias: float com o total retirado em sangrias.
+            total_cancelado: float em dinheiro dos cupons cancelados na SEFAZ.
+                Opcional (default 0.0) para não quebrar chamadas antigas —
+                quando informado, o cupom cancelado deixa de contar como venda
+                em dinheiro (DEC-005).
 
         Returns:
             float: dinheiro líquido esperado na gaveta.
         """
         dinheiro_bruto = cash_details.get('payment_amount', 0.0) if cash_details else 0.0
-        return dinheiro_bruto - total_sangrias
+        return dinheiro_bruto - total_sangrias - total_cancelado
 
     def _calc_saldo_caixa_dinheiro(self, cash_details, total_sangrias,
                                     total_suprimentos, recebimentos_por_metodo,
-                                    fundo_caixa):
+                                    fundo_caixa, total_cancelado=0.0):
         """Saldo do caixa físico (gaveta) = fundo + vendas em dinheiro +
         suprimentos + recebimentos em dinheiro − sangrias.
 
@@ -803,12 +1058,15 @@ class PosSession(models.Model):
             total_suprimentos: float entrado em suprimentos (sempre dinheiro).
             recebimentos_por_metodo: dict nome do método → soma de recebimentos.
             fundo_caixa: float do fundo de caixa de abertura.
+            total_cancelado: float em dinheiro dos cupons cancelados na SEFAZ.
+                Opcional (default 0.0) para não quebrar chamadas antigas —
+                quando informado, o cupom cancelado sai da gaveta (DEC-005).
 
         Returns:
             dict: ``{entradas, saidas, saldo, vendas_dinheiro, receb_dinheiro}``.
             Offline-safe (RF-04): função pura, sem RPC.
         """
-        vendas_dinheiro = cash_details.get('payment_amount', 0.0) if cash_details else 0.0
+        vendas_dinheiro = (cash_details.get('payment_amount', 0.0) if cash_details else 0.0) - total_cancelado
         nome_dinheiro = cash_details.get('name', 'Dinheiro') if cash_details else 'Dinheiro'
         receb_dinheiro = recebimentos_por_metodo.get(nome_dinheiro, 0.0)
         entradas = (fundo_caixa or 0.0) + vendas_dinheiro + total_suprimentos + receb_dinheiro
