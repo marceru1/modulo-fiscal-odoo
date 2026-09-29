@@ -437,22 +437,29 @@ class PosOrder(models.Model):
     # ==========================================================
     @api.model
     def action_cancelar_nfce(self, pos_reference, justificativa):
-        """Solicita ao middleware o cancelamento da NFC-e de um cupom pago.
+        """Cancela comercialmente um cupom pago do PDV (fiscal ou não-fiscal).
 
-        Chamado do PDV (TicketScreen, atalho N) via orm.call. Apenas SOLICITA:
-        quem escreve x_fiscal_cancelado=True é o callback assíncrono do
-        middleware (/api/retorno-fiscal), depois que a SEFAZ aceitar (DEC-004).
+        Chamado do PDV (TicketScreen, atalho N) via orm.call. SÍNCRONO e
+        autoritativo no Odoo (decisão do usuário 29/09: o cancelamento não
+        passa mais pelo middleware/SEFAZ):
 
-        Guards — espelham os do frontend como defesa em profundidade (a SEFAZ
-        é a autoridade final, o middleware é a segunda linha):
-          - justificativa >= 15 chars (mesmo mínimo do FocusNfceService);
-          - pedido existe, x_fiscal_status == 'autorizado' e online;
-          - date_order dentro do prazo de 24h do evento 110111.
+          - marca x_fiscal_cancelado=True IMEDIATAMENTE (o fechamento de caixa
+            desconta o valor do cupom cancelado);
+          - reverte o estoque na hora (_reverter_estoque_cancelamento);
+          - se o cupom tinha NFC-e emitida, avisa o middleware best-effort
+            para o painel refletir o estado (sem transação fiscal: a NFC-e
+            autorizada permanece autorizada na SEFAZ).
+
+        Guards:
+          - justificativa >= 15 chars (padrão do módulo/painel);
+          - pedido existe, state 'paid'/'invoiced' (cupom pago), ainda não
+            cancelado;
+          - dentro de 24h (janela herdada do evento 110111 — mantida como
+            política de negócio mesmo sem o evento).
 
         Returns:
             dict: ``{'success': bool, 'mensagem': str}``. Nunca levanta
-            exceção para o JS — falha de rede/timeout vira ``success=False``
-            com mensagem (o operador precisa ver algo na tela).
+            exceção para o JS — falha vira ``success=False`` com mensagem.
         """
         justificativa = (justificativa or '').strip()
         if len(justificativa) < 15:
@@ -468,19 +475,19 @@ class PosOrder(models.Model):
             [('pos_reference', '=', pos_reference)], limit=1
         )
         if not pedido:
-            _logger.warning('[CANCELAR-NFCE] Pedido %s não encontrado.', pos_reference)
+            _logger.warning('[CANCELAR-CUPOM] Pedido %s não encontrado.', pos_reference)
             return {'success': False, 'mensagem': 'Pedido não encontrado'}
 
-        if pedido.x_fiscal_status != 'autorizado':
+        if pedido.x_fiscal_cancelado:
             return {
                 'success': False,
-                'mensagem': 'Cupom não está autorizado pela SEFAZ',
+                'mensagem': 'Cupom já foi cancelado',
             }
 
-        if pedido.x_fiscal_offline:
+        if pedido.state not in ('paid', 'invoiced'):
             return {
                 'success': False,
-                'mensagem': 'Cancelamento de cupom em contingência não suportado',
+                'mensagem': 'Cupom não está pago',
             }
 
         if not pedido.date_order:
@@ -493,78 +500,66 @@ class PosOrder(models.Model):
                 'mensagem': 'Prazo de 24h para cancelamento expirado',
             }
 
-        # Mesmo padrão de action_pos_order_paid: URL/secret/timeout em runtime
-        # via ir.config_parameter, secret opcional no header X-Webhook-Token.
-        api_url = f"{pedido._get_middleware_url()}/api/odoo/cancelar"
-        payload = {
-            'documento_id': pedido.pos_reference,
-            'justificativa': justificativa,
-            'chave_nfe': pedido.x_fiscal_chave or '',
-        }
-        headers = {'Content-Type': 'application/json', 'Accept': 'application/json'}
-        webhook_secret = pedido._get_webhook_secret()
-        if webhook_secret:
-            headers['X-Webhook-Token'] = webhook_secret
+        # Autoritativo: marca e reverte ANTES de avisar o middleware. O aviso
+        # lá é cosmético (painel) — a operação comercial é do Odoo.
+        pedido.sudo().write({'x_fiscal_cancelado': True})
+        _logger.info(
+            '[CANCELAR-CUPOM] Pedido %s cancelado comercialmente (fiscal=%s). '
+            'Revertendo estoque.',
+            pos_reference, bool(pedido.x_confirmacao_venda),
+        )
+        pedido.sudo()._reverter_estoque_cancelamento()
 
+        self._avisar_middleware_cancelamento(pedido, justificativa)
+
+        return {
+            'success': True,
+            'mensagem': 'Cupom cancelado — estoque reposto e valor descontado do caixa',
+        }
+
+    def _avisar_middleware_cancelamento(self, pedido, justificativa):
+        """Avisa o middleware de um cancelamento comercial (best-effort).
+
+        Usado quando o cupom tinha NFC-e: o painel do middleware deve refletir
+        o cancelamento da venda. NÃO é autoridade — falha de rede não desfaz
+        o cancelamento no Odoo. Sem middleware configurado, no-op silencioso.
+        """
         try:
             response = requests.post(
-                api_url,
-                data=json.dumps(payload),
-                headers=headers,
+                f"{pedido._get_middleware_url()}/api/odoo/cancelar",
+                data=json.dumps({
+                    'documento_id': pedido.pos_reference,
+                    'justificativa': justificativa,
+                    'chave_nfe': pedido.x_fiscal_chave or '',
+                }),
+                headers={
+                    'Content-Type': 'application/json',
+                    'X-Webhook-Token': pedido._get_webhook_secret(),
+                },
                 timeout=pedido._get_webhook_timeout(),
             )
-        except requests.exceptions.Timeout:
-            _logger.error(
-                '[CANCELAR-NFCE] Timeout ao solicitar cancelamento de %s.', pos_reference
-            )
-            return {
-                'success': False,
-                'mensagem': 'Tempo esgotado ao falar com o middleware. Tente novamente.',
-            }
-        except requests.exceptions.RequestException as e:
-            _logger.error(
-                '[CANCELAR-NFCE] Falha de conexão ao cancelar %s: %s', pos_reference, e
-            )
-            return {
-                'success': False,
-                'mensagem': 'Falha de conexão com o middleware.',
-            }
+            if 200 <= response.status_code < 300:
+                _logger.info(
+                    '[CANCELAR-CUPOM] Middleware avisado do cancelamento de %s.',
+                    pedido.pos_reference,
+                )
+            else:
+                _logger.warning(
+                    '[CANCELAR-CUPOM] Middleware não aceitou o aviso de %s (%s).',
+                    pedido.pos_reference, response.status_code,
+                )
         except Exception as e:
-            _logger.error(
-                '[CANCELAR-NFCE] Erro interno ao cancelar %s: %s',
-                pos_reference, e, exc_info=True,
+            _logger.warning(
+                '[CANCELAR-CUPOM] Falha best-effort ao avisar middleware de %s: %s',
+                pedido.pos_reference, e,
             )
-            return {
-                'success': False,
-                'mensagem': 'Erro interno ao solicitar o cancelamento.',
-            }
-
-        if 200 <= response.status_code < 300:
-            _logger.info(
-                '[CANCELAR-NFCE] Cancelamento de %s aceito pelo middleware. '
-                'Aguardando callback para marcar o pedido e devolver o estoque.',
-                pos_reference,
-            )
-            return {'success': True, 'mensagem': 'Solicitação de cancelamento enviada'}
-
-        _logger.warning(
-            '[CANCELAR-NFCE] Middleware recusou o cancelamento de %s (%s): %s',
-            pos_reference, response.status_code, response.text[:2000],
-        )
-        try:
-            corpo = response.json()
-        except ValueError:
-            corpo = {}
-        mensagem = corpo.get('error') or corpo.get('mensagem')
-        if not mensagem:
-            mensagem = f'Cancelamento recusado pelo middleware (HTTP {response.status_code})'
-        return {'success': False, 'mensagem': str(mensagem)[:500]}
 
     def _reverter_estoque_cancelamento(self):
-        """Devolve ao estoque os produtos de um cupom cancelado na SEFAZ.
+        """Devolve ao estoque os produtos de um cupom cancelado no Odoo.
 
-        Disparado pelo callback do middleware (DEC-004) — nunca pelo clique do
-        operador: se a SEFAZ recusar, o estoque não pode ter voltado.
+        Disparado por action_cancelar_nfce — o cancelamento comercial é
+        sincrono e autoritativo no Odoo (decisão do usuário 29/09): estoque
+        volta na mesma transação do flag.
 
         API do Odoo 18 (o ticket 03 citava ``create_returns()``, que não existe
         mais no core):
