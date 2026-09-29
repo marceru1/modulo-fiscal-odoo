@@ -106,7 +106,13 @@ function excluirCupom(tela) {
  * TicketScreen do core já abre nos pedidos não finalizados
  * (ticket_screen.js:72 filter=null → activeOrderFilter). */
 function abrirListaDeVendas(tela) {
-    tela.pos.showScreen("TicketScreen");
+    // Abre JÁ no filtro "Pagos" (SYNCED) — decisão do usuário: J/V devem
+    // mostrar pedidos PAGOS, não os em andamento. stateOverride é prop nativa
+    // do TicketScreen (ticket_screen.js:47, aplicada em :77); "SYNCED" é o id
+    // do option "Pagos" do _getFilterOptions() (ticket_screen.js:595). O
+    // onMounted roda onFilterSelected("SYNCED") (_fetchSyncedOrders) — mesma
+    // RPC do core ao clicar no filtro manualmente, nada adicional.
+    tela.pos.showScreen("TicketScreen", { stateOverride: { filter: "SYNCED" } });
 }
 
 // ── A tabela ─────────────────────────────────────────────────────────────────
