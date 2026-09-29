@@ -88,6 +88,12 @@
             'meu_modulo_fiscal/static/src/xml/preco_badge_produto.xml',
             'meu_modulo_fiscal/static/src/css/preco_badge_produto.css',
 
+            # atalhos-pdv-tabela-classica: tabela clássica fiscal A-V.
+            # PaymentScreen A/D · ProductScreen C/E/F/I/J/L/P/Q/V · Navbar B/G/M.
+            # Substituiu integralmente o esquema de atalhos anterior (removido
+            # no ticket 01), que conflitava nas letras A-E.
+            'meu_modulo_fiscal/static/src/js/atalhos_tabela_classica.js',
+
         ],
         'web.assets_web': [
             'meu_modulo_fiscal/static/src/js/user_menu_cleanup.js',
