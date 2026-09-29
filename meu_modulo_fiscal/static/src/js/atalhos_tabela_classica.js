@@ -22,6 +22,10 @@
  *   pos.onDeleteOrder(order)     → pos_store.js:417 (ARG OBRIGATÓRIO,
  *                                  confirmação interna)  ⚠ ver DEC-009      ✓
  *   pos.cashMove()               → pos_store.js:364                         ✓
+ *   pos.pay()                    → pos_store.js:1296 (mesmo handler do botão
+ *                                  "Payment" do Actionpad; guards internos:
+ *                                  canPay() = cupom não vazio
+ *                                  [pos_order.js:298] + lotes/serial)         ✓
  *   pos.closeSession()           → pos_store.js:368 (abre ClosePosPopup)
  *                                  ⚠ DEC-008: NÃO é closePos(), que faz
  *                                  redirectToBackend() no Odoo 18           ✓
@@ -153,6 +157,7 @@ export const ATALHOS = {
         { tecla: "l", acao: "Buscar produto", executar: focarBuscaDeProduto },
         { tecla: "p", acao: "Excluir cupom", executar: excluirCupom },
         { tecla: "q", acao: "Cancelar item", executar: cancelarItemSelecionado },
+        { tecla: "s", acao: "Receber pagamento", executar: (tela) => tela.pos.pay() },
         { tecla: "v", acao: "Vendas", executar: abrirListaDeVendas },
     ],
     // Globais: vivem no Navbar, que fica montado enquanto o POS está aberto
