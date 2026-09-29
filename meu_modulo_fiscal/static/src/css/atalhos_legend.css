@@ -37,3 +37,27 @@
     font-weight: 600;
     line-height: 1.4;
 }
+
+/* ── PaymentScreen: cabe tudo na altura fixa do caixa ─────────────────────── */
+/*
+ * A coluna esquerda da PaymentScreen (left-content) é altura fixa. A legenda
+ * nova empurrou numpad + rodapé Voltar/Validar pra fora (left-content
+ * scrollH 765px > clientH 650px): o fundo da legenda e metade dos botões
+ * ficavam cortados (overflow-hidden do container).
+ * FIX (medido ao vivo no POS, 2026-09-28): o container dos MÉTODOS encolhe
+ * com flex + scroll interno; legenda, numpad e rodapé ficam inteiros.
+ */
+.payment-screen .left-content {
+    overflow: hidden;
+}
+.payment-screen .left-content > .paymentmethods-container {
+    flex: 1 1 0;
+    min-height: 0;
+    display: flex;
+    flex-direction: column;
+    overflow-y: auto;
+    margin-bottom: 0.5rem;
+}
+.payment-screen .left-content > .paymentmethods-container > .paymentmethods {
+    flex: 0 0 auto;
+}
