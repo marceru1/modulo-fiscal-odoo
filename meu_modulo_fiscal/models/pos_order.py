@@ -2,6 +2,8 @@ import json
 import requests
 from odoo import models, api, fields
 from datetime import datetime
+from collections import defaultdict
+from odoo.osv.expression import AND
 import logging
 import os
 
@@ -502,10 +504,10 @@ class PosOrder(models.Model):
 
         # Autoritativo: marca e reverte ANTES de avisar o middleware. O aviso
         # lá é cosmético (painel) — a operação comercial é do Odoo.
-        pedido.sudo().write({'x_fiscal_cancelado': True})
+        pedido.sudo().write({'x_fiscal_cancelado': True, 'state': 'cancel'})
         _logger.info(
-            '[CANCELAR-CUPOM] Pedido %s cancelado comercialmente (fiscal=%s). '
-            'Revertendo estoque.',
+            '[CANCELAR-CUPOM] Pedido %s cancelado comercialmente (fiscal=%s, '
+            'state=cancel). Revertendo estoque.',
             pos_reference, bool(pedido.x_confirmacao_venda),
         )
         pedido.sudo()._reverter_estoque_cancelamento()
@@ -516,6 +518,40 @@ class PosOrder(models.Model):
             'success': True,
             'mensagem': 'Cupom cancelado — estoque reposto e valor descontado do caixa',
         }
+
+    @api.model
+    def search_paid_order_ids(self, config_id, domain, limit, offset):
+        """Estende o search do filtro "Pagos" do TicketScreen.
+
+        Base: o core exclui 'cancel' do domínio default — os cupons cancelados
+        aqui (atalho N) seriam invisíveis no PDV. Este override remove a
+        exclusão de 'cancel' quando o domínio explícito pede cancelados
+        (filtro "Cancelado"), e mantém o comportamento core nos demais.
+        """
+        # Sem o nosso dominio de cancelados, core intacto.
+        if not any(dom for dom in (domain or []) if isinstance(dom, (list, tuple)) and len(dom) >= 3 and dom[0] == 'x_fiscal_cancelado'):
+            return super().search_paid_order_ids(config_id, domain, limit, offset)
+
+        # Busca de cancelados (flag True): draft e cancel saem do default do
+        # core — aqui o alvo É o cancel. Rodamos como o core, sem o exclude.
+        real_domain = AND([domain or [], [
+            ['config_id', '=', config_id],
+        ]])
+        orders = self.search(real_domain, limit=limit, offset=offset, order='create_date desc')
+        pos_config = self.env['pos.config'].browse(config_id)
+        orders = orders.filtered(lambda order: order.currency_id == pos_config.currency_id)
+        orderlines = self.env['pos.order.line'].search(['|', ('refunded_orderline_id.order_id', 'in', orders.ids), ('order_id', 'in', orders.ids)])
+        _logger.info(
+            '[CANCELAR-CUPOM] Filtro de cancelados no PDV: %d pedidos.', len(orders),
+        )
+        orders_info = defaultdict(lambda: datetime.min)
+        for orderline in orderlines:
+            key_order = orderline.order_id.id if orderline.order_id in orders \
+                            else orderline.refunded_orderline_id.order_id.id
+            if orders_info[key_order] < orderline.write_date:
+                orders_info[key_order] = orderline.write_date
+        totalCount = self.search_count(real_domain)
+        return {'ordersInfo': list(orders_info.items())[::-1], 'totalCount': totalCount}
 
     def _avisar_middleware_cancelamento(self, pedido, justificativa):
         """Avisa o middleware de um cancelamento comercial (best-effort).
@@ -873,10 +909,12 @@ class PosSession(models.Model):
         # `dinheiro_liquido` (vendas em dinheiro − sangrias) é o subtotal líquido
         # de vendas, exibido na seção "DINHEIRO EM CAIXA" (RF-01/RF-03).
         fundo_caixa = identificacao['fundo_caixa'] or 0.0
-        # Dinheiro dos cupons cancelados na SEFAZ: o core já os somou em
-        # payment_amount (state continua 'invoiced', DEC-001), então o valor
-        # precisa ser subtraído aqui para o cupom sair do caixa (DEC-005).
+        # Dinheiro dos cupons cancelados: com state='cancel' (redesign 29/09)
+        # o core já exclui o cupom do somatório; o helper cobre legados
+        # (cancelados PRÉ-redesign com state invoiced) e é no-op no caso novo.
         total_cancelado = self._get_dinheiro_cancelado()
+        # Seção CUPONS CANCELADOS do relatório (auditoria do operador)
+        cupons_cancelados = self._get_cupons_cancelados()
         saldo_caixa_dinheiro = self._calc_saldo_caixa_dinheiro(
             cash_details, total_sangrias, total_suprimentos,
             recebimentos_por_metodo, fundo_caixa, total_cancelado,
@@ -896,6 +934,7 @@ class PosSession(models.Model):
             'total_sangrias': total_sangrias,
             'suprimentos': suprimentos,
             'total_suprimentos': total_suprimentos,
+            'cupons_cancelados': cupons_cancelados,
             'recebimentos': recebimentos,
             'total_recebimentos': total_recebimentos,
             'dinheiro_liquido': dinheiro_liquido,
@@ -975,22 +1014,23 @@ class PosSession(models.Model):
         return sangrias, suprimentos, total_sangrias, total_suprimentos
 
     def _get_dinheiro_cancelado(self):
-        """Total em dinheiro dos cupons cancelados fiscalmente na sessão.
+        """Total em dinheiro dos cupons cancelados na sessão.
 
-        O core monta ``default_cash_details.payment_amount`` a partir de TODOS
-        os pedidos não-draft/cancel da sessão (``get_closing_control_data`` →
-        ``_get_closed_orders``). Como o cancelamento fiscal NÃO muda o ``state``
-        do pedido (DEC-001), o valor do cupom cancelado continuaria entrando na
-        gaveta. Este helper devolve o quanto precisa ser subtraído para que o
-        cupom "suma como se nunca tivesse sido recebido" (DEC-005).
+        Com o cancelamento comercial (state='cancel' — redesign 29/09), o core
+        já EXCLUI o pedido de ``_get_closed_orders``: o valor do cupom cancelado
+        não entra mais em ``payment_amount`` nem em ``non_cash_payment_methods``.
+        Este helper devolve a soma dos pagamentos em dinheiro dos cancelados —
+        hoje sempre 0.0 (não há nada a subtrair; o core já tratou), mas é a
+        base da seção "CUPONS CANCELADOS" do relatório de fechamento, para o
+        operador conferir o que saiu.
 
-        Espelha a seleção de método do core: só o PRIMEIRO método de dinheiro
-        da sessão compõe ``payment_amount``. Filtrar por ``type == 'cash'``
-        subtrairia de mais caso o caixa tenha mais de um método de dinheiro
-        cadastrado — o saldo do fechamento ficaria menor que a gaveta real.
+        Compat: em pedidos cancelados ANTES do redesign (state 'invoiced' +
+        flag True), ainda funcionam: continuam em _get_closed_orders e o
+        retorno aqui desconta corretamente.
 
         Returns:
-            float: soma dos pagamentos em dinheiro dos pedidos cancelados.
+            float: soma dos pagamentos em dinheiro dos pedidos cancelados
+            que AINDA estão no conjunto fechado do core (legados).
         """
         metodos_dinheiro = self.payment_method_ids.filtered(
             lambda pm: pm.type == 'cash'
@@ -998,13 +1038,34 @@ class PosSession(models.Model):
         if not metodos_dinheiro:
             return 0.0
         metodo_padrao = metodos_dinheiro[0]
-        pedidos_cancelados = self._get_closed_orders().filtered(
+        # Cancelados que o core ainda considera "fechados" (legacy, pré-redesign)
+        pedidos_cancelados_legacy = self._get_closed_orders().filtered(
             lambda o: o.x_fiscal_cancelado
         )
-        pagamentos = pedidos_cancelados.payment_ids.filtered(
+        pagamentos_legacy = pedidos_cancelados_legacy.payment_ids.filtered(
             lambda p: p.payment_method_id == metodo_padrao
         )
-        return sum(pagamentos.mapped('amount'))
+        return sum(pagamentos_legacy.mapped('amount'))
+
+    def _get_cupons_cancelados(self):
+        """Lista de cupons cancelados da sessão (atalho N) para o relatório.
+
+        Fonte: order_ids da sessão com x_fiscal_cancelado=True — independe do
+        state (os novos vêm com state='cancel', legados podem ter 'invoiced').
+
+        Returns:
+            list[dict]: [{referencia, data, valor, total_pagamentos}].
+        """
+        cancelados = self.order_ids.filtered(lambda o: o.x_fiscal_cancelado)
+        cupons = []
+        for order in cancelados:
+            cupons.append({
+                'referencia': order.pos_reference,
+                'data': order.date_order.strftime('%d/%m/%Y %H:%M') if order.date_order else '',
+                'valor': sum(order.payment_ids.mapped('amount')),
+                'fiscal': bool(order.x_confirmacao_venda),
+            })
+        return cupons
 
     def _calc_dinheiro_liquido(self, cash_details, total_sangrias, total_cancelado=0.0):
         """Dinheiro líquido esperado na gaveta = vendas em dinheiro − sangrias.

@@ -342,10 +342,152 @@ patch(ProductScreen.prototype, {
 });
 
 // ── TicketScreen: R = Reimprimir cupom selecionado ───────────────────────────
+// + filtro "Cancelados" na lista de vendas (feature cancelar-cupom).
+//
+// Como funciona a lista do core (ticket_screen.js):
+//   - "Pagos" (SYNCED): pedidos `finalized` com uiState.displayed (o cache
+//     local), completados por _fetchSyncedOrders → search_paid_order_ids.
+//   - O setup do PosOrder marca uiState.displayed = (state !== "cancel") —
+//     um pedido cancelado no backend sincronizado chega com displayed=false
+//     e some de TODAS as listas. Além disso search_paid_order_ids exclui
+//     state='cancel' no SQL.
+//   - O dropdown de filtros vem do _getOrderStates do core.
+//
+// Este patch faz 4 coisas:
+//   1. _getFilterOptions: adiciona a opção "Cancelados" no dropdown;
+//   2. onFilterSelected/onSearch: no filtro CANCELADOS, busca os cancelados
+//      no backend (domínio explícito x_fiscal_cancelado — o search_paid_order_ids
+//      do módulo já aceita) e lê no cache;
+//   3. getFilteredOrderList: no filtro CANCELADOS, lista os cancelados
+//      (uiState.displayed=false do core não pode bloquear aqui — filtramos
+//      por x_fiscal_cancelado direto no cache);
+//   4. getStatus: mostra "Cancelado" no lugar de "Paid".
+const FILTRO_CANCELADOS = "CANCELADOS";
+/** Mesmo page size do core (ticket_screen.js: NBR_BY_PAGE = 30). */
+const CANCELADOS_POR_PAGINA = 30;
+
 patch(TicketScreen.prototype, {
     setup() {
         super.setup();
         registrarAtalhos(this, ATALHOS.TicketScreen);
+    },
+    _getFilterOptions() {
+        const options = super._getFilterOptions();
+        options.set(FILTRO_CANCELADOS, { text: _t("Cancelados") });
+        return options;
+    },
+    async onFilterSelected(selectedFilter) {
+        this.state.filter = selectedFilter;
+        if (this.state.filter === FILTRO_CANCELADOS) {
+            await this._fetchCancelados();
+        }
+    },
+    async onSearch(search) {
+        this.state.search = search;
+        this.state.page = 1;
+        if (this.state.filter === FILTRO_CANCELADOS) {
+            await this._fetchCancelados();
+        }
+    },
+    async onNextPage() {
+        if (this.state.filter === FILTRO_CANCELADOS) {
+            this.state.page += 1;
+            await this._fetchCancelados();
+            return;
+        }
+        return super.onNextPage();
+    },
+    async onPrevPage() {
+        if (this.state.filter === FILTRO_CANCELADOS) {
+            this.state.page -= 1;
+            await this._fetchCancelados();
+            return;
+        }
+        return super.onPrevPage();
+    },
+    /** Busca os cupons cancelados e atualiza o cache. O domínio explícito
+     * x_fiscal_cancelado desliga o exclude de 'cancel' no backend do módulo. */
+    async _fetchCancelados() {
+        const screenState = this.pos.ticketScreenState;
+        const domain = this._computeCanceladosDomain();
+        const offset = screenState.offsetByDomain[JSON.stringify(domain)] || 0;
+        const { ordersInfo, totalCount } = await this.pos.data.call(
+            "pos.order",
+            "search_paid_order_ids",
+            [],
+            {
+                config_id: this.pos.config.id,
+                domain,
+                limit: 30,
+                offset,
+            }
+        );
+        if (!screenState.offsetByDomain[JSON.stringify(domain)]) {
+            screenState.offsetByDomain[JSON.stringify(domain)] = 0;
+        }
+        screenState.offsetByDomain[JSON.stringify(domain)] += ordersInfo.length;
+        screenState.totalCount = totalCount;
+
+        const idsNotInCache = ordersInfo
+            .map((info) => info[0])
+            .filter((id) => !this.pos.models["pos.order"].get(id));
+        if (idsNotInCache.length > 0) {
+            await this.pos.data.read("pos.order", Array.from(new Set(idsNotInCache)));
+        }
+        // Cancelados chegam com uiState.displayed=false (setup do PosOrder
+        // marca state !== "cancel") — SEM isso eles não entram no cache com
+        // a linha exibível. O filtro lê do cache direto, mas o read acima
+        // precisa criar o record; o create já roda. displayed não é usado
+        // pelo nosso filtro — nada a forçar aqui.
+    },
+    /** Domínio do search: cupons cancelados. Espelha o formato do core
+     * (lista de leafs — o AND no backend concatena com config_id). */
+    _computeCanceladosDomain() {
+        const { fieldName, searchTerm } = this.state.search;
+        if (!searchTerm) {
+            return [["x_fiscal_cancelado", "=", true]];
+        }
+        const searchField = this._getSearchFields()[fieldName];
+        if (searchField && searchField.modelField && searchField.modelField !== null) {
+            if (searchField.formatSearch) {
+                const formatted = searchField.formatSearch(searchTerm);
+                return [["x_fiscal_cancelado", "=", true], [searchField.modelField, "ilike", `%${formatted}%`]];
+            }
+            return [["x_fiscal_cancelado", "=", true], [searchField.modelField, "ilike", `%${searchTerm}%`]];
+        }
+        return [["x_fiscal_cancelado", "=", true]];
+    },
+    getFilteredOrderList() {
+        if (this.state.filter === FILTRO_CANCELADOS) {
+            const orderModel = this.pos.models["pos.order"];
+            const cancelados = orderModel.filter(
+                (o) => o.x_fiscal_cancelado && o.id !== undefined && parseUTCString(o.date_order)
+            );
+            return this._ordenarComoCore(cancelados).slice(
+                (this.state.page - 1) * CANCELADOS_POR_PAGINA,
+                this.state.page * CANCELADOS_POR_PAGINA
+            );
+        }
+        return super.getFilteredOrderList();
+    },
+    getStatus(order) {
+        if (order.x_fiscal_cancelado) {
+            return _t("Cancelado");
+        }
+        return super.getStatus(order);
+    },
+    /** Mesma ordenação do core (data_order desc, tie-break por name). */
+    _ordenarComoCore(orders) {
+        return orders.sort((a, b) => {
+            const dateA = parseUTCString(a.date_order, "yyyy-MM-dd HH:mm:ss");
+            const dateB = parseUTCString(b.date_order, "yyyy-MM-dd HH:mm:ss");
+            if (a.date_order !== b.date_order) {
+                return dateB - dateA;
+            }
+            const nameA = parseInt(a.name.replace(/\D/g, "")) || 0;
+            const nameB = parseInt(b.name.replace(/\D/g, "")) || 0;
+            return nameB - nameA;
+        });
     },
 });
 
