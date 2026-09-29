@@ -462,7 +462,7 @@ class PosOrder(models.Model):
         if not pos_reference:
             return {'success': False, 'mensagem': 'Pedido não encontrado'}
 
-        pedido = self.sudo().search(
+        pedido = self.search(
             [('pos_reference', '=', pos_reference)], limit=1
         )
         if not pedido:
