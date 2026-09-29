@@ -93,6 +93,12 @@
             # Substituiu integralmente o esquema de atalhos anterior (removido
             # no ticket 01), que conflitava nas letras A-E.
             'meu_modulo_fiscal/static/src/js/atalhos_tabela_classica.js',
+            # Legenda visual dos atalhos (ticket 05). O JS registra o
+            # componente nas telas (patch de statics `components`); o XML o
+            # renderiza. JS antes do XML.
+            'meu_modulo_fiscal/static/src/js/atalhos_legend.js',
+            'meu_modulo_fiscal/static/src/xml/atalhos_legend.xml',
+            'meu_modulo_fiscal/static/src/css/atalhos_legend.css',
 
         ],
         'web.assets_web': [
