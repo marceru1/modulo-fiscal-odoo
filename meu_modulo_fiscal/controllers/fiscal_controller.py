@@ -135,34 +135,6 @@ class FiscalWebhookController(http.Controller):
             # Aciona o ORM para escrever os metadados devolvidos direto no Pedido Odoo
             pedido.write(valores)
 
-            # Cancelamento fiscal (evento 110111). O middleware manda o mesmo
-            # callback com fiscal.status = 'cancelado' — aqui o pedido ganha o
-            # flag que o tira do fechamento de caixa (DEC-001/DEC-005) e o
-            # estoque volta. O estoque só é revertido NESTE ponto, nunca no
-            # clique do operador: quem confirma o cancelamento é a SEFAZ
-            # (DEC-004), então uma recusa dela não deixa o estoque errado.
-            #
-            # IDEMPOTENTE: o webhook é retentado pelo middleware (a própria
-            # rota devolve 404 "pro Laravel retentar" quando o pedido ainda não
-            # existe). Sem o guard, um segundo callback do mesmo cancelamento
-            # criaria OUTRA devolução do mesmo picking e o estoque voltaria em
-            # dobro. O flag é a fonte da verdade: só reverte na transição
-            # False → True.
-            if valores.get('x_fiscal_status') == 'cancelado':
-                ja_estava_cancelado = pedido.x_fiscal_cancelado
-                _logger.info(
-                    '[API ODOO] Cancelamento confirmado para %s — marcando '
-                    'x_fiscal_cancelado e revertendo estoque.', documento_id,
-                )
-                pedido.sudo().write({'x_fiscal_cancelado': True})
-                if ja_estava_cancelado:
-                    _logger.info(
-                        '[API ODOO] Callback de cancelamento REPETIDO para %s — '
-                        'estoque já devolvido, nada a fazer.', documento_id,
-                    )
-                else:
-                    pedido.sudo()._reverter_estoque_cancelamento()
-
             # Atualiza o high-water mark no pos.config (DEC-011 / ERROR-010)
             # Garante que o contador de contingência reflete orders autorizadas pelo middleware.
             numero_str = valores.get('x_fiscal_numero', '')
