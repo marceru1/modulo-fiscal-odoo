@@ -44,20 +44,26 @@
  * nova empurrou numpad + rodapé Voltar/Validar pra fora (left-content
  * scrollH 765px > clientH 650px): o fundo da legenda e metade dos botões
  * ficavam cortados (overflow-hidden do container).
- * FIX (medido ao vivo no POS, 2026-09-28): o container dos MÉTODOS encolhe
- * com flex + scroll interno; legenda, numpad e rodapé ficam inteiros.
+ *
+ * Layout desejado (feedback do operador, 2026-09-28): lista de MÉTODOS em
+ * cima ocupando o espaço restante (com scroll interno se os cards não
+ * couberem), e TODOS os outros blocos (botões Cliente/Acréscimo/Desconto,
+ * numpad, legenda, Voltar/Validar) empilhados na BASE — o teclado colado no
+ * rodapé, sem faixa vazia flutuando no meio.
+ * FIX medido ao vivo no POS: .paymentmethods-container é o ÚNICO filho
+ * elástico (flex-grow-1 + min-height 0 + scroll interno); os demais ficam
+ * com flex-shrink 0 na base.
  */
 .payment-screen .left-content {
     overflow: hidden;
 }
 .payment-screen .left-content > .paymentmethods-container {
-    flex: 1 1 0;
+    flex: 1 1 auto;
     min-height: 0;
-    display: flex;
-    flex-direction: column;
     overflow-y: auto;
     margin-bottom: 0.5rem;
 }
-.payment-screen .left-content > .paymentmethods-container > .paymentmethods {
-    flex: 0 0 auto;
+.payment-screen .left-content > .payment-buttons,
+.payment-screen .left-content > .numpad {
+    flex-shrink: 0;
 }
