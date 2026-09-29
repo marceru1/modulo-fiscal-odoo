@@ -570,3 +570,27 @@ class TestCallbackCancelamento(_CancelamentoBase, HttpCase):
 
         self.assertEqual(resposta.status_code, 200, resposta.text)
         self.assertTrue(pedido.x_fiscal_cancelado)
+
+    def test_callback_cancelado_repetido_nao_devolve_estoque_duas_vezes(self):
+        """O webhook é retentado pelo middleware (a rota devolve 404 'pro
+        Laravel retentar' quando o pedido ainda não existe). Um segundo
+        callback do MESMO cancelamento não pode criar outra devolução: o
+        estoque voltaria em dobro.
+
+        O spy no _reverter_estoque_cancelamento é o seam: o que importa é que
+        ele roda uma vez só, não como ele devolve (isso é testado no core)."""
+        pedido = self._criar_pedido('Order cb-004')
+
+        with mock.patch.object(
+            type(pedido), '_reverter_estoque_cancelamento'
+        ) as reverter:
+            primeira = self._post_callback(pedido.pos_reference, 'cancelado')
+            segunda = self._post_callback(pedido.pos_reference, 'cancelado')
+
+        self.assertEqual(primeira.status_code, 200, primeira.text)
+        self.assertEqual(segunda.status_code, 200, segunda.text)
+        self.assertTrue(pedido.x_fiscal_cancelado)
+        self.assertEqual(
+            reverter.call_count, 1,
+            'callback repetido não pode devolver o estoque de novo',
+        )
