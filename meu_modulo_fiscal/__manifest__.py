@@ -100,15 +100,6 @@
             'meu_modulo_fiscal/static/src/xml/atalhos_legend.xml',
             'meu_modulo_fiscal/static/src/css/atalhos_legend.css',
 
-            # cancelar-cupom-nfce-pdv: popup de justificativa do cancelamento
-            # do cupom na SEFAZ (evento 110111). O TextInputPopup do core NÃO
-            # tem minLength (input_popups/text_input_popup.js) — o Apply dele
-            # fica sempre habilitado, então precisamos de componente próprio
-            # que só libere o Confirmar com 15+ caracteres. JS antes do XML
-            # (o template usa os getters do componente).
-            'meu_modulo_fiscal/static/src/js/cancelamento_justificativa_popup.js',
-            'meu_modulo_fiscal/static/src/xml/cancelamento_justificativa_popup.xml',
-
         ],
         'web.assets_web': [
             'meu_modulo_fiscal/static/src/js/user_menu_cleanup.js',

@@ -48,7 +48,7 @@
  * Nenhuma dessas letras colide com hotkey do core: o único useHotkey() do
  * point_of_sale é o "enter" de partner_list.js:34, e o number_buffer só
  * consome dígitos/+-., (ALLOWED_KEYS) — nenhuma letra da tabela é engolida.
- * Varredura repetida ao entrar o N do cancelamento: nenhum useHotkey de letra
+ * Varredura repetida ao entrar hotkeys de letra: nenhum useHotkey de letra
  * em point_of_sale/ nem em pos_restaurant/ (o TicketScreen é compartilhado
  * com o módulo de restaurante).
  *
@@ -70,7 +70,6 @@ import { makeAwaitable } from "@point_of_sale/app/store/make_awaitable_dialog";
 import { parseUTCString } from "@point_of_sale/utils";
 import { patch } from "@web/core/utils/patch";
 import { useHotkey } from "@web/core/hotkeys/hotkey_hook";
-import { CancelamentoJustificativaPopup } from "./cancelamento_justificativa_popup";
 
 // ── Guards e ações (os corpos que a tabela referencia) ───────────────────────
 
@@ -153,119 +152,6 @@ function abrirListaDeVendas(tela) {
     tela.pos.showScreen("TicketScreen", { stateOverride: { filter: "SYNCED" } });
 }
 
-// ── Cancelamento de cupom no Odoo (estoque + caixa, fiscal ou não-fiscal) ────
-
-/** Janela de cancelamento: 24h da emissão (política de negócio herdada da
- * janela do evento 110111 da NFC-e; o usuário a manteve para ambos os tipos).
- * Exportado para o teste ler daqui. */
-export const JANELA_CANCELAMENTO_MS = 24 * 3600 * 1000;
-
-/** Um cupom é cancelável pelo PDV? (guard do atalho N)
- *
- * Função pura de propósito: é o único ponto que decide se o atalho N age ou
- * fica em silêncio, então é o seam de teste do fluxo do operador.
- *
- * Regras, todas no-op silencioso quando falham (o operador não precisa do
- * motivo técnico na tela):
- *   - precisa de cupom selecionado;
- *   - cupom pago (finalized — a TicketScreen lista só esses no filtro PAGOS);
- *   - ainda não cancelado (x_fiscal_cancelado false/undefined);
- *   - dentro da janela de 24h.
- *
- * Tanto faz ser fiscal ou não-fiscal: o cancelamento é comercial (estoque +
- * caixa voltam, decisão do usuário 29/09). A NFC-e autorizada, quando houve,
- * permanece autorizada na SEFAZ.
- *
- * date_order vem em UTC ("yyyy-MM-dd HH:mm:ss"). `new Date(...)` trataria essa
- * string como hora LOCAL e deslocaria a janela pelo fuso do caixa — por isso
- * o parseUTCString do core (utils.js:132), o mesmo que a TicketScreen usa para
- * ordenar os pedidos.
- *
- * @param {Object} order cupom selecionado no TicketScreen
- * @param {number} agoraMs agora em epoch ms (injetável para teste)
- * @returns {boolean}
- */
-export function cupomCancelavel(order, agoraMs = Date.now()) {
-    if (!order) {
-        return false;
-    }
-    if (order.x_fiscal_cancelado) {
-        return false;
-    }
-    if (!order.finalized) {
-        return false;
-    }
-    if (!order.date_order) {
-        return false;
-    }
-    const emissaoMs = parseUTCString(order.date_order).toMillis();
-    return agoraMs - emissaoMs < JANELA_CANCELAMENTO_MS;
-}
-
-/** N — Cancela o cupom selecionado (estoque volta, caixa desconta).
- *
- * Fluxo: guard → popup de justificativa → RPC → feedback. O backend é
- * autoritativo e sincrono (decisão do usuário 29/09): ele marca
- * x_fiscal_cancelado e reverte o estoque na mesma chamada — a resposta
- * "aceito" significa já executado. O x_fiscal_status local vira 'cancelado'
- * quando o cupom era fiscal (só informativo — a nota SEFAZ permanece como
- * está).
- *
- * O popup de resultado abre DEPOIS do unblock — um AlertDialog adicionado com
- * a UI bloqueada nasceria sob o BlockUI e o operador não conseguiria fechá-lo.
- */
-async function cancelarCupomNfce(tela) {
-    const order = tela.getSelectedOrder();
-    if (!cupomCancelavel(order)) {
-        return;
-    }
-
-    const justificativa = await makeAwaitable(
-        tela.dialog,
-        CancelamentoJustificativaPopup,
-        { title: _t("Cancelar cupom") }
-    );
-    // undefined = operador fechou o popup (Esc / Voltar): aborta sem chamar nada.
-    if (!justificativa) {
-        return;
-    }
-
-    let titulo;
-    let mensagem;
-    tela.ui.block({ message: _t("Cancelando cupom...") });
-    try {
-        const result = await tela.env.services.orm.call(
-            "pos.order",
-            "action_cancelar_nfce",
-            [],
-            { pos_reference: order.pos_reference, justificativa }
-        );
-        if (result?.success) {
-            if (order.x_confirmacao_venda) {
-                // Cupom fiscal: status informativo. A NFC-e autorizada segue
-                // autorizada na SEFAZ (decisão do usuário) — nenhum evento
-                // fiscal é feito.
-                order.x_fiscal_status = "cancelado";
-            }
-            order.x_fiscal_cancelado = true;
-            titulo = _t("Cupom cancelado");
-            mensagem = _t(
-                "Estoque reposto e valor descontado do fechamento do caixa."
-            );
-        } else {
-            titulo = _t("Não foi possível cancelar");
-            mensagem = result?.mensagem || _t("Erro desconhecido.");
-        }
-    } catch (error) {
-        console.error("[CANCELAR-CUPOM] Falha na chamada do backend:", error);
-        titulo = _t("Não foi possível cancelar");
-        mensagem = _t("Falha de comunicação com o servidor. Tente novamente.");
-    } finally {
-        tela.ui.unblock();
-    }
-    tela.dialog.add(AlertDialog, { title: titulo, body: mensagem });
-}
-
 // ── A tabela ─────────────────────────────────────────────────────────────────
 /**
  * Atalhos por tela. `executar(tela)` recebe a instância do componente
@@ -279,7 +165,6 @@ export const ATALHOS = {
     ],
     TicketScreen: [
         { tecla: "r", acao: "Reimprimir cupom", executar: reimprimirCupomSelecionado },
-        { tecla: "n", acao: "Cancelar cupom", executar: cancelarCupomNfce },
     ],
     ProductScreen: [
         { tecla: "c", acao: "Consultar produto", executar: consultarProdutoSelecionado },
@@ -342,152 +227,10 @@ patch(ProductScreen.prototype, {
 });
 
 // ── TicketScreen: R = Reimprimir cupom selecionado ───────────────────────────
-// + filtro "Cancelados" na lista de vendas (feature cancelar-cupom).
-//
-// Como funciona a lista do core (ticket_screen.js):
-//   - "Pagos" (SYNCED): pedidos `finalized` com uiState.displayed (o cache
-//     local), completados por _fetchSyncedOrders → search_paid_order_ids.
-//   - O setup do PosOrder marca uiState.displayed = (state !== "cancel") —
-//     um pedido cancelado no backend sincronizado chega com displayed=false
-//     e some de TODAS as listas. Além disso search_paid_order_ids exclui
-//     state='cancel' no SQL.
-//   - O dropdown de filtros vem do _getOrderStates do core.
-//
-// Este patch faz 4 coisas:
-//   1. _getFilterOptions: adiciona a opção "Cancelados" no dropdown;
-//   2. onFilterSelected/onSearch: no filtro CANCELADOS, busca os cancelados
-//      no backend (domínio explícito x_fiscal_cancelado — o search_paid_order_ids
-//      do módulo já aceita) e lê no cache;
-//   3. getFilteredOrderList: no filtro CANCELADOS, lista os cancelados
-//      (uiState.displayed=false do core não pode bloquear aqui — filtramos
-//      por x_fiscal_cancelado direto no cache);
-//   4. getStatus: mostra "Cancelado" no lugar de "Paid".
-const FILTRO_CANCELADOS = "CANCELADOS";
-/** Mesmo page size do core (ticket_screen.js: NBR_BY_PAGE = 30). */
-const CANCELADOS_POR_PAGINA = 30;
-
 patch(TicketScreen.prototype, {
     setup() {
         super.setup();
         registrarAtalhos(this, ATALHOS.TicketScreen);
-    },
-    _getFilterOptions() {
-        const options = super._getFilterOptions();
-        options.set(FILTRO_CANCELADOS, { text: _t("Cancelados") });
-        return options;
-    },
-    async onFilterSelected(selectedFilter) {
-        this.state.filter = selectedFilter;
-        if (this.state.filter === FILTRO_CANCELADOS) {
-            await this._fetchCancelados();
-        }
-    },
-    async onSearch(search) {
-        this.state.search = search;
-        this.state.page = 1;
-        if (this.state.filter === FILTRO_CANCELADOS) {
-            await this._fetchCancelados();
-        }
-    },
-    async onNextPage() {
-        if (this.state.filter === FILTRO_CANCELADOS) {
-            this.state.page += 1;
-            await this._fetchCancelados();
-            return;
-        }
-        return super.onNextPage();
-    },
-    async onPrevPage() {
-        if (this.state.filter === FILTRO_CANCELADOS) {
-            this.state.page -= 1;
-            await this._fetchCancelados();
-            return;
-        }
-        return super.onPrevPage();
-    },
-    /** Busca os cupons cancelados e atualiza o cache. O domínio explícito
-     * x_fiscal_cancelado desliga o exclude de 'cancel' no backend do módulo. */
-    async _fetchCancelados() {
-        const screenState = this.pos.ticketScreenState;
-        const domain = this._computeCanceladosDomain();
-        const offset = screenState.offsetByDomain[JSON.stringify(domain)] || 0;
-        const { ordersInfo, totalCount } = await this.pos.data.call(
-            "pos.order",
-            "search_paid_order_ids",
-            [],
-            {
-                config_id: this.pos.config.id,
-                domain,
-                limit: 30,
-                offset,
-            }
-        );
-        if (!screenState.offsetByDomain[JSON.stringify(domain)]) {
-            screenState.offsetByDomain[JSON.stringify(domain)] = 0;
-        }
-        screenState.offsetByDomain[JSON.stringify(domain)] += ordersInfo.length;
-        screenState.totalCount = totalCount;
-
-        const idsNotInCache = ordersInfo
-            .map((info) => info[0])
-            .filter((id) => !this.pos.models["pos.order"].get(id));
-        if (idsNotInCache.length > 0) {
-            await this.pos.data.read("pos.order", Array.from(new Set(idsNotInCache)));
-        }
-        // Cancelados chegam com uiState.displayed=false (setup do PosOrder
-        // marca state !== "cancel") — SEM isso eles não entram no cache com
-        // a linha exibível. O filtro lê do cache direto, mas o read acima
-        // precisa criar o record; o create já roda. displayed não é usado
-        // pelo nosso filtro — nada a forçar aqui.
-    },
-    /** Domínio do search: cupons cancelados. Espelha o formato do core
-     * (lista de leafs — o AND no backend concatena com config_id). */
-    _computeCanceladosDomain() {
-        const { fieldName, searchTerm } = this.state.search;
-        if (!searchTerm) {
-            return [["x_fiscal_cancelado", "=", true]];
-        }
-        const searchField = this._getSearchFields()[fieldName];
-        if (searchField && searchField.modelField && searchField.modelField !== null) {
-            if (searchField.formatSearch) {
-                const formatted = searchField.formatSearch(searchTerm);
-                return [["x_fiscal_cancelado", "=", true], [searchField.modelField, "ilike", `%${formatted}%`]];
-            }
-            return [["x_fiscal_cancelado", "=", true], [searchField.modelField, "ilike", `%${searchTerm}%`]];
-        }
-        return [["x_fiscal_cancelado", "=", true]];
-    },
-    getFilteredOrderList() {
-        if (this.state.filter === FILTRO_CANCELADOS) {
-            const orderModel = this.pos.models["pos.order"];
-            const cancelados = orderModel.filter(
-                (o) => o.x_fiscal_cancelado && o.id !== undefined && parseUTCString(o.date_order)
-            );
-            return this._ordenarComoCore(cancelados).slice(
-                (this.state.page - 1) * CANCELADOS_POR_PAGINA,
-                this.state.page * CANCELADOS_POR_PAGINA
-            );
-        }
-        return super.getFilteredOrderList();
-    },
-    getStatus(order) {
-        if (order.x_fiscal_cancelado) {
-            return _t("Cancelado");
-        }
-        return super.getStatus(order);
-    },
-    /** Mesma ordenação do core (data_order desc, tie-break por name). */
-    _ordenarComoCore(orders) {
-        return orders.sort((a, b) => {
-            const dateA = parseUTCString(a.date_order, "yyyy-MM-dd HH:mm:ss");
-            const dateB = parseUTCString(b.date_order, "yyyy-MM-dd HH:mm:ss");
-            if (a.date_order !== b.date_order) {
-                return dateB - dateA;
-            }
-            const nameA = parseInt(a.name.replace(/\D/g, "")) || 0;
-            const nameB = parseInt(b.name.replace(/\D/g, "")) || 0;
-            return nameB - nameA;
-        });
     },
 });
 

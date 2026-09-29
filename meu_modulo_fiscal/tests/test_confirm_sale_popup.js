@@ -491,7 +491,7 @@ function montar() {
 
 // ── Grupo G: CpfInputPopup — Esc = seguir sem CPF (DEC-007) ──────────────
 
-// G1: Esc passa a chamar recusarCpf() explicitamente (antes caía no
+// G1: Esc passa a chamar recusarDocumento() explicitamente (antes caía no
 // onClose -> undefined, que o confirm_popup.js coagia pra "" de qualquer forma)
 {
     assert(
@@ -499,23 +499,23 @@ function montar() {
         "CpfInputPopup deve importar useHotkey"
     );
     assert(
-        /useHotkey\("escape", \(\) => this\.recusarCpf\(\)\)/.test(cpfPopupSource),
-        "Esc deve chamar recusarCpf()"
+        /useHotkey\("escape", \(\) => this\.recusarDocumento\(\)\)/.test(cpfPopupSource),
+        "Esc deve chamar recusarDocumento()"
     );
-    console.log("✓ G1: CpfInputPopup Esc -> recusarCpf()");
+    console.log("✓ G1: CpfInputPopup Esc -> recusarDocumento()");
 }
 
-// G2: recusarCpf envia "" e fecha; o Enter com campo vazio continua confirmando
+// G2: recusarDocumento envia "" e fecha; o Enter com campo vazio continua confirmando
 {
     assert(
-        /recusarCpf\(\) \{[\s\S]*?getPayload\(""\)[\s\S]*?close\(\)/.test(cpfPopupSource),
-        "recusarCpf deve enviar getPayload(\"\") e fechar"
+        /recusarDocumento\(\) \{[\s\S]*?getPayload\(""\)[\s\S]*?close\(\)/.test(cpfPopupSource),
+        "recusarDocumento deve enviar getPayload(\"\") e fechar"
     );
     assert(
-        /get cpfValido\(\) \{[\s\S]*?trim\(\) === ""/.test(cpfPopupSource),
+        /get docValido\(\) \{[\s\S]*?inputValue.trim\(\) === ""/.test(cpfPopupSource),
         "campo vazio continua válido (DEC-007)"
     );
-    console.log("✓ G2: recusarCpf -> \"\" ; Enter vazio segue confirmando (DEC-007)");
+    console.log("✓ G2: recusarDocumento -> \"\" ; Enter vazio segue confirmando (DEC-007)");
 }
 
 // ── Grupo H: manifest ────────────────────────────────────────────────────
