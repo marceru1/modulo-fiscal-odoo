@@ -16,6 +16,7 @@
 import { Component } from "@odoo/owl";
 import { PaymentScreen } from "@point_of_sale/app/screens/payment_screen/payment_screen";
 import { ProductScreen } from "@point_of_sale/app/screens/product_screen/product_screen";
+import { TicketScreen } from "@point_of_sale/app/screens/ticket_screen/ticket_screen";
 import { patch } from "@web/core/utils/patch";
 import { atalhosDaTela } from "./atalhos_tabela_classica";
 
@@ -41,4 +42,8 @@ patch(ProductScreen, {
 
 patch(PaymentScreen, {
     components: { ...PaymentScreen.components, AtalhosLegend },
+});
+
+patch(TicketScreen, {
+    components: { ...TicketScreen.components, AtalhosLegend },
 });
