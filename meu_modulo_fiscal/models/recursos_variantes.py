@@ -1,4 +1,6 @@
 from odoo import models, fields, api
+from odoo.osv import expression
+
 
 class ProductTemplate(models.Model):
     """
@@ -71,6 +73,42 @@ class ProductProduct(models.Model):
                 odd = sum(int(base_code[i]) for i in range(0, 12, 2))
                 even = sum(int(base_code[i]) for i in range(1, 12, 2)) * 3
                 check_digit = (10 - ((odd + even) % 10)) % 10
-                
+
                 rec.barcode = f"{base_code}{check_digit}"
+
+    @api.model
+    def name_search(self, name='', args=None, operator='ilike', limit=100):
+        """
+        Fallback de busca por PEDAÇO do código de barras (hook correto do
+        Odoo 18 — o core não tem _name_search).
+
+        O name_search do core (product/models/product_product.py:575) testa
+        barcode apenas com o operador EXATO ('='), então colar o EAN de 13
+        dígitos acha o produto, mas digitar o SUFIXO (ex.: "86" no fim de
+        0000000000086) — hábito do operador no recebimento, que lê o fim da
+        etiqueta — não acha nada.
+
+        Fluxo: roda o pipeline completo do core primeiro (nome, default_code,
+        barcode exato, fornecedor); só quando NADA retorna e o termo é numérico
+        de 2+ dígitos, acrescenta os produtos cujo barcode TERMINA com o que
+        foi digitado. Merge estável: resultados do core primeiro.
+        """
+        res = super().name_search(name, args, operator, limit)
+        if res or not name:
+            return res
+        clean = name.strip()
+        if not clean.isdigit() or len(clean) < 2:
+            return res
+        domain = expression.AND([
+            args or [],
+            [('barcode', '=like', '%' + clean)],
+        ])
+        extra = self.search_fetch(domain, ['display_name'], limit=limit)
+        if extra:
+            return list(res) + [
+                (product.id, product.display_name)
+                for product in extra.sudo()
+                if product.id not in {r[0] for r in res}
+            ]
+        return res
 
