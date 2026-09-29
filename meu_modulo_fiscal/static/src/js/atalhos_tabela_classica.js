@@ -153,13 +153,14 @@ function abrirListaDeVendas(tela) {
     tela.pos.showScreen("TicketScreen", { stateOverride: { filter: "SYNCED" } });
 }
 
-// ── Cancelamento de cupom na SEFAZ (evento 110111) ───────────────────────────
+// ── Cancelamento de cupom no Odoo (estoque + caixa, fiscal ou não-fiscal) ────
 
-/** Janela do evento 110111: a SEFAZ só aceita o cancelamento em até 24h da
- * autorização (DEC-002). Exportado para o teste ler daqui. */
+/** Janela de cancelamento: 24h da emissão (política de negócio herdada da
+ * janela do evento 110111 da NFC-e; o usuário a manteve para ambos os tipos).
+ * Exportado para o teste ler daqui. */
 export const JANELA_CANCELAMENTO_MS = 24 * 3600 * 1000;
 
-/** Um cupom é cancelável pelo PDV? (guards de DEC-002/DEC-003)
+/** Um cupom é cancelável pelo PDV? (guard do atalho N)
  *
  * Função pura de propósito: é o único ponto que decide se o atalho N age ou
  * fica em silêncio, então é o seam de teste do fluxo do operador.
@@ -167,11 +168,13 @@ export const JANELA_CANCELAMENTO_MS = 24 * 3600 * 1000;
  * Regras, todas no-op silencioso quando falham (o operador não precisa do
  * motivo técnico na tela):
  *   - precisa de cupom selecionado;
- *   - x_fiscal_status === 'autorizado' (rejeitado/processando/erro/contingência
- *     não têm o que cancelar, e 'cancelado' não pode ser cancelado de novo);
- *   - não pode ser cupom de contingência: a chave é provisória e o
- *     cancelamento dele exige outro fluxo, fora do escopo;
+ *   - cupom pago (finalized — a TicketScreen lista só esses no filtro PAGOS);
+ *   - ainda não cancelado (x_fiscal_cancelado false/undefined);
  *   - dentro da janela de 24h.
+ *
+ * Tanto faz ser fiscal ou não-fiscal: o cancelamento é comercial (estoque +
+ * caixa voltam, decisão do usuário 29/09). A NFC-e autorizada, quando houve,
+ * permanece autorizada na SEFAZ.
  *
  * date_order vem em UTC ("yyyy-MM-dd HH:mm:ss"). `new Date(...)` trataria essa
  * string como hora LOCAL e deslocaria a janela pelo fuso do caixa — por isso
@@ -186,10 +189,10 @@ export function cupomCancelavel(order, agoraMs = Date.now()) {
     if (!order) {
         return false;
     }
-    if (order.x_fiscal_status !== "autorizado") {
+    if (order.x_fiscal_cancelado) {
         return false;
     }
-    if (order.x_fiscal_offline) {
+    if (!order.finalized) {
         return false;
     }
     if (!order.date_order) {
@@ -199,12 +202,14 @@ export function cupomCancelavel(order, agoraMs = Date.now()) {
     return agoraMs - emissaoMs < JANELA_CANCELAMENTO_MS;
 }
 
-/** N — Cancela o cupom selecionado junto à SEFAZ.
+/** N — Cancela o cupom selecionado (estoque volta, caixa desconta).
  *
- * Fluxo: guard → popup de justificativa → RPC → feedback. A ordem permanece
- * `invoiced` e só ganha x_fiscal_cancelado=True no callback do middleware
- * (DEC-001/DEC-004): aqui o operador apenas SOLICITA. Por isso o feedback fala
- * em "solicitação aceita" e não em estoque já devolvido.
+ * Fluxo: guard → popup de justificativa → RPC → feedback. O backend é
+ * autoritativo e sincrono (decisão do usuário 29/09): ele marca
+ * x_fiscal_cancelado e reverte o estoque na mesma chamada — a resposta
+ * "aceito" significa já executado. O x_fiscal_status local vira 'cancelado'
+ * quando o cupom era fiscal (só informativo — a nota SEFAZ permanece como
+ * está).
  *
  * O popup de resultado abre DEPOIS do unblock — um AlertDialog adicionado com
  * a UI bloqueada nasceria sob o BlockUI e o operador não conseguiria fechá-lo.
@@ -218,7 +223,7 @@ async function cancelarCupomNfce(tela) {
     const justificativa = await makeAwaitable(
         tela.dialog,
         CancelamentoJustificativaPopup,
-        { title: _t("Cancelar cupom na SEFAZ") }
+        { title: _t("Cancelar cupom") }
     );
     // undefined = operador fechou o popup (Esc / Voltar): aborta sem chamar nada.
     if (!justificativa) {
@@ -227,7 +232,7 @@ async function cancelarCupomNfce(tela) {
 
     let titulo;
     let mensagem;
-    tela.ui.block({ message: _t("Cancelando junto à SEFAZ...") });
+    tela.ui.block({ message: _t("Cancelando cupom...") });
     try {
         const result = await tela.env.services.orm.call(
             "pos.order",
@@ -236,20 +241,23 @@ async function cancelarCupomNfce(tela) {
             { pos_reference: order.pos_reference, justificativa }
         );
         if (result?.success) {
-            // Só o status local: x_fiscal_cancelado é escrito pelo callback do
-            // middleware, que é quem tem a confirmação da SEFAZ. Marcá-lo aqui
-            // seria afirmar um cancelamento que ainda pode não ter voltado.
-            order.x_fiscal_status = "cancelado";
-            titulo = _t("Cancelamento aceito");
+            if (order.x_confirmacao_venda) {
+                // Cupom fiscal: status informativo. A NFC-e autorizada segue
+                // autorizada na SEFAZ (decisão do usuário) — nenhum evento
+                // fiscal é feito.
+                order.x_fiscal_status = "cancelado";
+            }
+            order.x_fiscal_cancelado = true;
+            titulo = _t("Cupom cancelado");
             mensagem = _t(
-                "A SEFAZ aceitou o cancelamento. O estoque será reposto automaticamente quando o middleware confirmar."
+                "Estoque reposto e valor descontado do fechamento do caixa."
             );
         } else {
             titulo = _t("Não foi possível cancelar");
             mensagem = result?.mensagem || _t("Erro desconhecido.");
         }
     } catch (error) {
-        console.error("[CANCELAR-NFCE] Falha na chamada do backend:", error);
+        console.error("[CANCELAR-CUPOM] Falha na chamada do backend:", error);
         titulo = _t("Não foi possível cancelar");
         mensagem = _t("Falha de comunicação com o servidor. Tente novamente.");
     } finally {

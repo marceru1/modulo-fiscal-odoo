@@ -1,10 +1,11 @@
 /**
- * Teste unitário (Node puro, sem Odoo) dos tickets 02 e 06 da feature
- * cancelar-cupom-nfce-pdv — o lado do PDV do cancelamento de cupom na SEFAZ.
+ * Teste unitário (Node puro, sem Odoo) do lado do PDV do cancelamento de cupom
+ * (atalho N, TicketScreen) — redesign 29/09: cancelamento COMERCIAL 100% no
+ * Odoo (estoque + caixa), fiscal ou não-fiscal, sem middleware/SEFAZ.
  *
  * Dois seams:
  *   1. `cupomCancelavel(order, agoraMs)` — função pura, decide se o atalho N
- *      age, é o único lugar que conhece a regra das 24h (DEC-002);
+ *      age, é o único lugar que conhece a regra das 24h;
  *   2. `cancelarCupomNfce(tela)` — o fluxo guard → popup → RPC → feedback.
  *      Extraído do arquivo real e executado com `tela` mockada: o teste
  *      verifica a ORDEM dos efeitos (block antes da RPC, unblock antes do
@@ -153,8 +154,8 @@ function montarFluxo({
     let orderProxy = null;
     if (order) {
         // Proxy: registra TODO campo que o fluxo escreve no pedido. O teste
-        // exige que seja só x_fiscal_status — marcar x_fiscal_cancelado aqui
-        // afirmaria um cancelamento que a SEFAZ ainda não confirmou.
+        // exige que sejam SÓ x_fiscal_cancelado (e x_fiscal_status quando o
+        // cupom era fiscal) — o backend é quem executa o cancelamento.
         orderProxy = new Proxy(order, {
             set(alvo, prop, valor) {
                 setProps.push({ prop, valor });
@@ -226,7 +227,7 @@ function montarFluxo({
 }
 
 /** Roda o fluxo do atalho N com um cenário e devolve os espiões.
- * O console.error do módulo é capturado (o prefixo [CANCELAR-NFCE] é contrato
+ * O console.error do módulo é capturado (o prefixo [CANCELAR-CUPOM] é contrato
  * de operação: sem ele não há como achar a falha no log do PDV). */
 async function rodar(opts) {
     const f = montarFluxo(opts);
@@ -240,13 +241,16 @@ async function rodar(opts) {
     return f;
 }
 
-/** Cupom autorizado e recém-emitido (caso feliz). */
+/** Cupom pago recém-emitido (caso feliz). Fiscal por padrão; a flag
+ * x_confirmacao_venda distingue os dois tipos no fluxo. */
 const AGORA = Date.UTC(2026, 8, 29, 15, 0, 0); // 2026-09-29T15:00:00Z
 
-function cupomAutorizado(extra = {}) {
+function cupomPago(extra = {}) {
     return {
         pos_reference: "Order 00042-001-0001",
         date_order: "2026-09-29 14:30:00",
+        finalized: true,
+        x_confirmacao_venda: true,
         x_fiscal_status: "autorizado",
         x_fiscal_offline: false,
         x_fiscal_chave: "35260912345678901234567890123456789012345678",
@@ -258,13 +262,13 @@ function cupomAutorizado(extra = {}) {
 // ─────────────────────────────────────────────────────────────────────────
 
 async function main() {
-    // ═══ Grupo A: cupomCancelavel — a regra das 24h (DEC-002) ═══
+    // ═══ Grupo A: cupomCancelavel — a regra das 24h ═══
 
     // A1: a janela é de 24h e vem do próprio arquivo (sem número mágico)
     assert.strictEqual(
         JANELA_CANCELAMENTO_MS,
         24 * 3600 * 1000,
-        "a janela do evento 110111 é de 24h"
+        "a janela de cancelamento é de 24h"
     );
     console.log("✓ A1: JANELA_CANCELAMENTO_MS = 24h");
 
@@ -273,37 +277,44 @@ async function main() {
     assert.strictEqual(SEM_DEPS.cupomCancelavel(undefined, AGORA), false);
     console.log("✓ A2: sem cupom selecionado → false");
 
-    // A3: só 'autorizado' é cancelável. Os outros são no-op SILENCIOSO: o
-    // operador não precisa do motivo técnico na tela, e 'cancelado' não pode
-    // ser cancelado duas vezes (a SEFAZ rejeitaria o evento duplicado).
-    for (const status of ["processando", "rejeitado", "erro", "cancelado", "", undefined, null]) {
-        assert.strictEqual(
-            SEM_DEPS.cupomCancelavel(cupomAutorizado({ x_fiscal_status: status }), AGORA),
-            false,
-            `status ${String(status)} não pode ser cancelado`
-        );
-    }
-    console.log("✓ A3: só 'autorizado' é cancelável (7 status testados)");
-
-    // A4: contingência fica de fora — a chave é provisória e o cancelamento
-    // dela é outro fluxo (fora do escopo da spec)
+    // A3: cupom NÃO pago não é cancelável. finalized=false cobre rascunho e
+    // cupom cancelado pelo core; é o equivalente no cache do POS a
+    // state in ('paid','invoiced') no backend.
     assert.strictEqual(
-        SEM_DEPS.cupomCancelavel(cupomAutorizado({ x_fiscal_offline: true }), AGORA),
+        SEM_DEPS.cupomCancelavel(cupomPago({ finalized: false }), AGORA),
         false,
-        "cupom de contingência não é cancelável por aqui"
+        "cupom não pago não é cancelável"
     );
-    console.log("✓ A4: contingência → false");
+    console.log("✓ A3: não-finalized → false");
+
+    // A4: cancelado uma vez não pode ser cancelado de novo — em NENHUM dos
+    // tipos (o backend recusaria, mas o guard evita o RPC inteiro).
+    assert.strictEqual(
+        SEM_DEPS.cupomCancelavel(cupomPago({ x_fiscal_cancelado: true }), AGORA),
+        false,
+        "cupom já cancelado não é cancelável de novo"
+    );
+    console.log("✓ A4: já cancelado → false");
+
+    // A4b: fiscal OU não-fiscal são canceláveis (decisão do usuário 29/09) —
+    // o cancelamento é comercial; a fiscalidade só muda o feedback.
+    assert.strictEqual(
+        SEM_DEPS.cupomCancelavel(cupomPago({ x_confirmacao_venda: false, x_fiscal_status: null }), AGORA),
+        true,
+        "venda não-fiscal TAMBÉM é cancelável (estoque + caixa voltam)"
+    );
+    console.log("✓ A4b: não-fiscal → true");
 
     // A5: sem data de emissão não dá pra medir a janela → no-op
     assert.strictEqual(
-        SEM_DEPS.cupomCancelavel(cupomAutorizado({ date_order: null }), AGORA),
+        SEM_DEPS.cupomCancelavel(cupomPago({ date_order: null }), AGORA),
         false
     );
     console.log("✓ A5: sem date_order → false");
 
     // A6: recém-emitido → cancelável
     assert.strictEqual(
-        SEM_DEPS.cupomCancelavel(cupomAutorizado(), AGORA),
+        SEM_DEPS.cupomCancelavel(cupomPago(), AGORA),
         true,
         "emitido 30min atrás está na janela"
     );
@@ -316,17 +327,17 @@ async function main() {
     const NA_BORDA = Date.UTC(2026, 8, 30, 15, 0, 0); // exatas 24h
     const UM_SEGUNDO_DEPOIS = Date.UTC(2026, 8, 30, 15, 0, 1);
     assert.strictEqual(
-        SEM_DEPS.cupomCancelavel(cupomAutorizado({ date_order: EMITIDO }), UM_SEGUNDO_ANTES),
+        SEM_DEPS.cupomCancelavel(cupomPago({ date_order: EMITIDO }), UM_SEGUNDO_ANTES),
         true,
         "23h59m59s → ainda dentro"
     );
     assert.strictEqual(
-        SEM_DEPS.cupomCancelavel(cupomAutorizado({ date_order: EMITIDO }), NA_BORDA),
+        SEM_DEPS.cupomCancelavel(cupomPago({ date_order: EMITIDO }), NA_BORDA),
         false,
-        "exatamente 24h → false (a SEFAZ não aceita mais)"
+        "exatamente 24h → false (política de negócio)"
     );
     assert.strictEqual(
-        SEM_DEPS.cupomCancelavel(cupomAutorizado({ date_order: EMITIDO }), UM_SEGUNDO_DEPOIS),
+        SEM_DEPS.cupomCancelavel(cupomPago({ date_order: EMITIDO }), UM_SEGUNDO_DEPOIS),
         false,
         "além de 24h → false"
     );
@@ -336,7 +347,7 @@ async function main() {
     // core. `new Date("2026-09-29 14:30:00")` leria como hora LOCAL do caixa e
     // deslocaria a janela pelo fuso (no Brasil, 3h menos de margem).
     parseUTCChamadas = [];
-    const orderUtc = cupomAutorizado();
+    const orderUtc = cupomPago();
     SEM_DEPS.cupomCancelavel(orderUtc, AGORA);
     assert.deepStrictEqual(
         parseUTCChamadas,
@@ -354,8 +365,8 @@ async function main() {
     // B1: cupom não cancelável → nada acontece (nem popup, nem RPC, nem UI)
     for (const cenário of [
         null,
-        cupomAutorizado({ x_fiscal_status: "processando" }),
-        cupomAutorizado({ x_fiscal_offline: true }),
+        cupomPago({ finalized: false }),
+        cupomPago({ x_fiscal_cancelado: true }),
     ]) {
         const f = await rodar({ order: cenário });
         assert.deepStrictEqual(f.eventos, [], "guard falhou → nenhum efeito");
@@ -366,7 +377,7 @@ async function main() {
     // B2: operador fechou o popup (Esc / Voltar) → aborta sem chamar o backend.
     // makeAwaitable resolve undefined no cancelamento — é esse contrato.
     {
-        const f = await rodar({ order: cupomAutorizado(), abortar: true });
+        const f = await rodar({ order: cupomPago(), abortar: true });
         assert.deepStrictEqual(f.eventos, ["popup"], "abriu o popup e parou");
         assert.strictEqual(f.rpc.length, 0, "abortar não pode chamar action_cancelar_nfce");
         assert.strictEqual(f.dialog.length, 0, "abortar não mostra resultado");
@@ -376,8 +387,8 @@ async function main() {
     // B3: caminho feliz — RPC no formato certo
     {
         const f = await rodar({
-            order: cupomAutorizado(),
-            retorno: { success: true, mensagem: "Solicitação de cancelamento enviada" },
+            order: cupomPago(),
+            retorno: { success: true, mensagem: "Cupom cancelado" },
         });
         assert.strictEqual(f.rpc.length, 1, "uma única chamada ao backend");
         const { modelo, metodo, args, kwargs } = f.rpc[0];
@@ -394,38 +405,54 @@ async function main() {
         console.log("✓ B3: RPC orm.call('pos.order','action_cancelar_nfce',[],{...})");
     }
 
-    // B4: sucesso marca SÓ x_fiscal_status no pedido, e mostra o resultado.
-    // x_fiscal_cancelado é escrito pelo callback do middleware — que é quem tem
-    // a confirmação da SEFAZ (DEC-001/DEC-004). Marcá-lo aqui seria afirmar um
-    // cancelamento que ainda pode não ter voltado.
+    // B4: cupom FISCAL cancelado — o PDV marca x_fiscal_cancelado (o backend
+    // JÁ executou: é sincrono) e x_fiscal_status (informativo), e mostra o
+    // resultado.
     {
-        const f = await rodar({ order: cupomAutorizado(), retorno: { success: true } });
+        const f = await rodar({ order: cupomPago(), retorno: { success: true } });
         assert.deepStrictEqual(
-            f.setProps,
-            [{ prop: "x_fiscal_status", valor: "cancelado" }],
-            "o PDV só pode mexer em x_fiscal_status"
+            f.setProps.sort((a, b) => a.prop.localeCompare(b.prop)),
+            [
+                { prop: "x_fiscal_cancelado", valor: true },
+                { prop: "x_fiscal_status", valor: "cancelado" },
+            ],
+            "fiscal: marca cancelado + status informativo"
         );
-        assert.strictEqual(f.order.x_fiscal_cancelado, false, "x_fiscal_cancelado é do callback");
         assert.strictEqual(f.dialog.length, 1, "mostra o resultado ao operador");
         assert.strictEqual(f.dialog[0].componente, f.AlertDialog, "feedback é um AlertDialog");
         assert(
             f.dialog[0].props.body && f.dialog[0].props.title,
             "o diálogo de sucesso precisa de título e corpo"
         );
-        console.log("✓ B4: sucesso → só x_fiscal_status='cancelado' + AlertDialog");
+        console.log("✓ B4: fiscal → x_fiscal_cancelado=true + status + AlertDialog");
     }
 
-    // B5: middleware recusa → mostra o motivo dele e NÃO marca nada no pedido
+    // B4b: cupom NÃO-FISCAL cancelado — NÃO toca x_fiscal_status (não há
+    // nota fiscal na SEFAZ cujo status mudou), mas marca o cancelado.
     {
         const f = await rodar({
-            order: cupomAutorizado(),
-            retorno: { success: false, mensagem: "Prazo de cancelamento expirado na SEFAZ" },
+            order: cupomPago({ x_confirmacao_venda: false, x_fiscal_status: null }),
+            retorno: { success: true },
+        });
+        assert.deepStrictEqual(
+            f.setProps,
+            [{ prop: "x_fiscal_cancelado", valor: true }],
+            "não-fiscal: só x_fiscal_cancelado"
+        );
+        console.log("✓ B4b: não-fiscal → só x_fiscal_cancelado=true");
+    }
+
+    // B5: backend recusa → mostra o motivo dele e NÃO marca nada no pedido
+    {
+        const f = await rodar({
+            order: cupomPago(),
+            retorno: { success: false, mensagem: "Prazo de 24h para cancelamento expirado" },
         });
         assert.deepStrictEqual(f.setProps, [], "recusa não muda o pedido");
         assert.strictEqual(f.dialog.length, 1, "mostra a recusa");
         assert.strictEqual(
             f.dialog[0].props.body,
-            "Prazo de cancelamento expirado na SEFAZ",
+            "Prazo de 24h para cancelamento expirado",
             "a mensagem do backend é o que o operador lê"
         );
         console.log("✓ B5: recusa → mensagem do backend, pedido intacto");
@@ -433,16 +460,16 @@ async function main() {
 
     // B5b: recusa sem mensagem no payload → o operador não pode ver "undefined"
     {
-        const f = await rodar({ order: cupomAutorizado(), retorno: { success: false } });
+        const f = await rodar({ order: cupomPago(), retorno: { success: false } });
         const body = f.dialog[0].props.body;
         assert(body && body !== "undefined", `corpo do diálogo não pode ser vazio: ${body}`);
         console.log("✓ B5b: recusa sem mensagem tem fallback");
     }
 
-    // B6: exceção na RPC (middleware fora do ar, timeout, JSON inválido) → erro
+    // B6: exceção na RPC (backend fora do ar, timeout, JSON inválido) → erro
     // de comunicação pro operador, pedido intacto, e o `finally` solta a UI
     {
-        const f = await rodar({ order: cupomAutorizado(), excecao: new Error("boom") });
+        const f = await rodar({ order: cupomPago(), excecao: new Error("boom") });
         assert.deepStrictEqual(f.setProps, [], "exceção não muda o pedido");
         assert.strictEqual(f.dialog.length, 1, "o operador precisa saber que falhou");
         assert(
@@ -451,7 +478,7 @@ async function main() {
         );
         assert.strictEqual(f.logsErro.length, 1, "a falha precisa ir pro log do PDV");
         assert(
-            String(f.logsErro[0][0]).includes("[CANCELAR-NFCE]"),
+            String(f.logsErro[0][0]).includes("[CANCELAR-CUPOM]"),
             `o log precisa do prefixo rastreável: ${f.logsErro[0][0]}`
         );
         console.log("✓ B6: exceção → erro de comunicação + UI destravada + log");
@@ -461,7 +488,7 @@ async function main() {
     // diálogo. Um AlertDialog adicionado com a UI travada nasceria sob o
     // BlockUI e o operador não conseguiria fechá-lo.
     {
-        const f = await rodar({ order: cupomAutorizado(), retorno: { success: true } });
+        const f = await rodar({ order: cupomPago(), retorno: { success: true } });
         assert.deepStrictEqual(
             f.eventos,
             ["popup", "block", "rpc", "unblock", "dialog"],
@@ -473,9 +500,9 @@ async function main() {
     // B8: block e unblock balanceados em TODOS os caminhos — um unblock órfão
     // não quebra nada, mas um block sem unblock deixa o PDV travado.
     for (const cenário of [
-        { order: cupomAutorizado(), retorno: { success: true } },
-        { order: cupomAutorizado(), retorno: { success: false, mensagem: "x" } },
-        { order: cupomAutorizado(), excecao: new Error("boom") },
+        { order: cupomPago(), retorno: { success: true } },
+        { order: cupomPago(), retorno: { success: false, mensagem: "x" } },
+        { order: cupomPago(), excecao: new Error("boom") },
     ]) {
         const f = await rodar(cenário);
         const block = f.eventos.filter((e) => e === "block").length;
