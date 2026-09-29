@@ -33,7 +33,7 @@
                     t-on-click="confirm"
                     t-att-disabled="confirmDisabled"
                 >Confirmar</button>
-                <button class="btn btn-secondary btn-lg lh-lg o-default-button" t-on-click="recusarCpf">Não adicionar CPF</button>
+                <button class="btn btn-secondary btn-lg lh-lg o-default-button" t-on-click="recusarDocumento">Não adicionar</button>
                 <button class="btn btn-secondary btn-lg lh-lg o-default-button" t-on-click="close">Cancelar</button>
             </t>
         </Dialog>
