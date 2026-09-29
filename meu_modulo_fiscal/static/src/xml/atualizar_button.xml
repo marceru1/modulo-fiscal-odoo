@@ -1,0 +1,28 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<templates id="template" xml:space="preserve">
+
+    <!--
+        Item "Atualizar" no menu sanduíche do POS (recuperação de tela travada
+        sem depender de F5 / do gestor).
+
+        Âncora: DropdownItem "Recebimento" (criado por recebimento_button.xml).
+        ⚠️ ORDEM IMPORTA: recebimento_button.xml precisa ser carregado ANTES
+        deste arquivo no bundle point_of_sale._assets_pos (ver __manifest__.py).
+        Se este template for aplicado primeiro, o xpath não acha o node e o
+        render do POS quebra. Mesmo padrão já usado em desconto_button.xml, que
+        ancora num node criado por acrescimo_button.xml.
+
+        Visibilidade: t-if="canRefreshPOS" (getter em atualizar_button.js) —
+        oculto, não desabilitado, quando offline ou com pedido de contingência
+        pendente (DEC-002). Sem dialog de confirmação (DEC-003): abrir menu +
+        clicar já é confirmação implícita quando online.
+    -->
+    <t t-name="meu_modulo.NavbarAtualizar" t-inherit="point_of_sale.Navbar" t-inherit-mode="extension">
+        <xpath expr="//DropdownItem[@onSelected='() =&gt; this.showRecebimento()']" position="after">
+            <DropdownItem t-if="canRefreshPOS" onSelected="() =&gt; window.location.reload()">
+                Atualizar
+            </DropdownItem>
+        </xpath>
+    </t>
+
+</templates>
