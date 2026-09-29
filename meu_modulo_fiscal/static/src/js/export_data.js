@@ -31,6 +31,7 @@ patch(PosOrder.prototype, {
             x_fiscal_offline: Boolean(json.x_fiscal_offline),
             x_confirmacao_venda: json.x_confirmacao_venda,
             x_cpf_nota: json.x_cpf_nota,
+            x_cnpj_nota: json.x_cnpj_nota,
             x_amount_other_value: json.x_amount_other_value || 0.0,
             x_discount_value: json.x_discount_value || 0.0,
             x_contingencia_payload: json.x_contingencia_payload || "",
@@ -74,6 +75,7 @@ patch(PosOrder.prototype, {
 
         // Envia as decisões do operador pro Banco de Dados
         json.x_cpf_nota = this.x_cpf_nota || "";
+        json.x_cnpj_nota = this.x_cnpj_nota || "";
         json.x_confirmacao_venda = !!this.x_confirmacao_venda;
         json.x_amount_other_value = this.x_amount_other_value || 0.0;
         json.x_discount_value = this.x_discount_value || 0.0;
@@ -194,6 +196,7 @@ patch(PosOrder.prototype, {
         }
 
         result.x_cpf_nota = this.x_cpf_nota;
+        result.x_cnpj_nota = this.x_cnpj_nota;
         result.x_confirmacao_venda = this.x_confirmacao_venda;
         result.x_amount_other_value = this.x_amount_other_value || 0.0;
         

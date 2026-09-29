@@ -186,6 +186,9 @@
                         <t t-if="props.data.x_cpf_nota">
                             CONSUMIDOR CPF: <t t-esc="props.data.x_cpf_nota"/>
                         </t>
+                        <t t-elif="props.data.x_cnpj_nota">
+                            CONSUMIDOR CNPJ: <t t-esc="props.data.x_cnpj_nota"/>
+                        </t>
                         <t t-else="">
                             CONSUMIDOR NÃO IDENTIFICADO
                         </t>
@@ -218,6 +221,9 @@
                         <div>Op.: <t t-esc="props.data.cashier"/></div>
                         <t t-if="props.data.x_cpf_nota">
                             <div style="margin-top: 4px;">CPF: <t t-esc="props.data.x_cpf_nota"/></div>
+                        </t>
+                        <t t-elif="props.data.x_cnpj_nota">
+                            <div style="margin-top: 4px;">CNPJ: <t t-esc="props.data.x_cnpj_nota"/></div>
                         </t>
                     </div>
                       
