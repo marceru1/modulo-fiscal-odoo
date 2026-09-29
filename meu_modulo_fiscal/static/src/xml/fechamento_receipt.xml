@@ -158,6 +158,24 @@
                 </div>
             </t>
 
+            <!-- Cupons cancelados no PDV (atalho N) — auditoria do operador.
+                 O valor deles JÁ saiu das VENDAS acima (o cupom some do caixa). -->
+            <t t-if="data.cupons_cancelados and data.cupons_cancelados.length > 0">
+                <div class="danfe-separador"></div>
+                <div class="pagamento-titulo">CUPONS CANCELADOS</div>
+                <div class="totais-section">
+                    <t t-foreach="data.cupons_cancelados" t-as="cupom" t-key="cupom_index">
+                        <div class="fechamento-linha">
+                            <span><t t-esc="cupom.referencia"/></span>
+                            <span class="total-valor"><t t-esc="formatCurrency(cupom.valor).replace('R$', '').trim()"/></span>
+                        </div>
+                        <div class="fechamento-linha" style="font-size: 10px; color: #555;">
+                            <span><t t-esc="cupom.data"/> <t t-if="cupom.fiscal">* NFC-e segue autorizada na SEFAZ</t> <t t-else="">* venda não-fiscal</t></span>
+                        </div>
+                    </t>
+                </div>
+            </t>
+
             <!-- Movimentação total (todos os métodos — auditoria). NÃO é a gaveta:
                  inclui cartão/PIX/a prazo. Rótulo sem a palavra "CAIXA". -->
             <div class="danfe-separador"></div>
