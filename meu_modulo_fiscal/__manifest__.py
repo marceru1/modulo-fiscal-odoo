@@ -100,6 +100,14 @@
             'meu_modulo_fiscal/static/src/xml/atalhos_legend.xml',
             'meu_modulo_fiscal/static/src/css/atalhos_legend.css',
 
+            # atalhos-pagamento-setas: setas percorrem métodos + Validar e
+            # Enter aciona o item destacado (entradas arrowup/arrowdown/enter
+            # na tabela acima). O JS de ação vem ANTES da tabela porque a
+            # tabela importa as funções dele; o destaque é atributo de DOM
+            # pintado pelo CSS (não há template novo).
+            'meu_modulo_fiscal/static/src/js/atalhos_pagamento_setas.js',
+            'meu_modulo_fiscal/static/src/css/atalhos_pagamento_setas.css',
+
         ],
         'web.assets_web': [
             'meu_modulo_fiscal/static/src/js/user_menu_cleanup.js',

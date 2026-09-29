@@ -1,0 +1,20 @@
+/* Destaque do item navegado pelas setas ↑/↓ na PaymentScreen
+ * (feature atalhos-pagamento-setas).
+ *
+ * O anel é `outline`, não `border`: outline não ocupa espaço no layout, então
+ * o botão NÃO muda de tamanho nem empurra os vizinhos ao ser destacado (com
+ * border era preciso compensar o px extra no padding). `outline-offset`
+ * positivo deixa uma folga e faz o anel aparecer tanto no botão claro de
+ * método quanto no botão roxo do Validar.
+ * !important porque o `.btn` do Bootstrap define borda/fundo próprios.
+ */
+[data-atalho-destacado] {
+    outline: 3px solid #5b4f8c !important;
+    outline-offset: 3px;
+}
+
+/* Só os métodos ganham o fundo lilás do protótipo: o Validar é btn-primary
+ * (roxo com texto branco) — clarear o fundo dele derrubaria o contraste. */
+.paymentmethods .paymentmethod[data-atalho-destacado] {
+    background: #f3f1f9 !important;
+}
