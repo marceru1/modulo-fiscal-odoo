@@ -33,10 +33,24 @@
  *                                  (navbar.xml:5 + input.xml:20-24; o
  *                                  spec supunha name="search-product-input",
  *                                  que não existe)  ⚠ ver DEC-009          ✓
+ *   getSelectedOrder()           → ticket_screen.js:325 (cupom selecionado
+ *                                  na lista de vendas)                      ✓
+ *   this.dialog / this.ui        → ticket_screen.js:61-62 (já vêm do setup do
+ *                                  core — NÃO precisa de patch extra como o
+ *                                  ticket 06 supunha)                       ✓
+ *   ui.block()/ui.unblock()      → web ui_service.js:161-180 (closures sobre
+ *                                  blockCount, não usam `this` — funcionam
+ *                                  através do useState(useService("ui")) do
+ *                                  TicketScreen)                            ✓
+ *   parseUTCString()             → point_of_sale/utils.js:132 (date_order é
+ *                                  UTC; new Date() o leria como hora local) ✓
  *
  * Nenhuma dessas letras colide com hotkey do core: o único useHotkey() do
  * point_of_sale é o "enter" de partner_list.js:34, e o number_buffer só
  * consome dígitos/+-., (ALLOWED_KEYS) — nenhuma letra da tabela é engolida.
+ * Varredura repetida ao entrar o N do cancelamento: nenhum useHotkey de letra
+ * em point_of_sale/ nem em pos_restaurant/ (o TicketScreen é compartilhado
+ * com o módulo de restaurante).
  *
  * ── Proteções ────────────────────────────────────────────────────────────────
  * Popup aberto e input focado são tratados pelo hotkey_service do core (o
@@ -50,8 +64,13 @@ import { PaymentScreen } from "@point_of_sale/app/screens/payment_screen/payment
 import { ProductScreen } from "@point_of_sale/app/screens/product_screen/product_screen";
 import { TicketScreen } from "@point_of_sale/app/screens/ticket_screen/ticket_screen";
 import { Navbar } from "@point_of_sale/app/navbar/navbar";
+import { AlertDialog } from "@web/core/confirmation_dialog/confirmation_dialog";
+import { _t } from "@web/core/l10n/translation";
+import { makeAwaitable } from "@point_of_sale/app/store/make_awaitable_dialog";
+import { parseUTCString } from "@point_of_sale/utils";
 import { patch } from "@web/core/utils/patch";
 import { useHotkey } from "@web/core/hotkeys/hotkey_hook";
+import { CancelamentoJustificativaPopup } from "./cancelamento_justificativa_popup";
 
 // ── Guards e ações (os corpos que a tabela referencia) ───────────────────────
 
@@ -134,6 +153,111 @@ function abrirListaDeVendas(tela) {
     tela.pos.showScreen("TicketScreen", { stateOverride: { filter: "SYNCED" } });
 }
 
+// ── Cancelamento de cupom na SEFAZ (evento 110111) ───────────────────────────
+
+/** Janela do evento 110111: a SEFAZ só aceita o cancelamento em até 24h da
+ * autorização (DEC-002). Exportado para o teste ler daqui. */
+export const JANELA_CANCELAMENTO_MS = 24 * 3600 * 1000;
+
+/** Um cupom é cancelável pelo PDV? (guards de DEC-002/DEC-003)
+ *
+ * Função pura de propósito: é o único ponto que decide se o atalho N age ou
+ * fica em silêncio, então é o seam de teste do fluxo do operador.
+ *
+ * Regras, todas no-op silencioso quando falham (o operador não precisa do
+ * motivo técnico na tela):
+ *   - precisa de cupom selecionado;
+ *   - x_fiscal_status === 'autorizado' (rejeitado/processando/erro/contingência
+ *     não têm o que cancelar, e 'cancelado' não pode ser cancelado de novo);
+ *   - não pode ser cupom de contingência: a chave é provisória e o
+ *     cancelamento dele exige outro fluxo, fora do escopo;
+ *   - dentro da janela de 24h.
+ *
+ * date_order vem em UTC ("yyyy-MM-dd HH:mm:ss"). `new Date(...)` trataria essa
+ * string como hora LOCAL e deslocaria a janela pelo fuso do caixa — por isso
+ * o parseUTCString do core (utils.js:132), o mesmo que a TicketScreen usa para
+ * ordenar os pedidos.
+ *
+ * @param {Object} order cupom selecionado no TicketScreen
+ * @param {number} agoraMs agora em epoch ms (injetável para teste)
+ * @returns {boolean}
+ */
+export function cupomCancelavel(order, agoraMs = Date.now()) {
+    if (!order) {
+        return false;
+    }
+    if (order.x_fiscal_status !== "autorizado") {
+        return false;
+    }
+    if (order.x_fiscal_offline) {
+        return false;
+    }
+    if (!order.date_order) {
+        return false;
+    }
+    const emissaoMs = parseUTCString(order.date_order).toMillis();
+    return agoraMs - emissaoMs < JANELA_CANCELAMENTO_MS;
+}
+
+/** N — Cancela o cupom selecionado junto à SEFAZ.
+ *
+ * Fluxo: guard → popup de justificativa → RPC → feedback. A ordem permanece
+ * `invoiced` e só ganha x_fiscal_cancelado=True no callback do middleware
+ * (DEC-001/DEC-004): aqui o operador apenas SOLICITA. Por isso o feedback fala
+ * em "solicitação aceita" e não em estoque já devolvido.
+ *
+ * O popup de resultado abre DEPOIS do unblock — um AlertDialog adicionado com
+ * a UI bloqueada nasceria sob o BlockUI e o operador não conseguiria fechá-lo.
+ */
+async function cancelarCupomNfce(tela) {
+    const order = tela.getSelectedOrder();
+    if (!cupomCancelavel(order)) {
+        return;
+    }
+
+    const justificativa = await makeAwaitable(
+        tela.dialog,
+        CancelamentoJustificativaPopup,
+        { title: _t("Cancelar cupom na SEFAZ") }
+    );
+    // undefined = operador fechou o popup (Esc / Voltar): aborta sem chamar nada.
+    if (!justificativa) {
+        return;
+    }
+
+    let titulo;
+    let mensagem;
+    tela.ui.block({ message: _t("Cancelando junto à SEFAZ...") });
+    try {
+        const result = await tela.env.services.orm.call(
+            "pos.order",
+            "action_cancelar_nfce",
+            [],
+            { pos_reference: order.pos_reference, justificativa }
+        );
+        if (result?.success) {
+            // Só o status local: x_fiscal_cancelado é escrito pelo callback do
+            // middleware, que é quem tem a confirmação da SEFAZ. Marcá-lo aqui
+            // seria afirmar um cancelamento que ainda pode não ter voltado.
+            order.x_fiscal_status = "cancelado";
+            titulo = _t("Cancelamento aceito");
+            mensagem = _t(
+                "A SEFAZ aceitou o cancelamento. O estoque será reposto automaticamente quando o middleware confirmar."
+            );
+        } else {
+            titulo = _t("Não foi possível cancelar");
+            mensagem = result?.mensagem || _t("Erro desconhecido.");
+        }
+    } catch (error) {
+        console.error("[CANCELAR-NFCE] Falha na chamada do backend:", error);
+        titulo = _t("Não foi possível cancelar");
+        mensagem = _t("Falha de comunicação com o servidor. Tente novamente.");
+    } finally {
+        tela.ui.unblock();
+    }
+    tela.dialog.add(AlertDialog, { title: titulo, body: mensagem });
+}
+
 // ── A tabela ─────────────────────────────────────────────────────────────────
 /**
  * Atalhos por tela. `executar(tela)` recebe a instância do componente
@@ -147,6 +271,7 @@ export const ATALHOS = {
     ],
     TicketScreen: [
         { tecla: "r", acao: "Reimprimir cupom", executar: reimprimirCupomSelecionado },
+        { tecla: "n", acao: "Cancelar cupom", executar: cancelarCupomNfce },
     ],
     ProductScreen: [
         { tecla: "c", acao: "Consultar produto", executar: consultarProdutoSelecionado },
