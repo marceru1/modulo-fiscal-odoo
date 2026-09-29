@@ -1,0 +1,69 @@
+/* Legenda dos atalhos (ticket 05) — faixa de chips acima da barra Pagar.
+ *
+ * Cores e tamanhos medidos no protótipo validado pelo orquestrador: fundo
+ * branco, hairline #dee2e6 em cima, fonte ~11.5px, kbd roxo #5b4f8c com texto
+ * branco e raio 3px. flex-wrap + justify-content: center porque a barra quebra
+ * em 2 linhas na largura real do caixa.
+ */
+.atalhos-legend {
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: center;
+    align-items: center;
+    gap: 0.25rem 0.5rem;
+    padding: 0.25rem 0.5rem;
+    background: #fff;
+    border-top: 1px solid #dee2e6;
+    font-size: 11.5px;
+    line-height: 1.3;
+}
+
+.atalhos-legend-chip {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.3rem;
+    white-space: nowrap;
+    color: #495057;
+}
+
+.atalhos-legend-kbd {
+    padding: 0 0.3rem;
+    background: #5b4f8c;
+    border-radius: 3px;
+    color: #fff;
+    /* kbd vem com monospace do navegador — a legenda usa a fonte da tela */
+    font-family: inherit;
+    font-size: 11.5px;
+    font-weight: 600;
+    line-height: 1.4;
+}
+
+/* ── PaymentScreen: cabe tudo na altura fixa do caixa ─────────────────────── */
+/*
+ * A coluna esquerda da PaymentScreen (left-content) é altura fixa. A legenda
+ * nova empurrou numpad + rodapé Voltar/Validar pra fora (left-content
+ * scrollH 765px > clientH 650px): o fundo da legenda e metade dos botões
+ * ficavam cortados (overflow-hidden do container).
+ *
+ * Layout desejado (feedback do operador, 2026-09-28): lista de MÉTODOS em
+ * cima ocupando o espaço restante (com scroll interno se os cards não
+ * couberem), e TODOS os outros blocos (botões Cliente/Acréscimo/Desconto,
+ * numpad, legenda, Voltar/Validar) empilhados na BASE — o teclado colado no
+ * rodapé, sem faixa vazia flutuando no meio.
+ * FIX medido ao vivo no POS: .paymentmethods-container é o ÚNICO filho
+ * elástico (flex-grow-1 + min-height 0 + scroll interno); os demais ficam
+ * com flex-shrink 0 na base.
+ */
+.payment-screen .left-content {
+    overflow: hidden;
+}
+.payment-screen .left-content > .paymentmethods-container {
+    flex: 1 1 auto;
+    min-height: 0;
+    overflow-y: auto;
+    margin-bottom: 0.5rem;
+}
+.payment-screen .left-content > .payment-buttons,
+.payment-screen .left-content > .numpad {
+    flex-shrink: 0;
+}
