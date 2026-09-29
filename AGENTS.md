@@ -656,6 +656,7 @@ Salvar em `.agents/reviews/<feature-slug>-<date>.md`. Sempre incluir pelo menos 
 - **`store=False`:** Computed fields sem `store=True` precisam de `search=` para serem searchable
 - **`t-esc` vs `t-raw`:** `t-esc` para user data (XSS safety), `t-raw` só para trusted HTML
 - **`position="replace"` em XML** pode silenciosamente quebrar outros módulos que dependem do node
+- **`hasclass()` só vê o `@class` literal** — em `xpath` de `t-inherit` ele compila para `contains(concat(' ', @class, ' '), ' x ')`; âncora em nó com `t-attf-class` casa 0 nós e o Odoo aborta a herança, derrubando o bundle do POS inteiro
 - **`os.environ` vs `ir.config_parameter`** — preferir o último para runtime config; env vars precisam restart
 - **`sudo()` needed para `partner.credit`** em multi-company setups
 - **`many2many_checkboxes` widget** é a escolha correta para M2M em config settings
