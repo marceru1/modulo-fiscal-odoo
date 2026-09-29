@@ -44,6 +44,7 @@
  */
 import { PaymentScreen } from "@point_of_sale/app/screens/payment_screen/payment_screen";
 import { ProductScreen } from "@point_of_sale/app/screens/product_screen/product_screen";
+import { TicketScreen } from "@point_of_sale/app/screens/ticket_screen/ticket_screen";
 import { Navbar } from "@point_of_sale/app/navbar/navbar";
 import { patch } from "@web/core/utils/patch";
 import { useHotkey } from "@web/core/hotkeys/hotkey_hook";
@@ -102,6 +103,20 @@ function excluirCupom(tela) {
     tela.pos.onDeleteOrder(order);
 }
 
+/** R — Reimprimir cupom selecionado no TicketScreen. Reuso puro do botão
+ * "Print Receipt" do core (ticket_screen.xml:163): doPrint é o useTrackedAsync
+ * do setup (loading + lock anti-double-print). Guard espelha a condição do
+ * botão (isOrderSynced, ticket_screen.js:333): sem ordem selecionada ou não
+ * finalizada = no-op — reimpressão só de cupom PAGO.
+ */
+function reimprimirCupomSelecionado(tela) {
+    const order = tela.getSelectedOrder();
+    if (!order || !tela.isOrderSynced) {
+        return;
+    }
+    tela.doPrint.call(order);
+}
+
 /** J / V — Lista de vendas. Mesmo handler de propósito (DEC-005): o
  * TicketScreen do core já abre nos pedidos não finalizados
  * (ticket_screen.js:72 filter=null → activeOrderFilter). */
@@ -125,6 +140,9 @@ export const ATALHOS = {
     PaymentScreen: [
         { tecla: "a", acao: "Acréscimo", executar: (tela) => tela.clickAcrescimoButton() },
         { tecla: "d", acao: "Desconto", executar: (tela) => tela.clickDescontoButton() },
+    ],
+    TicketScreen: [
+        { tecla: "r", acao: "Reimprimir cupom", executar: reimprimirCupomSelecionado },
     ],
     ProductScreen: [
         { tecla: "c", acao: "Consultar produto", executar: consultarProdutoSelecionado },
@@ -182,6 +200,14 @@ patch(ProductScreen.prototype, {
     setup() {
         super.setup();
         registrarAtalhos(this, ATALHOS.ProductScreen);
+    },
+});
+
+// ── TicketScreen: R = Reimprimir cupom selecionado ───────────────────────────
+patch(TicketScreen.prototype, {
+    setup() {
+        super.setup();
+        registrarAtalhos(this, ATALHOS.TicketScreen);
     },
 });
 
