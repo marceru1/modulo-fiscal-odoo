@@ -204,11 +204,30 @@ function registrarAtalhos(tela, entradas) {
 
 // ── PaymentScreen: A = Acréscimo, D = Desconto ────────────────────────────────
 // Handlers dos patches existentes (acrescimo_popup.js / desconto_popup.js) —
-// zero lógica nova aqui. Sem Enter (fora de escopo nesta feature).
+// zero lógica nova aqui.
+// ENTER = Validar: o number_buffer do core já escuta Enter no PaymentScreen
+// (CONTROL_KEYS, number_buffer_service.js:13) mas o config do core
+// (_getNumberBufferConfig) não configura triggerAtEnter — Enter morre sem
+// efeito. Este patch adiciona o trigger: Enter com o pedido pago (mesmo
+// canBeValidated() do botão Validate) chama o próprio validateOrder, que já
+// é useAsyncLockedMethod no core (anti duplo-clique). Sem o guard, Enter
+// com pagamento faltante seria ignorado pelo core de qualquer forma
+// (validateOrder recusa), mas o guard evita o call stack à toa.
 patch(PaymentScreen.prototype, {
     setup() {
         super.setup();
         registrarAtalhos(this, ATALHOS.PaymentScreen);
+    },
+    get _getNumberBufferConfig() {
+        const config = super._getNumberBufferConfig;
+        return {
+            ...config,
+            triggerAtEnter: () => {
+                if (this.currentOrder?.canBeValidated()) {
+                    this.validateOrder();
+                }
+            },
+        };
     },
 });
 
