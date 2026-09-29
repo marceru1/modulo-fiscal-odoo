@@ -42,8 +42,6 @@
  *                                  blockCount, não usam `this` — funcionam
  *                                  através do useState(useService("ui")) do
  *                                  TicketScreen)                            ✓
- *   parseUTCString()             → point_of_sale/utils.js:132 (date_order é
- *                                  UTC; new Date() o leria como hora local) ✓
  *
  * Nenhuma dessas letras colide com hotkey do core: o único useHotkey() do
  * point_of_sale é o "enter" de partner_list.js:34, e o number_buffer só
@@ -64,10 +62,6 @@ import { PaymentScreen } from "@point_of_sale/app/screens/payment_screen/payment
 import { ProductScreen } from "@point_of_sale/app/screens/product_screen/product_screen";
 import { TicketScreen } from "@point_of_sale/app/screens/ticket_screen/ticket_screen";
 import { Navbar } from "@point_of_sale/app/navbar/navbar";
-import { AlertDialog } from "@web/core/confirmation_dialog/confirmation_dialog";
-import { _t } from "@web/core/l10n/translation";
-import { makeAwaitable } from "@point_of_sale/app/store/make_awaitable_dialog";
-import { parseUTCString } from "@point_of_sale/utils";
 import { patch } from "@web/core/utils/patch";
 import { useHotkey } from "@web/core/hotkeys/hotkey_hook";
 

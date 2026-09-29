@@ -2,8 +2,6 @@ import json
 import requests
 from odoo import models, api, fields
 from datetime import datetime
-from collections import defaultdict
-from odoo.osv.expression import AND
 import logging
 import os
 
