@@ -54,4 +54,18 @@
         </xpath>
     </t>
 
+    <!--
+        TicketScreen — no painel direito (leftpane do core), ANTES da
+        div.control-buttons (Details/Print Receipt): legenda R + globais.
+        Âncora única ARMADILHA-CHECADA: div[hasclass('pads')] casa 2 nós no
+        template do core (branch t-if isOrderSynced E branch t-else) — XPath
+        ambíguo aborta a herança e derruba o bundle. control-buttons existe
+        1x (dentro da pads do branch desktop). Sem t-attf-class na âncora.
+    -->
+    <t t-name="meu_modulo.AtalhosLegendTicketScreen" t-inherit="point_of_sale.TicketScreen" t-inherit-mode="extension">
+        <xpath expr="//div[hasclass('control-buttons')]" position="before">
+            <AtalhosLegend tela="'TicketScreen'" />
+        </xpath>
+    </t>
+
 </templates>
