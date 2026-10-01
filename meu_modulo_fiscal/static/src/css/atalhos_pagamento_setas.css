@@ -25,3 +25,26 @@
 .paymentmethods .paymentmethod[data-atalho-destacado] {
     background: #e6e0f5 !important;
 }
+
+/* ── Métodos em coluna única (um embaixo do outro) ─────────────────────────── */
+/*
+ * O core monta a lista com `d-grid` (display: grid !important) +
+ * `grid-template-columns: repeat(2, 1fr)` (payment_screen.scss:15-17): dois
+ * métodos por linha. Para empilhar, o display tem que virar flex —
+ * `grid-template-columns: 1fr` NÃO resolve: num grid, os itens que sobram criam
+ * colunas IMPLÍCITAS (medido ao vivo: com 1fr os 5 botões continuavam em 2
+ * colunas, 713px + 230px). Com flex-column cada botão ocupa a linha inteira.
+ *
+ * !important nos dois: o `d-grid` do Bootstrap carrega `display: grid
+ * !important` e a regra do core fixa as 2 colunas (que precisa ser
+ * neutralizada para o caso de algum tema reativar o grid).
+ *
+ * O container (.paymentmethods-container) já é o filho elástico com
+ * overflow-y: auto (atalhos_legend.css): se os métodos não couberem na altura,
+ * a lista rola em vez de empurrar o teclado e o rodapé para fora da tela.
+ */
+.paymentmethods {
+    display: flex !important;
+    flex-direction: column !important;
+    grid-template-columns: none !important;
+}
