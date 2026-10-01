@@ -172,7 +172,11 @@ class TestEtiquetasPdfSmoke(EtiquetasTestMixin, TransactionCase):
         wizard = self._make_wizard(label_format, [(self.tmpl_completo, 2), (self.tmpl_simples, 1)])
         _, data = wizard._prepare_report_data()
         report = self.env.ref(report_xml_id)
-        return report._render_qweb_pdf(report.id, data=data)[0]
+        # `force_report_rendering` é obrigatório: em modo de teste o core
+        # (_pre_render_qweb_pdf) pula o wkhtmltopdf e cai em _render_qweb_html,
+        # devolvendo HTML em vez de PDF — sem esta context a asserção de %PDF
+        # nunca passa. Ver ir_actions_report.py:1008.
+        return report.with_context(force_report_rendering=True)._render_qweb_pdf(report.id, data=data)[0]
 
     def test_render_bijuteria_pdf(self):
         pdf = self._render('bijuteria', 'meu_modulo_fiscal.action_report_etiqueta_bijuteria')

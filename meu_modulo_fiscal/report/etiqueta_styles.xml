@@ -86,17 +86,24 @@
                     white-space: nowrap;
                 }
 
-                /* Bijuteria — 34,8 x 20 mm */
+                /* Bijuteria — 35 x 20 mm (bobina real 34,8 mm; o papel do
+                   paperformat é Integer e vai a 35 mm, então o conteúdo usa
+                   34.8mm e sobra 0,1mm de sangria de cada lado). */
                 .x_etiqueta_bijuteria {
                     width: 34.8mm;
                     height: 20mm;
                     font-size: 7pt;
                     line-height: 1.05;
-                    padding: 0.4mm 1.2mm;
+                    padding: 0.8mm 1.2mm 0.5mm;
+                }
+
+                .x_etiqueta_bijuteria .x_eti_barcode {
+                    padding-top: 0.8mm;
                 }
 
                 .x_etiqueta_bijuteria .x_eti_preco {
                     font-size: 1.15em;
+                    margin-top: 1.2mm;
                 }
 
                 /* Confecção — 35 x 60 mm */
@@ -110,18 +117,21 @@
 
                 .x_etiqueta_confeccao .x_eti_nome {
                     font-size: 1.15em;
+                    margin-top: 7mm;
                 }
 
                 .x_etiqueta_confeccao .x_eti_barcode {
-                    padding-top: 3mm;
-                }
-
-                .x_etiqueta_confeccao .x_eti_preco {
-                    font-size: 1.7em;
+                    padding-top: 7mm;
                 }
 
                 .x_etiqueta_confeccao .x_eti_digitos {
                     font-size: 0.9em;
+                    margin-top: 1.5mm;
+                }
+
+                .x_etiqueta_confeccao .x_eti_preco {
+                    font-size: 1.7em;
+                    margin-top: 7mm;
                 }
             </style>
         </template>

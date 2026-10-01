@@ -23,10 +23,23 @@
                                 </div>
                                 <div class="x_eti_digitos" t-if="barcode" t-out="barcode"/>
                                 <div class="x_eti_preco">
-                                    <t t-out="product.lst_price" t-options="{'widget': 'monetary', 'display_currency': product.currency_id}"/>
+                                    <!-- Ver nota no template da Bijuteria: 'monetary' + wkhtmltopdf
+                                         corrompe o NBSP e sai "R$Â 40,00". -->
+                                    <t t-out="product.currency_id.symbol"/>
+                                    <t t-out="product.lst_price" t-options="{'widget': 'float', 'precision': 2}"/>
                                 </div>
                                 <div class="x_eti_rodape">
-                                    <i class="fa fa-instagram"/> @lojas20mais_itacoatiara
+                                    <!-- SVG inline no lugar de <i class="fa fa-instagram"/>:
+                                         webfont do Font Awesome não é confiável no
+                                         wkhtmltopdf (risco de tofu). O glifo é o mesmo. -->
+                                    <svg width="3mm" height="3mm" viewBox="0 0 24 24"
+                                         fill="none" stroke="#000" stroke-width="2"
+                                         style="vertical-align:-0.5mm">
+                                        <rect x="2" y="2" width="20" height="20" rx="5"/>
+                                        <circle cx="12" cy="12" r="4.5"/>
+                                        <circle cx="17.5" cy="6.5" r="1.2" fill="#000" stroke="none"/>
+                                    </svg>
+                                    @lojas20mais_itacoatiara
                                 </div>
                             </div>
                         </t>
