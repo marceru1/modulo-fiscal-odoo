@@ -197,25 +197,60 @@ odoo -d <db> -u meu_modulo_fiscal --test-enable --test-tags /meu_modulo_fiscal
 
 ## 6. Pontos de atenção para o reviewer
 
-**Alta prioridade — precisam de ambiente real:**
+### Resolvidos na verificação em ambiente real (commit `66156b8`)
 
-1. **Página em branco / overflow de página.** O maior risco da feature. Se
-   aparecer folga ou página extra, o ponto de ajuste é a altura/largura em mm em
-   `etiqueta_styles.xml` (`.x_etiqueta_bijuteria` / `_confeccao`). Não consegui
-   medir o PDF renderizado — validar no ticket 05.
-2. **Rodapé Instagram no layout Confecção.** Usei `<i class="fa fa-instagram"/>`
-   (Font Awesome está em `web.report_assets_common`, confirmado no manifest do
-   `web`). **Não verifiquei se o glifo renderiza no PDF** — webfont em
-   wkhtmltopdf é o ponto frágil. Se sair quadrado/tofu, trocar por SVG inline.
-   O texto `@lojas20mais_itacoatiara` sai de qualquer forma.
-3. **`quiet=0` no Code128.** Segue o core, mas remove a *quiet zone* — se a
+Rodei o módulo de verdade (Odoo 18 + Postgres local + wkhtmltopdf 0.12.6,
+banco `grupo20mais`) — o que o coder não conseguiu. Resultado: **33 testes, 0
+falhas**, e os dois PDFs gerados e inspecionados página a página
+(`fitz` → PNG → inspeção visual).
+
+1. **CRÍTICO — o módulo não instalava.** `page_width`/`page_height` são
+   `fields.Integer` em Odoo 18 (`report_paperformat.py:177-178`), então o
+   `<field name="page_width">34.8</field>` estourava
+   `ValueError: invalid literal for int() with base 10: '34.8'` e derrubava o
+   registry inteiro (nem `-u` passava). Corrigido: papel arredondado para 35 mm,
+   conteúdo CSS segue em `34.8mm` (0,1 mm de sangria por lado). **Nenhum teste
+   estático pegaria isso — só rodando.**
+2. **`R$Â 40,00` no PDF.** O widget `monetary` emite
+   `R$` + NBSP(`\xa0`) + `<span class="oe_currency_value">`, e o wkhtmltopdf
+   corrompe o NBSP (UTF-8 lido como Latin-1). Trocado por símbolo cru +
+   widget `float` → sai `R$ 40,00` limpo.
+3. **Rodapé Instagram (risco nº 2 abaixo).** `<i class="fa fa-instagram"/>`
+   renderiza glifo no HTML, mas a webfont **não sai no PDF** (o texto do PDF
+   extrai só `@lojas20mais_itacoatiara`, sem o glifo). Trocado por SVG inline —
+   verificado renderizado no PNG de 600 dpi.
+4. **Vazio grande no meio da Confecção (risco nº 1 abaixo).** O conteúdo
+   ocupava ~30 mm dos 60 mm. Margens adicionadas (nome 7 mm, barcode 7 mm,
+   preço 7 mm) — agora está distribuído.
+5. **Smoke test não passava por construction.** Em modo de teste o core
+   **pula o wkhtmltopdf de propósito** (`ir_actions_report.py:1008`:
+   *"In case of test environment... fallback to render_html"*) e devolvia HTML.
+   As duas asserções de `%PDF` nunca passariam. Corrigido com
+   `with_context(force_report_rendering=True)`.
+
+### Verificado e OK
+
+- Tamanho de página física: **34,9 × 20,1 mm** e **34,9 × 60,0 mm** (medido no
+  PDF, 1 etiqueta por página, sem página em branco).
+- 4 páginas para 2 produtos × 2 etiquetas cada — a quantidade por produto
+  funciona ponta a ponta.
+- Barcode Code128 completo, sem clipping; dígitos corretos.
+- Regressão do core intacta: wizard sem `x_label_format` cai em
+  `product.report_product_template_label_2x7` (etiqueta do core).
+
+**Ainda precisam da impressora física:**
+
+1. **Dimensão do papel no driver Elgin.** Confirmar que o Ctrl+P detecta
+   35×20 e 35×60 (paperformat `custom`, `dpi=96`, `disable_shrinking=True` —
+   os três são candidatos a ajuste se a escala sair errada).
+2. **`quiet=0` no Code128.** Segue o core, mas remove a *quiet zone* — se a
    leitora da loja falhar na etiqueta, é o primeiro suspeito (trocar para
    `quiet: 1` e reduzir a largura do `img_style`).
-4. **Dimensão do papel no driver Elgin.** Confirmar que o Ctrl+P detecta
-   34,8×20 e 35×60 (paperformat `custom`, `dpi=96`, `disable_shrinking=True` —
-   os três são candidatos a ajuste se a escala sair errada).
-5. **`default_code` no layout Bijuteria** (seção 4) — verificar se cabe nos
-   20 mm sem cortar o preço.
+3. **`default_code` no layout Bijuteria** (seção 4) — no produto de teste o
+   campo vinha vazio, então não deu para ver se cabe nos 20 mm com referência
+   preenchida. Testar com um produto que tenha referência.
+4. **Preço com separador de milhar** (ex.: `R$ 1.299,00`) em 34,8 mm de largura
+   — o `nowrap` segura na linha, mas pode encostar na borda.
 
 **Média:**
 
@@ -254,6 +289,7 @@ lista de produtos e ao wizard continua regido pelos grupos do módulo `stock`
 |---|---|
 | `8601de1` | `feat(estoque): impressão de etiquetas de produto pelo Inventário` (tickets 01–04) |
 | `316d41f` | `test(estoque): testes do wizard de etiquetas, smoke de PDF e xml_id` (ticket 05) |
+| `66156b8` | `fix(estoque): corrige install e render das etiquetas` (verificação em ambiente real) |
 
 Não houve push nem PR, conforme a instrução. Os testes foram commitados com
 `git add -f` porque `tests/` e `.agents/` são gitignored.
