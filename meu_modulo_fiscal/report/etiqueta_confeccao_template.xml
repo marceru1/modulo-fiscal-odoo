@@ -1,0 +1,39 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <data>
+
+        <!-- Etiqueta Confecção — 35 x 60 mm (paperformat_etiqueta_confeccao).
+             Mesmo conteúdo da Bijuteria com preço maior e rodapé Instagram
+             (paridade com o layout B do BarTender). -->
+        <template id="report_etiqueta_confeccao">
+            <t t-set="full_width" t-value="True"/>
+            <t t-call="web.html_container">
+                <t t-call="meu_modulo_fiscal.etiqueta_styles"/>
+
+                <t t-foreach="quantity.items()" t-as="barcode_and_qty_by_product">
+                    <t t-set="product" t-value="barcode_and_qty_by_product[0]"/>
+                    <t t-foreach="barcode_and_qty_by_product[1]" t-as="barcode_and_qty">
+                        <t t-set="barcode" t-value="barcode_and_qty[0]"/>
+                        <t t-foreach="range(barcode_and_qty[1])" t-as="qty">
+                            <div class="x_etiqueta x_etiqueta_confeccao">
+                                <div class="x_eti_nome" t-out="product.name.upper()"/>
+                                <div class="x_eti_ref" t-if="product.default_code" t-out="product.default_code"/>
+                                <div class="x_eti_barcode" t-if="barcode">
+                                    <t t-field="product.barcode" t-options="{'widget': 'barcode', 'symbology': 'Code128', 'quiet': 0, 'width': 930, 'height': 420, 'img_style': 'width:31mm;height:14mm'}"/>
+                                </div>
+                                <div class="x_eti_digitos" t-if="barcode" t-out="barcode"/>
+                                <div class="x_eti_preco">
+                                    <t t-field="product.lst_price" t-options="{'widget': 'monetary', 'display_currency': product.currency_id}"/>
+                                </div>
+                                <div class="x_eti_rodape">
+                                    <i class="fa fa-instagram"/> @lojas20mais_itacoatiara
+                                </div>
+                            </div>
+                        </t>
+                    </t>
+                </t>
+            </t>
+        </template>
+
+    </data>
+</odoo>

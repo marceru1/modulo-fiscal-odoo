@@ -14,6 +14,14 @@
     'data': [
         'data/br.ncm.csv',
         'security/ir.model.access.csv',
+        # etiquetas-produto-impressao: paperformats, reports e templates QWeb
+        # antes das views — a view do wizard referencia a action registrada aqui.
+        'report/etiquetas_reports.xml',
+        'report/etiqueta_styles.xml',
+        'report/etiqueta_bijuteria_template.xml',
+        'report/etiqueta_confeccao_template.xml',
+        'views/etiquetas_wizard_views.xml',
+        'views/etiquetas_menu_views.xml',
         'views/campos_fiscais_views.xml',
         'views/res_company_views.xml',
         'views/res_config_settings_views.xml',
