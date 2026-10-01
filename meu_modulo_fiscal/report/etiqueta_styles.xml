@@ -131,7 +131,13 @@
 
                 .x_etiqueta_confeccao .x_eti_preco {
                     font-size: 1.7em;
-                    margin-top: 7mm;
+                    margin-top: 6mm;
+                }
+
+                /* Rodapé 2mm acima da borda: impressora térmica costuma perder
+                   o último 1–2 mm da etiqueta, e o conteúdo terminava a 0,8mm. */
+                .x_etiqueta_confeccao .x_eti_rodape {
+                    bottom: 2mm;
                 }
             </style>
         </template>
