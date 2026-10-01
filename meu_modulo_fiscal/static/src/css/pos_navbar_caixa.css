@@ -1,0 +1,14 @@
+/* caixa-no-navbar-pdv: nome do caixa (pos.config.name) ao lado da logo.
+   O .pos-centerheader do core tem só 10% de largura da navbar — fonte
+   pequena + ellipsis mantém o rótulo dentro do bloco sem empurrar as
+   laterais (pos-leftheader/pos-rightheader, 45% cada). */
+.pos-navbar-caixa {
+    font-size: 0.8rem;
+    line-height: 1.1;
+    letter-spacing: 0.02em;
+    margin-left: 0.5rem;
+    max-width: 100%;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
