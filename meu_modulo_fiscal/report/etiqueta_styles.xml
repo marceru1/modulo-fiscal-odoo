@@ -12,13 +12,19 @@
             <style>
                 /* O relatório do core usa `body.container`/`container-fluid`, cujo
                    padding (~3mm de cada lado) deslocaria a etiqueta dentro de uma
-                   página de 34,8mm. Reset local do documento. */
+                   página de 34,8mm. Reset local do documento.
+
+                   Sem `overflow: hidden` aqui: no wkhtmltopdf o documento é
+                   renderizado como uma página longa e recortado, e esconder o
+                   overflow do root cortaria as páginas seguintes. */
                 html, body, #wrapwrap, #wrapwrap > main {
                     margin: 0 !important;
                     padding: 0 !important;
-                    width: 100% !important;
                     background: #fff;
-                    overflow: hidden;
+                }
+
+                body, #wrapwrap, #wrapwrap > main {
+                    width: 100% !important;
                 }
 
                 .x_etiqueta {
