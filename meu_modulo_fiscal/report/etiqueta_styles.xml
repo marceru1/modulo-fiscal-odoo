@@ -1,0 +1,124 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <data>
+
+        <!-- Estilos compartilhados das etiquetas.
+
+             Fica num template próprio (chamado pelos dois relatórios) em vez de
+             num asset em `web.report_assets_common`: assim o reset de `body`
+             vale só para ESTE documento renderizado, sem vazar para os demais
+             relatórios do Odoo que compartilham o mesmo bundle de CSS. -->
+        <template id="etiqueta_styles">
+            <style>
+                /* O relatório do core usa `body.container`/`container-fluid`, cujo
+                   padding (~3mm de cada lado) deslocaria a etiqueta dentro de uma
+                   página de 34,8mm. Reset local do documento. */
+                html, body, #wrapwrap, #wrapwrap > main {
+                    margin: 0 !important;
+                    padding: 0 !important;
+                    width: 100% !important;
+                    background: #fff;
+                    overflow: hidden;
+                }
+
+                .x_etiqueta {
+                    box-sizing: border-box;
+                    overflow: hidden;
+                    position: relative;
+                    color: #000;
+                    background: #fff;
+                    font-family: Arial, Helvetica, sans-serif;
+                    text-align: center;
+                    page-break-inside: avoid;
+                }
+
+                /* Quebra só ENTRE etiquetas — a primeira nunca gera página em branco. */
+                .x_etiqueta + .x_etiqueta {
+                    page-break-before: always;
+                }
+
+                .x_etiqueta .x_eti_nome {
+                    font-weight: bold;
+                    text-transform: uppercase;
+                    line-height: 1.05;
+                    overflow: hidden;
+                }
+
+                .x_etiqueta .x_eti_ref {
+                    font-size: 0.85em;
+                    line-height: 1;
+                    overflow: hidden;
+                }
+
+                .x_etiqueta .x_eti_barcode img {
+                    display: block;
+                    margin: 0 auto;
+                }
+
+                .x_etiqueta .x_eti_digitos {
+                    font-size: 0.8em;
+                    line-height: 1;
+                    letter-spacing: 0.4px;
+                    white-space: nowrap;
+                }
+
+                .x_etiqueta .x_eti_preco {
+                    text-align: right;
+                    font-weight: bold;
+                    line-height: 1.1;
+                    white-space: nowrap;
+                }
+
+                .x_etiqueta .x_eti_rodape {
+                    position: absolute;
+                    left: 0;
+                    right: 0;
+                    bottom: 1mm;
+                    text-align: center;
+                    font-size: 0.85em;
+                    line-height: 1;
+                    white-space: nowrap;
+                }
+
+                /* Bijuteria — 34,8 x 20 mm */
+                .x_etiqueta_bijuteria {
+                    width: 34.8mm;
+                    height: 20mm;
+                    font-size: 7pt;
+                    line-height: 1.05;
+                    padding: 0.4mm 1.2mm;
+                }
+
+                .x_etiqueta_bijuteria .x_eti_preco {
+                    font-size: 1.15em;
+                }
+
+                /* Confecção — 35 x 60 mm */
+                .x_etiqueta_confeccao {
+                    width: 35mm;
+                    height: 60mm;
+                    font-size: 8pt;
+                    line-height: 1.15;
+                    padding: 1mm;
+                }
+
+                .x_etiqueta_confeccao .x_eti_nome {
+                    font-size: 1.15em;
+                }
+
+                .x_etiqueta_confeccao .x_eti_barcode {
+                    padding-top: 3mm;
+                }
+
+                .x_etiqueta_confeccao .x_eti_preco {
+                    font-size: 1.7em;
+                }
+
+                .x_etiqueta_confeccao .x_eti_digitos {
+                    font-size: 0.9em;
+                }
+            </style>
+        </template>
+
+    </data>
+</odoo>
