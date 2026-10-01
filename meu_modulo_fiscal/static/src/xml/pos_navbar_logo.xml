@@ -13,6 +13,13 @@
             <attribute name="alt">Lojas 20+</attribute>
             <attribute name="height">56</attribute>
         </xpath>
+        <!-- caixa-no-navbar-pdv: nome do caixa ao lado da logo. Âncora no
+             container (div.pos-centerheader, navbar.xml:9) — o img que
+             recebe os attributes acima fica dentro dele. Fonte do rótulo é
+             o getter caixaLabel (pos_navbar_logo.js). -->
+        <xpath expr="//div[hasclass('pos-centerheader')]" position="inside">
+            <span class="pos-navbar-caixa text-muted fw-semibold" t-esc="caixaLabel" t-if="caixaLabel"/>
+        </xpath>
     </t>
 
 </templates>
