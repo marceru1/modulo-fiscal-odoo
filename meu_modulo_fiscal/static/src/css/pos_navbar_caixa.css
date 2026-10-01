@@ -1,11 +1,26 @@
 /* caixa-no-navbar-pdv: nome do caixa (pos.config.name) ao lado da logo.
-   O .pos-centerheader do core tem só 10% de largura da navbar — fonte
-   pequena + ellipsis mantém o rótulo dentro do bloco sem empurrar as
-   laterais (pos-leftheader/pos-rightheader, 45% cada). */
+
+   display:flex + align-self:stretch + align-items:center — SEM isso o texto
+   encosta no TOPO do bloco: o span é filho de um .d-flex esticado (56px, a
+   altura da logo) e `display:block` (default do span) não centraliza nada.
+   Medido ao vivo: topo do texto y=1, centro do logo y=30 (parecia "em cima,
+   fora do lugar"); com o flex o centro do texto também fica em y=30.
+
+   0.875rem = 14px, peso 700 e cor escura: legível a distância na bancada
+   (era 12.8px/600/cinza).
+
+   ellipsis é obrigatório, não enfeite: o .pos-centerheader do core tem 10% da
+   largura da navbar e a logo (105px, height=56) come o resto — o orçamento do
+   rótulo é 55px (medido). A 14px "caixa01" = 54px cabe inteiro; "CAIXA 01"
+   corta com "…". Nome longo trunca de propósito, NUNCA cobre a logo. */
 .pos-navbar-caixa {
-    font-size: 0.8rem;
+    display: flex;
+    align-self: stretch;
+    align-items: center;
+    font-size: 0.875rem;
     line-height: 1.1;
-    letter-spacing: 0.02em;
+    font-weight: 700;
+    color: #212529;
     margin-left: 0.5rem;
     max-width: 100%;
     white-space: nowrap;
