@@ -59,6 +59,18 @@ ok('registry.category("fields").add("x_qz_print"' in js, "campo x_qz_print regis
 # conectar, e o QZ Tray nunca chegava a pedir permissao.
 ok("setPromise(" not in js, "nao chama qz.security.setPromise (nao existe na API)")
 ok("qz.websocket.connect()" in js, "conecta ao QZ Tray")
+# Sem salvar, o servidor le o x_line_ids do BANCO e imprime a quantidade antiga
+# (default 1) — sintoma: "sempre sai 1 etiqueta". urgentSave grava e mantem o
+# dialogo aberto; root.save() fecharia a janela.
+ok("urgentSave()" in js, "salva antes de imprimir (urgentSave)")
+# Compara a ORDEM no CODIGO, ignorando comentarios: um comentario explicando o
+# bug menciona x_get_print_payload e daria falso positivo.
+import re as _re2
+_js_codigo = _re2.sub(r"//[^\n]*", "", _re2.sub(r"/\*.*?\*/", "", js, flags=_re2.S))
+ok(
+    _js_codigo.index("urgentSave()") < _js_codigo.index("x_get_print_payload"),
+    "salva ANTES de pedir o PDF (na ordem do codigo)",
+)
 
 print("\nView / XML / manifest:")
 ok('field name="x_qz_print" widget="x_qz_print"' in view, "wizard usa o widget")
