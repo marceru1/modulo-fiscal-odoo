@@ -49,9 +49,15 @@ export class XQzPrintField extends Component {
         return this.props.record;
     }
 
-    /** Assina o QZ Tray sem certificado (a sessão é local). */
+    /**
+     * Conecta ao QZ Tray.
+     *
+     * Não usa `qz.security.setPromise` — essa função NÃO existe na API (é
+     * `setCertificatePromise`/`setSignaturePromise`) e o erro abortava a
+     * impressão antes de conectar. O QZ Tray 2.2.6 conecta sem assinatura numa
+     * sessão local: ele mostra o diálogo de permissão na primeira impressão.
+     */
     async _connect(qz) {
-        qz.security.setPromise(() => Promise.resolve(null));
         if (!qz.websocket.isActive()) {
             await qz.websocket.connect();
         }

@@ -54,6 +54,11 @@ ok(js.index("/l42/i") < js.index("/elgin/i"), "L42 avaliado ANTES do elgin gener
 ok('units: "mm"' in js, "tamanho em mm")
 ok("blackwhite" in js, "colorType blackwhite (etiqueta termica)")
 ok('registry.category("fields").add("x_qz_print"' in js, "campo x_qz_print registrado")
+# `qz.security.setPromise` NAO existe na API (e setCertificatePromise /
+# setSignaturePromise). Chamar a inexistente abortava a impressao antes de
+# conectar, e o QZ Tray nunca chegava a pedir permissao.
+ok("setPromise(" not in js, "nao chama qz.security.setPromise (nao existe na API)")
+ok("qz.websocket.connect()" in js, "conecta ao QZ Tray")
 
 print("\nView / XML / manifest:")
 ok('field name="x_qz_print" widget="x_qz_print"' in view, "wizard usa o widget")
