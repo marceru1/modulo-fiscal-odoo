@@ -75,8 +75,18 @@ export class XQzPrintField extends Component {
             return;
         }
         this.state.busy = true;
-        this.state.status = "conectando ao QZ Tray...";
+        this.state.status = "salvando...";
         try {
+            // SALVAR ANTES DE IMPRIMIR. O x_get_print_payload roda no servidor e
+            // le o x_line_ids do BANCO — se as quantidades que o operador acabou
+            // de digitar não forem gravadas, ele imprime o valor antigo (foi o
+            // bug de "sempre sai 1 etiqueta": 1 e o default da linha).
+            // urgentSave grava e mantem a janela aberta (save fecharia o dialogo).
+            const saved = await this.wizard.model.root.urgentSave();
+            if (saved === false) {
+                throw new Error("não deu para salvar as quantidades — confira os campos");
+            }
+
             const qz = await loadQzTray();
             await this._connect(qz);
 
