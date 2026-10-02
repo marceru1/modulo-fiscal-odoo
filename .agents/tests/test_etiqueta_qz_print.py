@@ -60,6 +60,17 @@ ok('field name="x_qz_print" widget="x_qz_print"' in view, "wizard usa o widget")
 ok('string="Imprimir (PDF)"' in view, "botao de PDF renomeado (distinguir do direto)")
 ok("meu_modulo_fiscal.XQzPrintField" in xml, "template define o componente")
 ok('t-on-click="onClick"' in xml, "template liga o clique")
+# Armadilha que derrubou o web client inteiro: asset de CLIENTE nao usa a forma
+# de servidor (<odoo><templates>). O bundle tenta ler <odoo> como template e
+# falha com "'O nome do modelo esta ausente'". Olha a ESTRUTURA (o elemento
+# raiz), nao o texto: um comentario pode mencionar <odoo>.
+import re as _re
+raiz = _re.sub(r"<!--.*?-->", "", xml, flags=_re.S).lstrip()
+ok(raiz.startswith("<?xml"), "tem cabecalho XML")
+ok("<odoo>" not in raiz.split("\n", 1)[-1][:200], "a raiz NAO e <odoo> (forma de servidor)")
+ok("<templates" in raiz, "raiz e <templates> (forma de asset de cliente)")
+ok('<templates xml:space="preserve">' in xml, "raiz e <templates xml:space=preserve>")
+ok("meu_modulo_fiscal." in xml, "t-name usa o nome do modulo Python")
 ok("etiqueta_qz_print.js" in manifest, "JS no manifest")
 ok("etiqueta_qz_print.xml" in manifest, "XML no manifest")
 ok(
