@@ -23,11 +23,29 @@
                     background: #fff;
                 }
 
-                body, #wrapwrap, #wrapwrap > main {
-                    width: 100% !important;
+                /* A página tem a largura do ROLO (105mm = 3 colunas de 35mm).
+                   width:100% não serve aqui: o body do relatório é `container`
+                   (largura fixa do Bootstrap) e cortaria a 3ª coluna. */
+                html, body, #wrapwrap, #wrapwrap > main, .x_linha_etiquetas {
+                    width: 105mm !important;
+                }
+
+                /* Uma LINHA de etiquetas por página, com as colunas lado a lado.
+                   A quebra é entre LINHAS (não entre etiquetas): assim a linha
+                   inteira sai numa passada e o `2 cópias` sai lado a lado em vez
+                   de descer o papel. */
+                .x_linha_etiquetas {
+                    display: table;      /* tabela: as colunas ficam na mesma linha */
+                    table-layout: fixed;
+                    page-break-inside: avoid;
+                }
+
+                .x_linha_etiquetas + .x_linha_etiquetas {
+                    page-break-before: always;
                 }
 
                 .x_etiqueta {
+                    display: table-cell;
                     box-sizing: border-box;
                     overflow: hidden;
                     position: relative;
@@ -35,12 +53,8 @@
                     background: #fff;
                     font-family: Arial, Helvetica, sans-serif;
                     text-align: center;
-                    page-break-inside: avoid;
-                }
-
-                /* Quebra só ENTRE etiquetas — a primeira nunca gera página em branco. */
-                .x_etiqueta + .x_etiqueta {
-                    page-break-before: always;
+                    /* evita o espaço fantasma entre inline-blocks */
+                    vertical-align: top;
                 }
 
                 .x_etiqueta .x_eti_nome {
@@ -106,38 +120,46 @@
                     margin-top: 1.2mm;
                 }
 
-                /* Confecção — 35 x 60 mm */
+                /* Confecção — 35 x 60 mm.
+                   ATENÇÃO: a faixa superior (~19 mm) da etiqueta é PRÉ-IMPRESSA
+                   com o logotipo da loja e não pode receber impressão nenhuma
+                   (zona de exclusão térmica). Por isso o conteúdo só começa a
+                   partir de Y = 21,5 mm do topo — a 2,5 mm abaixo da logo. */
                 .x_etiqueta_confeccao {
                     width: 35mm;
                     height: 60mm;
                     font-size: 8pt;
                     line-height: 1.15;
-                    padding: 1mm;
+                    /* padding-top aqui (e não margin no 1º filho) para o
+                       margin-top não colapsar com o container e puxar tudo
+                       pra cima. 21,5mm = faixa pré-impressa (19mm) + resguardo.
+                       laterais 2,5mm: largura útil ~30mm (o cabeçote da L42
+                       não imprime nas bordas). */
+                    padding: 21.5mm 2.5mm 0;
                 }
 
                 .x_etiqueta_confeccao .x_eti_nome {
                     font-size: 1.15em;
-                    margin-top: 7mm;
                 }
 
                 .x_etiqueta_confeccao .x_eti_barcode {
-                    padding-top: 7mm;
+                    padding-top: 4.5mm;
                 }
 
                 .x_etiqueta_confeccao .x_eti_digitos {
                     font-size: 0.9em;
-                    margin-top: 1.5mm;
+                    margin-top: 0.5mm;
                 }
 
                 .x_etiqueta_confeccao .x_eti_preco {
                     font-size: 1.7em;
-                    margin-top: 6mm;
+                    margin-top: 3.5mm;
                 }
 
-                /* Rodapé 2mm acima da borda: impressora térmica costuma perder
-                   o último 1–2 mm da etiqueta, e o conteúdo terminava a 0,8mm. */
+                /* Rodapé: a spec pede a faixa 52–55 mm, ou seja 5 mm de
+                   sangria inferior livre. */
                 .x_etiqueta_confeccao .x_eti_rodape {
-                    bottom: 2mm;
+                    bottom: 5mm;
                 }
             </style>
         </template>

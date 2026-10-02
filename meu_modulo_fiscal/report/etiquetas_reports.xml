@@ -26,10 +26,13 @@
         </record>
 
         <record id="paperformat_etiqueta_confeccao" model="report.paperformat">
-            <field name="name">Etiqueta Confecção (35 x 60 mm)</field>
+            <field name="name">Etiqueta Confecção (105 x 60 mm)</field>
             <field name="format">custom</field>
             <field name="page_height">60</field>
-            <field name="page_width">35</field>
+            <!-- Largura do ROLO (3 colunas de 35mm), não de uma etiqueta: o
+                 driver não reorganiza o PDF, então o template monta as 3
+                 colunas dentro da página (mesma técnica do 2x7/4x12 do core). -->
+            <field name="page_width">105</field>
             <field name="orientation">Portrait</field>
             <field name="margin_top">0</field>
             <field name="margin_bottom">0</field>
