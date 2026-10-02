@@ -1,0 +1,21 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <templates>
+
+        <!-- Botão de impressão direta (QZ Tray) na tela do wizard de etiquetas.
+             O campo x_qz_print é só um lugar no formulário; quem age é este
+             widget, que gera o PDF no servidor e o entrega ao QZ Tray do PC. -->
+        <t t-name="meu_modulo_fiscal.XQzPrintField">
+            <button type="button"
+                    class="btn btn-primary"
+                    t-att-disabled="state.busy"
+                    t-on-click="onClick">
+                <i t-att-class="state.busy ? 'fa fa-spinner fa-spin me-1' : 'fa fa-print me-1'"/>
+                <t t-if="state.busy">Imprimindo...</t>
+                <t t-else="">Imprimir direto (QZ Tray)</t>
+            </button>
+            <div t-if="state.status" class="text-muted small mt-1" t-out="state.status"/>
+        </t>
+
+    </templates>
+</odoo>

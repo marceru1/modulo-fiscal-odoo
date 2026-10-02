@@ -26,7 +26,8 @@
                         </list>
                     </field>
                     <footer>
-                        <button name="process" string="Imprimir" type="object" class="btn-primary"/>
+                        <button name="process" string="Imprimir (PDF)" type="object" class="btn-secondary"/>
+                        <field name="x_qz_print" widget="x_qz_print" nolabel="1"/>
                         <button string="Cancelar" class="btn-secondary" special="cancel"/>
                     </footer>
                 </form>
