@@ -1,6 +1,8 @@
 from odoo import _, api, fields, models
 from odoo.exceptions import UserError
 
+import base64
+
 
 class XLabelLine(models.TransientModel):
     """Linha do wizard de etiquetas: um produto e a quantidade dele.
@@ -44,6 +46,23 @@ class ProductLabelLayout(models.TransientModel):
     x_line_ids = fields.One2many(
         'x.label.line', 'wizard_id', string='Produtos',
         help='Uma linha por produto, com a quantidade de etiquetas de cada um.')
+    # Campo-botão: não carrega dado nenhum, só dá lugar ao widget que imprime
+    # direto pelo QZ Tray (a impressora é USB na loja; o navegador não fala
+    # com ela, então o QZ Tray no Windows faz a ponte).
+    x_qz_print = fields.Boolean(string='Imprimir direto')
+
+    #: Formato → geometria da página em mm, para o QZ Tray.
+    #: A largura é a do ROLO (na confecção são 3 etiquetas de 35mm lado a lado),
+    #: não a de uma etiqueta — é o tamanho que o driver deve receber.
+    _X_LABEL_PAGE_MM = {
+        'bijuteria': {'width': 35, 'height': 20},
+        'confeccao': {'width': 105, 'height': 60},
+    }
+
+    #: O perfil do Windows desta classe de Elgin carrega "Retrato 180°" (o fluxo
+    #: do BarTender foi desenhado em cima disso), então o raster precisa girar.
+    #: Fica aqui, em código, para não depender do dropdown do driver.
+    _X_LABEL_ROTATION = 180
 
     #: Formato escolhido → xml_id do `ir.actions.report` correspondente.
     _X_LABEL_REPORTS = {
@@ -97,3 +116,39 @@ class ProductLabelLayout(models.TransientModel):
         report_action = self.env.ref(xml_id).report_action(None, data=data, config=False)
         report_action.update({'close_on_report_download': True})
         return report_action
+
+    @api.model
+    def _x_qz_config(self):
+        """Parâmetros do QZ Tray que a tela usa para imprimir direto.
+
+        Ficam no servidor (e não no JS) porque são a mesma decisão do layout:
+        rotação do perfil da Elgin e a geometria de cada bobina. Assim há um
+        lugar só para mudar quando o formato ou a impressora mudar.
+        """
+        return {
+            'rotation': self._X_LABEL_ROTATION,
+            'pages': self._X_LABEL_PAGE_MM,
+        }
+
+    def x_get_print_payload(self):
+        """Devolve o PDF do formato escolhido, em base64, e a geometria.
+
+        Chamado pelo JS do wizard quando o operador usa o botão de impressão
+        direta: o navegador roda na mesma máquina do QZ Tray, então ele entrega
+        este PDF ao QZ Tray, que rasteriza e manda pra impressora USB.
+
+        Devolve ``{'report_name', 'pdf_base64', 'page', 'rotation'}``.
+        """
+        self.ensure_one()
+        xml_id, data = self._prepare_report_data()
+        report = self.env.ref(xml_id)
+        pdf, _ext = report._render_qweb_pdf(xml_id, res_ids=None, data=data)
+        page = self._X_LABEL_PAGE_MM.get(self.x_label_format)
+        if not page:
+            raise UserError(_('Formato de etiqueta inválido: %s', self.x_label_format))
+        return {
+            'report_name': _('Etiquetas'),
+            'pdf_base64': base64.b64encode(pdf).decode('ascii'),
+            'page': page,
+            'rotation': self._X_LABEL_ROTATION,
+        }

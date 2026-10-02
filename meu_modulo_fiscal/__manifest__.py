@@ -124,6 +124,11 @@
         # (stock.picking internal/incoming) em vez de download de PDF.
         'web.assets_backend': [
             'meu_modulo_fiscal/static/src/js/picking_print_helper.js',
+            # etiquetas-produto-impressao: botão de impressão direta no wizard de
+            # etiquetas. O JS registra o campo que fala com o QZ Tray (instalado
+            # no PC da impressora); o XML o renderiza. JS antes do XML.
+            'meu_modulo_fiscal/static/src/js/etiqueta_qz_print.js',
+            'meu_modulo_fiscal/static/src/xml/etiqueta_qz_print.xml',
             # selo-ambiente-teste: badge "TESTE" no navbar (só renderiza com
             # env var ODOO_ENV_LABEL setada no container; PROD não recebe).
             'meu_modulo_fiscal/static/src/js/env_badge.js',
