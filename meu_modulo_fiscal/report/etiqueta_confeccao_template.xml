@@ -2,48 +2,91 @@
 <odoo>
     <data>
 
-        <!-- Etiqueta Confecção — 35 x 60 mm (paperformat_etiqueta_confeccao).
-             Mesmo conteúdo da Bijuteria com preço maior e rodapé Instagram
-             (paridade com o layout B do BarTender). -->
+        <!-- Etiqueta Confecção — bobina de 3 colunas (105 x 60 mm).
+
+             A bobina tem TRÊS etiquetas lado a lado de 35x60 mm. O driver da
+             impressora NÃO reorganiza o que o PDF manda: ele imprime a página e
+             avança o papel. Por isso a página do PDF tem a largura do ROLO
+             (105 mm) e é o template que posiciona as etiquetas nas colunas —
+             mesma técnica das etiquetas A4 do core (2x7 / 4x12), que montam uma
+             grade dentro da página.
+
+             Cada etiqueta carrega a faixa pré-impressa da loja na parte de cima
+             (a bobina já vem com o logotipo em cada posição), então cada coluna
+             mantém os 21,5 mm superiores em branco.
+
+             A coluna é preenchida da esquerda para a direita: 1 etiqueta vai na
+             coluna 1, 2 etiquetas nas colunas 1 e 2, 3 completam a linha. Acabou
+             a linha, abre a próxima página. Assim "2 cópias" sai lado a lado em
+             vez de descer o papel. -->
         <template id="report_etiqueta_confeccao">
             <t t-set="full_width" t-value="True"/>
+            <t t-set="per_page" t-value="3"/>
+            <t t-set="pages" t-value="(total_quantity + per_page - 1) // per_page"/>
             <t t-call="web.html_container">
                 <t t-call="meu_modulo_fiscal.etiqueta_styles"/>
 
-                <t t-foreach="quantity.items()" t-as="barcode_and_qty_by_product">
-                    <t t-set="product" t-value="barcode_and_qty_by_product[0]"/>
-                    <t t-foreach="barcode_and_qty_by_product[1]" t-as="barcode_and_qty">
-                        <t t-set="barcode" t-value="barcode_and_qty[0]"/>
-                        <t t-foreach="range(barcode_and_qty[1])" t-as="qty">
-                            <div class="x_etiqueta x_etiqueta_confeccao">
-                                <div class="x_eti_nome" t-out="product.name.upper()"/>
-                                <div class="x_eti_ref" t-if="product.default_code" t-out="product.default_code"/>
-                                <div class="x_eti_barcode" t-if="barcode">
-                                    <t t-out="product.barcode" t-options="{'widget': 'barcode', 'symbology': 'Code128', 'quiet': 0, 'width': 930, 'height': 420, 'img_style': 'width:31mm;height:14mm'}"/>
-                                </div>
-                                <div class="x_eti_digitos" t-if="barcode" t-out="barcode"/>
-                                <div class="x_eti_preco">
-                                    <!-- Ver nota no template da Bijuteria: 'monetary' + wkhtmltopdf
-                                         corrompe o NBSP e sai "R$Â 40,00". -->
-                                    <t t-out="product.currency_id.symbol"/>
-                                    <t t-out="product.lst_price" t-options="{'widget': 'float', 'precision': 2}"/>
-                                </div>
-                                <div class="x_eti_rodape">
-                                    <!-- SVG inline no lugar de <i class="fa fa-instagram"/>:
-                                         webfont do Font Awesome não é confiável no
-                                         wkhtmltopdf (risco de tofu). O glifo é o mesmo. -->
-                                    <svg width="3mm" height="3mm" viewBox="0 0 24 24"
-                                         fill="none" stroke="#000" stroke-width="2"
-                                         style="vertical-align:-0.5mm">
-                                        <rect x="2" y="2" width="20" height="20" rx="5"/>
-                                        <circle cx="12" cy="12" r="4.5"/>
-                                        <circle cx="17.5" cy="6.5" r="1.2" fill="#000" stroke="none"/>
-                                    </svg>
-                                    @lojas20mais_itacoatiara
-                                </div>
-                            </div>
+                <!-- Achata {produto: [(barcode, qtd)]} numa fila de etiquetas,
+                     cada uma com o produto E o barcode. Usa o barcode do data
+                     (não o product.barcode) porque há produto sem código, e cada
+                     posição precisa saber se imprime o bloco de barras. -->
+                <t t-set="fila" t-value="[]"/>
+                <t t-foreach="quantity.items()" t-as="produto_e_lista">
+                    <t t-foreach="produto_e_lista[1]" t-as="barcode_e_qtd">
+                        <t t-foreach="range(barcode_e_qtd[1])" t-as="n">
+                            <t t-set="fila" t-value="fila + [(produto_e_lista[0], barcode_e_qtd[0])]"/>
                         </t>
                     </t>
+                </t>
+
+                <t t-foreach="range(pages)" t-as="pagina">
+                    <div class="x_linha_etiquetas">
+                        <t t-foreach="range(per_page)" t-as="coluna">
+                            <t t-set="idx" t-value="pagina * per_page + coluna"/>
+                            <t t-if="idx &lt; len(fila)">
+                                <!-- As duas variáveis ficam em escopo DENTRO do
+                                     t-if: sem o else não há como usá-las fora. -->
+                                <t t-set="product" t-value="fila[idx][0]"/>
+                                <t t-set="barcode" t-value="fila[idx][1]"/>
+                                <div class="x_etiqueta x_etiqueta_confeccao">
+                                    <div class="x_eti_nome" t-out="product.name.upper()"/>
+                                    <div class="x_eti_ref" t-if="product.default_code" t-out="product.default_code"/>
+                                    <div class="x_eti_barcode" t-if="barcode">
+                                        <!-- 8 mm de altura conforme a spec da bobina (203 dpi).
+                                             width/height intrínsecos mantêm a MESMA proporção
+                                             do img_style (930 x 240 para 31 x 8 mm) — proporção
+                                             diferente estica as barras e prejudica a leitura. -->
+                                        <t t-out="barcode" t-options="{'widget': 'barcode', 'symbology': 'Code128', 'quiet': 0, 'width': 930, 'height': 240, 'img_style': 'width:31mm;height:8mm'}"/>
+                                    </div>
+                                    <div class="x_eti_digitos" t-if="barcode" t-out="barcode"/>
+                                    <div class="x_eti_preco">
+                                        <!-- Ver nota no template da Bijuteria: 'monetary' + wkhtmltopdf
+                                             corrompe o NBSP e sai "R$Â 40,00". -->
+                                        <t t-out="product.currency_id.symbol"/>
+                                        <t t-out="product.lst_price" t-options="{'widget': 'float', 'precision': 2}"/>
+                                    </div>
+                                    <div class="x_eti_rodape">
+                                        <!-- SVG inline no lugar de <i class="fa fa-instagram"/>:
+                                             webfont do Font Awesome não é confiável no
+                                             wkhtmltopdf (risco de tofu). O glifo é o mesmo. -->
+                                        <svg width="3mm" height="3mm" viewBox="0 0 24 24"
+                                             fill="none" stroke="#000" stroke-width="2"
+                                             style="vertical-align:-0.5mm">
+                                            <rect x="2" y="2" width="20" height="20" rx="5"/>
+                                            <circle cx="12" cy="12" r="4.5"/>
+                                            <circle cx="17.5" cy="6.5" r="1.2" fill="#000" stroke="none"/>
+                                        </svg>
+                                        @lojas20mais_itacoatiara
+                                    </div>
+                                </div>
+                            </t>
+                            <t t-else="">
+                                <!-- Coluna vazia: reserva o lugar para as demais
+                                     não escorregarem para a esquerda. -->
+                                <div class="x_etiqueta x_etiqueta_confeccao x_etiqueta_vazia"/>
+                            </t>
+                        </t>
+                    </div>
                 </t>
             </t>
         </template>

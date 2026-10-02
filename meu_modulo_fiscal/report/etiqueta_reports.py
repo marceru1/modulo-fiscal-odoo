@@ -30,8 +30,13 @@ class ReportEtiqueta(models.AbstractModel):
         for product in products:
             quantity[product].append((product.barcode, quantity_by_product[product.id]))
 
+        # Quantidade TOTAL de etiquetas. O template usa para saber quantas
+        # paginas (linhas) montar no rolo de 3 colunas.
+        total_quantity = sum(quantity_by_product.values())
+
         return {
             'quantity': quantity,
+            'total_quantity': total_quantity,
             'layout_wizard': self.env['product.label.layout'].browse(data.get('layout_wizard')),
         }
 
