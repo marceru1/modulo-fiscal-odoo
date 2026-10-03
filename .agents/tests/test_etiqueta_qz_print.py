@@ -37,9 +37,10 @@ manifest = MANIFEST.read_text()
 print("Python (payload):")
 ok("def x_get_print_payload" in py, "metodo x_get_print_payload existe")
 ok("base64.b64encode(pdf)" in py, "PDF vai em base64")
-for chave in ("report_name", "pdf_base64", "page", "orientation"):
+for chave in ("report_name", "pdf_base64", "page"):
     ok(f"'{chave}'" in py, f"payload carrega '{chave}'")
-ok("_X_LABEL_ORIENTATION = 'reverse-portrait'" in py, "orientacao reverse-portrait vem do servidor")
+ok("rotate_pdf" in py, "usa o rotate_pdf do CORE (nao dependencia externa)")
+ok("_X_LABEL_ROTATE_DEGREES = 180" in py, "rotacao 180 vem do servidor")
 ok("'confeccao': {'width': 105, 'height': 60}" in py, "confeccao = 105x60 (largura do ROLO)")
 
 print("\nJS (widget):")
@@ -47,8 +48,12 @@ ok("loadQzTray" in js, "carrega o qz-tray.js sob demanda")
 ok("x_get_print_payload" in js, "chama o metodo que gera o PDF")
 ok('type: "pixel"' in js or "type: 'pixel'" in js, "usa o modo pixel (o unico que imprime)")
 ok('format: "pdf"' in js or "format: 'pdf'" in js, "envia PDF")
-ok("payload.orientation" in js, "usa a orientacao que veio do servidor")
 ok("payload.page" in js, "usa a geometria que veio do servidor")
+# A rotacao NAO vai mais pro QZ Tray: `rotation` a lib so declara como default
+# (o Java ignora) e `orientation` TROCA a pagina e encolhe a etiqueta. O PDF sai
+# girado do servidor (odoo.tools.pdf.rotate_pdf).
+ok("orientation:" not in js, "nao manda orientation pro QZ (trocaria a pagina)")
+ok("rotation:" not in js, "nao manda rotation pro QZ (o Java ignora)")
 # Busca da impressora por PRIORIDADE. A fila real da loja se chama "confecção"
 # (nome que veio no header do .btw original), entao ela vem primeiro; o modelo e
 # o /elgin/ generico sao fallback. Um regex so de /l42/ escolheria a impressora

@@ -1,7 +1,25 @@
 from odoo import _, api, fields, models
 from odoo.exceptions import UserError
+from odoo.tools.pdf import rotate_pdf
 
 import base64
+
+
+def _x_rotate_etiqueta_pdf(pdf, degrees):
+    """Gira o PDF em ``degrees`` (múltiplo de 90) usando o utilitário do core.
+
+    ``rotate_pdf`` do Odoo gira 90° por chamada, então 180° são duas chamadas.
+    Ele altera o ``/Rotate`` da página em vez de remontar as dimensões: em 180°
+    a folha continua 105x60 e só o conteúdo fica de cabeça pra baixo — que é o
+    efeito do "Retrato 180°" do driver da Elgin.
+
+    NÃO usa as opções do QZ Tray para isso: ``rotation`` a lib só declara como
+    default (o app Java ignora) e ``orientation`` TROCA a página (105x60 vira
+    60x105), fazendo o ``scaleContent`` encolher a etiqueta.
+    """
+    for _ in range((degrees // 90) % 4):
+        pdf = rotate_pdf(pdf)
+    return pdf
 
 
 class XLabelLine(models.TransientModel):
@@ -60,15 +78,12 @@ class ProductLabelLayout(models.TransientModel):
     }
 
     #: O perfil do Windows desta classe de Elgin carrega "Retrato 180°" (o fluxo
-    #: do BarTender foi desenhado em cima disso), então o raster precisa girar.
-    #: Fica aqui, em código, para não depender do dropdown do driver.
-    #:
-    #: Vai como `orientation: 'reverse-portrait'`. O parâmetro `rotation: 180`
-    #: NÃO funciona: a lib só o declara como default e o app Java ignora. O enum
-    #: do QZ Tray tem 4 orientações (portrait, landscape, reverse-landscape,
-    #: reverse-portrait) — a doc pública só cita 3, mas `reverse-portrait` é
-    #: exatamente PageFormat.PORTRAIT+180 = o "Retrato 180°" do driver.
-    _X_LABEL_ORIENTATION = 'reverse-portrait'
+    #: do BarTender foi desenhado em cima disso), então a página precisa sair
+    #: girada. Gira-se o PDF no SERVIDOR: a opção `rotation` do QZ Tray não existe
+    #: de fato (a lib só a declara como default e o app Java ignora), e
+    #: `orientation` NÃO serve — ele TROCA a página (105x60 vira 60x105) e o
+    #: `scaleContent` reescala a etiqueta para caber, encolhendo o conteúdo.
+    _X_LABEL_ROTATE_DEGREES = 180
 
     #: Formato escolhido → xml_id do `ir.actions.report` correspondente.
     _X_LABEL_REPORTS = {
@@ -128,11 +143,10 @@ class ProductLabelLayout(models.TransientModel):
         """Parâmetros do QZ Tray que a tela usa para imprimir direto.
 
         Ficam no servidor (e não no JS) porque são a mesma decisão do layout:
-        rotação do perfil da Elgin e a geometria de cada bobina. Assim há um
-        lugar só para mudar quando o formato ou a impressora mudar.
+        a geometria de cada bobina. Assim há um lugar só para mudar quando o
+        formato ou a impressora mudar.
         """
         return {
-            'orientation': self._X_LABEL_ORIENTATION,
             'pages': self._X_LABEL_PAGE_MM,
         }
 
@@ -143,12 +157,17 @@ class ProductLabelLayout(models.TransientModel):
         direta: o navegador roda na mesma máquina do QZ Tray, então ele entrega
         este PDF ao QZ Tray, que rasteriza e manda pra impressora USB.
 
-        Devolve ``{'report_name', 'pdf_base64', 'page', 'orientation'}``.
+        Devolve ``{'report_name', 'pdf_base64', 'page'}``.
+
+        O PDF sai já girado em ``_X_LABEL_ROTATE_DEGREES`` (a página continua
+        105x60): a impressora Elgin recebe a etiqueta de cabeça pra baixo, e o
+        fluxo antigo do BarTender resolvia isso com o "Retrato 180" do driver.
         """
         self.ensure_one()
         xml_id, data = self._prepare_report_data()
         report = self.env.ref(xml_id)
         pdf, _ext = report._render_qweb_pdf(xml_id, res_ids=None, data=data)
+        pdf = _x_rotate_etiqueta_pdf(pdf, self._X_LABEL_ROTATE_DEGREES)
         page = self._X_LABEL_PAGE_MM.get(self.x_label_format)
         if not page:
             raise UserError(_('Formato de etiqueta inválido: %s', self.x_label_format))
@@ -156,5 +175,4 @@ class ProductLabelLayout(models.TransientModel):
             'report_name': _('Etiquetas'),
             'pdf_base64': base64.b64encode(pdf).decode('ascii'),
             'page': page,
-            'orientation': self._X_LABEL_ORIENTATION,
         }
