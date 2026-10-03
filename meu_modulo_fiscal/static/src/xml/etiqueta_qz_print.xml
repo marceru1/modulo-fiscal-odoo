@@ -26,7 +26,7 @@
                         <option value="">(abra o QZ Tray e reimprima para listar)</option>
                     </t>
                     <t t-else="">
-                        <option t-foreach="state.impressoras" t-as="p" t-att-value="p" t-out="p"/>
+                        <option t-foreach="state.impressoras" t-as="p" t-key="p" t-att-value="p" t-out="p"/>
                     </t>
                 </select>
             </div>
