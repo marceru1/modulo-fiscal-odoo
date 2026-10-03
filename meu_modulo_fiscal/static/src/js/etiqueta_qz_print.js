@@ -128,7 +128,6 @@ export class XQzPrintField extends Component {
                 units: "mm",
                 size: payload.page,
                 scaleContent: true,
-                orientation: payload.orientation,
             });
             await qz.print(config, [
                 { type: "pixel", format: "pdf", flavor: "base64", data: payload.pdf_base64 },
