@@ -14,6 +14,14 @@
     'data': [
         'data/br.ncm.csv',
         'security/ir.model.access.csv',
+        # etiquetas-produto-impressao: paperformats, reports e templates QWeb
+        # antes das views — a view do wizard referencia a action registrada aqui.
+        'report/etiquetas_reports.xml',
+        'report/etiqueta_styles.xml',
+        'report/etiqueta_bijuteria_template.xml',
+        'report/etiqueta_confeccao_template.xml',
+        'views/etiquetas_wizard_views.xml',
+        'views/etiquetas_menu_views.xml',
         'views/campos_fiscais_views.xml',
         'views/res_company_views.xml',
         'views/res_config_settings_views.xml',
@@ -120,6 +128,11 @@
         # (stock.picking internal/incoming) em vez de download de PDF.
         'web.assets_backend': [
             'meu_modulo_fiscal/static/src/js/picking_print_helper.js',
+            # etiquetas-produto-impressao: botão de impressão direta no wizard de
+            # etiquetas. O JS registra o campo que fala com o QZ Tray (instalado
+            # no PC da impressora); o XML o renderiza. JS antes do XML.
+            'meu_modulo_fiscal/static/src/js/etiqueta_qz_print.js',
+            'meu_modulo_fiscal/static/src/xml/etiqueta_qz_print.xml',
             # selo-ambiente-teste: badge "TESTE" no navbar (só renderiza com
             # env var ODOO_ENV_LABEL setada no container; PROD não recebe).
             'meu_modulo_fiscal/static/src/js/env_badge.js',

@@ -1,0 +1,25 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<templates xml:space="preserve">
+
+    <!-- Botão de impressão direta (QZ Tray) na tela do wizard de etiquetas.
+         O campo x_qz_print é só um lugar no formulário; quem age é este
+         widget, que gera o PDF no servidor e o entrega ao QZ Tray do PC.
+
+         Asset de cliente: a raiz tem que ser <templates> e o nome do template
+         usa o nome do módulo Python (meu_modulo_fiscal.), igual aos outros XML
+         deste bundle. A forma de servidor (<odoo><templates>) NÃO funciona
+         aqui: o bundle tenta ler <odoo> como um template e derruba o web client
+         inteiro ("O nome do modelo está ausente"). -->
+    <t t-name="meu_modulo_fiscal.XQzPrintField">
+        <button type="button"
+                class="btn btn-primary"
+                t-att-disabled="state.busy"
+                t-on-click="onClick">
+            <i t-att-class="state.busy ? 'fa fa-spinner fa-spin me-1' : 'fa fa-print me-1'"/>
+            <t t-if="state.busy">Imprimindo...</t>
+            <t t-else="">Imprimir direto (QZ Tray)</t>
+        </button>
+        <div t-if="state.status" class="text-muted small mt-1" t-out="state.status"/>
+    </t>
+
+</templates>
