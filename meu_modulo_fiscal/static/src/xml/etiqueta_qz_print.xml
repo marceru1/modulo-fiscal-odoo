@@ -5,6 +5,10 @@
          O campo x_qz_print é só um lugar no formulário; quem age é este
          widget, que gera o PDF no servidor e o entrega ao QZ Tray do PC.
 
+         A impressora é DECIDIDA PELO FORMATO escolhido no wizard (confeccao →
+         fila "confecção", bijuteria → fila "bijuteria") — o operador não
+         escolhe impressora, o formato é a escolha.
+
          Asset de cliente: a raiz tem que ser <templates> e o nome do template
          usa o nome do módulo Python (meu_modulo_fiscal.), igual aos outros XML
          deste bundle. A forma de servidor (<odoo><templates>) NÃO funciona

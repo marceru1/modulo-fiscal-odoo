@@ -1,7 +1,74 @@
 from odoo import _, api, fields, models
 from odoo.exceptions import UserError
+from odoo.tools.pdf import (
+    DecodedStreamObject,
+    NameObject,
+    NumberObject,
+    PdfFileReader,
+    PdfFileWriter,
+)
 
 import base64
+import io
+
+
+def _x_rotate_etiqueta_pdf(pdf, degrees):
+    """Gira o CONTEUDO do PDF, injetando a matriz ``cm`` no stream.
+
+    Caminhos que NAO funcionam (testados de verdade):
+      - ``rotation: 180`` no config do QZ Tray: a lib so o declara como default
+        e o app Java ignora.
+      - ``orientation: 'reverse-portrait'``: TROCA a pagina (105x60 vira
+        60x105) e o ``scaleContent`` reescala, encolhendo a etiqueta.
+      - ``/Rotate`` na pagina: o rasterizador do QZ Tray ignora o flag.
+      - ``mergeTransformedPage`` com matriz crua: na PyPDF2 2.x (container) a
+        matriz e silenciosamente descartada (roda sem erro, PDF sai IGUAL).
+
+    O que funciona e injecao cirurgica: o stream ``/Contents`` da pagina e
+    envelopado em ``q <matriz> cm <conteudo> Q``. A matriz -1 0 0 -1 w h
+    espelha o desenho em torno do centro da folha (== girar 180). Qualquer
+    rasterizador APPLICA a matriz porque ela e parte do desenho.
+
+    A folha continua 105x60 e a pagina reutiliza mediaBox/objetos originais.
+
+    Imports SO via odoo.tools.pdf: o PyPDF2 do dev local (1.26) expoe
+    PageObject em PyPDF2.pdf, ja o do container (2.12.1) no pacote raiz --
+    importar direto quebra um dos dois lados. Os nomes reexportados pelo core
+    existem garantidamente em qualquer instalacao Odoo 18.
+    """
+    resto = degrees % 360
+    if resto == 0:
+        return pdf
+    if resto != 180:
+        raise UserError(_('Rotação de %s° não suportada (só 180).', degrees))
+
+    reader = PdfFileReader(io.BytesIO(pdf), strict=False)
+    writer = PdfFileWriter()
+    # Matriz unica da rotacao 180 (espelha em torno do centro).
+    MATRIZ = b'q -1 0 0 -1 %.6f %.6f cm\n'
+    for i in range(reader.getNumPages()):
+        page = reader.getPage(i)
+        w = float(page.mediaBox.getWidth())
+        h = float(page.mediaBox.getHeight())
+        conteudo = page.getContents()
+        if conteudo is None:
+            bruto = b''
+        elif hasattr(conteudo, 'getData'):
+            # stream unico
+            bruto = conteudo.getData()
+        else:
+            # ArrayObject: varios streams (possivelmente IndirectObject)
+            bruto = b''.join(
+                (s.getData() if hasattr(s, 'getData') else s.getObject().getData())
+                for s in conteudo
+            )
+        novo = DecodedStreamObject()
+        novo.setData(MATRIZ % (w, h) + bruto + b'\nQ\n')
+        page[NameObject('/Contents')] = writer._add_object(novo)
+        writer.addPage(page)
+    buf = io.BytesIO()
+    writer.write(buf)
+    return buf.getvalue()
 
 
 class XLabelLine(models.TransientModel):
@@ -51,6 +118,23 @@ class ProductLabelLayout(models.TransientModel):
     # com ela, então o QZ Tray no Windows faz a ponte).
     x_qz_print = fields.Boolean(string='Imprimir direto')
 
+    #: Graus de rotação do PDF na impressão direta (0, 90, 180, 270).
+    #:
+    #: Os ambientes precisam de valores DIFERENTES: a impressora da DEV rasteriza
+    #: a página como veio (código funciona com 0) e a da PROD processa a folha
+    #: girada 180° (sai de ponta-cabeça E começa pela coluna da direita —
+    #: assinatura de página rodada pela máquina/driver). O valor por BANCO
+    #: resolve sem dividir o código: cada base grava o que a sua impressora
+    #: exige. Preenchido pela _x_default quando o ir.config não tem valor.
+    x_rotate_degrees = fields.Selection(
+        selection=[
+            ('0', '0° (etiqueta direita)'),
+            ('180', '180° (etiqueta de cabeça pra baixo)'),
+        ],
+        string='Rotação da Etiqueta',
+        default='0',
+    )
+
     #: Formato → geometria da página em mm, para o QZ Tray.
     #: A largura é a do ROLO (na confecção são 3 etiquetas de 35mm lado a lado),
     #: não a de uma etiqueta — é o tamanho que o driver deve receber.
@@ -59,10 +143,9 @@ class ProductLabelLayout(models.TransientModel):
         'confeccao': {'width': 105, 'height': 60},
     }
 
-    #: O perfil do Windows desta classe de Elgin carrega "Retrato 180°" (o fluxo
-    #: do BarTender foi desenhado em cima disso), então o raster precisa girar.
-    #: Fica aqui, em código, para não depender do dropdown do driver.
-    _X_LABEL_ROTATION = 180
+    #: Padrões por formato: a DEV/impressora de casa rasteriza a página como
+    #: veio (0°). A PROD (Elgin da loja) processa a folha girada 180°.
+    _X_LABEL_ROTATE_DEFAULT = '0'
 
     #: Formato escolhido → xml_id do `ir.actions.report` correspondente.
     _X_LABEL_REPORTS = {
@@ -118,15 +201,25 @@ class ProductLabelLayout(models.TransientModel):
         return report_action
 
     @api.model
+    def _x_rotate_degrees(self):
+        """Valor corrente de rotação: wizard → sistema → default da classe.
+
+        Ordem: o valor gravado na ABA do wizard vence (o operador pode trocar
+        numa impressão pontual); sem ele, o default do campo.
+        """
+        self.ensure_one()
+        return int(self.x_rotate_degrees or self._X_LABEL_ROTATE_DEFAULT)
+
+    @api.model
     def _x_qz_config(self):
         """Parâmetros do QZ Tray que a tela usa para imprimir direto.
 
         Ficam no servidor (e não no JS) porque são a mesma decisão do layout:
-        rotação do perfil da Elgin e a geometria de cada bobina. Assim há um
-        lugar só para mudar quando o formato ou a impressora mudar.
+        a geometria de cada bobina. Assim há um lugar só para mudar quando o
+        formato ou a impressora mudar.
         """
         return {
-            'rotation': self._X_LABEL_ROTATION,
+            'default_rotation': self.default_get(['x_rotate_degrees']).get('x_rotate_degrees'),
             'pages': self._X_LABEL_PAGE_MM,
         }
 
@@ -138,11 +231,17 @@ class ProductLabelLayout(models.TransientModel):
         este PDF ao QZ Tray, que rasteriza e manda pra impressora USB.
 
         Devolve ``{'report_name', 'pdf_base64', 'page', 'rotation'}``.
+
+        O PDF sai girado conforme ``x_rotate_degrees`` (0 ou 180) — a folha
+        fica 105x60 e o conteúdo gira dentro do stream (a matriz injetada).
+        Impressoras variam: a da dev rasteriza como veio (0°) e a da loja
+        processa a folha girada (180°).
         """
         self.ensure_one()
         xml_id, data = self._prepare_report_data()
         report = self.env.ref(xml_id)
         pdf, _ext = report._render_qweb_pdf(xml_id, res_ids=None, data=data)
+        pdf = _x_rotate_etiqueta_pdf(pdf, self._x_rotate_degrees())
         page = self._X_LABEL_PAGE_MM.get(self.x_label_format)
         if not page:
             raise UserError(_('Formato de etiqueta inválido: %s', self.x_label_format))
@@ -150,5 +249,4 @@ class ProductLabelLayout(models.TransientModel):
             'report_name': _('Etiquetas'),
             'pdf_base64': base64.b64encode(pdf).decode('ascii'),
             'page': page,
-            'rotation': self._X_LABEL_ROTATION,
         }

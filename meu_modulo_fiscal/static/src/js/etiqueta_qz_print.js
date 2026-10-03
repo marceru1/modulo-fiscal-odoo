@@ -42,7 +42,7 @@ export class XQzPrintField extends Component {
 
     setup() {
         this.notification = useService("notification");
-        this.state = useState({ printer: "", busy: false, status: "" });
+        this.state = useState({ busy: false, status: "" });
     }
 
     get wizard() {
@@ -63,11 +63,24 @@ export class XQzPrintField extends Component {
         }
     }
 
+    /**
+     * Decide a impressora pelo FORMATO escolhido no wizard: a loja tem uma fila
+     * para confecção e outra para bijuteria, e quem imprime é a fila certa.
+     *   confeccao → fila "confecção"  |  bijuteria → fila "bijuteria"
+     * Fallbacks: L42 (modelo), qualquer Elgin. O operador não escolhe nada —
+     * o formato da etiqueta é a escolha.
+     */
     async _findPrinter(qz) {
-        // Atenção: uma máquina da loja tem "ELGIN i9(USB)" E "ELGIN L42PRO FULL".
-        // Casar /elgin/ pega a errada — o modelo L42 tem prioridade.
         const printers = await qz.printers.find();
-        return printers.find((n) => /l42/i.test(n)) || printers.find((n) => /elgin/i.test(n));
+        const lista = Array.isArray(printers) ? printers : (printers ? [printers] : []);
+
+        const formato = this.wizard.model.root.data.x_label_format || "";
+        const candidatos = formato === "bijuteria"
+            ? [/bijut/i, /l42/i, /elgin/i]
+            : [/confec[cç]/i, /l42/i, /elgin/i];
+
+        const escolhida = candidatos.map((re) => lista.find((n) => re.test(n))).find(Boolean) || "";
+        return { escolhida, lista, formato };
     }
 
     async onClick() {
@@ -98,11 +111,18 @@ export class XQzPrintField extends Component {
                 { context: this.wizard.context }
             );
 
-            const printer = this.state.printer || (await this._findPrinter(qz));
+            const { escolhida, lista, formato } = await this._findPrinter(qz);
+            const printer = escolhida;
             if (!printer) {
-                throw new Error("Não achei a impressora (ELGIN L42PRO). Ela está ligada e instalada neste PC?");
+                // Mostra o que o QZ Tray ve: sem isso o operador so ve "nao
+                // achei" e nao sabe se o QZ nao devolveu nada ou se a fila do
+                // formato nao existe na maquina.
+                throw new Error(
+                    lista.length
+                        ? `a impressora do formato "${formato || "?"}" não está nesta máquina. O QZ Tray vê: ${lista.join(", ")}`
+                        : "o QZ Tray não devolveu nenhuma impressora (ele está aberto e rodando neste PC?)"
+                );
             }
-            this.state.printer = printer;
 
             this.state.status = `enviando para ${printer}...`;
             const config = qz.configs.create(printer, {
@@ -110,7 +130,6 @@ export class XQzPrintField extends Component {
                 units: "mm",
                 size: payload.page,
                 scaleContent: true,
-                rotation: payload.rotation,
             });
             await qz.print(config, [
                 { type: "pixel", format: "pdf", flavor: "base64", data: payload.pdf_base64 },
