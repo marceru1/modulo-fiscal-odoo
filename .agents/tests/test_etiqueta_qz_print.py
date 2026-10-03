@@ -39,8 +39,10 @@ ok("def x_get_print_payload" in py, "metodo x_get_print_payload existe")
 ok("base64.b64encode(pdf)" in py, "PDF vai em base64")
 for chave in ("report_name", "pdf_base64", "page"):
     ok(f"'{chave}'" in py, f"payload carrega '{chave}'")
-ok("mergeTransformedPage" in py, "gira o CONTEUDO via PyPDF2 (o /Rotate o QZ ignora)")
-ok("_X_LABEL_ROTATE_DEGREES = 180" in py, "rotacao 180 vem do servidor")
+ok("mergeTransformedPage" in py or "cm" in py, "gira o CONTEUDO (o /Rotate o QZ ignora)")
+ok("_X_LABEL_ROTATE_DEFAULT = '0'" in py, "rotação 0 é o default da classe (dev)")
+ok("x_rotate_degrees" in py, "rotação é campo do wizard (por impressão)")
+ok("_x_rotate_degrees" in py, "resolução: wizard -> default")
 ok("'confeccao': {'width': 105, 'height': 60}" in py, "confeccao = 105x60 (largura do ROLO)")
 
 print("\nJS (widget):")
