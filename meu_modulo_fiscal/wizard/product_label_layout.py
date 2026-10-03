@@ -62,7 +62,13 @@ class ProductLabelLayout(models.TransientModel):
     #: O perfil do Windows desta classe de Elgin carrega "Retrato 180°" (o fluxo
     #: do BarTender foi desenhado em cima disso), então o raster precisa girar.
     #: Fica aqui, em código, para não depender do dropdown do driver.
-    _X_LABEL_ROTATION = 180
+    #:
+    #: Vai como `orientation: 'reverse-portrait'`. O parâmetro `rotation: 180`
+    #: NÃO funciona: a lib só o declara como default e o app Java ignora. O enum
+    #: do QZ Tray tem 4 orientações (portrait, landscape, reverse-landscape,
+    #: reverse-portrait) — a doc pública só cita 3, mas `reverse-portrait` é
+    #: exatamente PageFormat.PORTRAIT+180 = o "Retrato 180°" do driver.
+    _X_LABEL_ORIENTATION = 'reverse-portrait'
 
     #: Formato escolhido → xml_id do `ir.actions.report` correspondente.
     _X_LABEL_REPORTS = {
@@ -126,7 +132,7 @@ class ProductLabelLayout(models.TransientModel):
         lugar só para mudar quando o formato ou a impressora mudar.
         """
         return {
-            'rotation': self._X_LABEL_ROTATION,
+            'orientation': self._X_LABEL_ORIENTATION,
             'pages': self._X_LABEL_PAGE_MM,
         }
 
@@ -137,7 +143,7 @@ class ProductLabelLayout(models.TransientModel):
         direta: o navegador roda na mesma máquina do QZ Tray, então ele entrega
         este PDF ao QZ Tray, que rasteriza e manda pra impressora USB.
 
-        Devolve ``{'report_name', 'pdf_base64', 'page', 'rotation'}``.
+        Devolve ``{'report_name', 'pdf_base64', 'page', 'orientation'}``.
         """
         self.ensure_one()
         xml_id, data = self._prepare_report_data()
@@ -150,5 +156,5 @@ class ProductLabelLayout(models.TransientModel):
             'report_name': _('Etiquetas'),
             'pdf_base64': base64.b64encode(pdf).decode('ascii'),
             'page': page,
-            'rotation': self._X_LABEL_ROTATION,
+            'orientation': self._X_LABEL_ORIENTATION,
         }
