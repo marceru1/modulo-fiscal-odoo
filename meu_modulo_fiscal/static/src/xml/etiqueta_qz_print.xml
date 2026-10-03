@@ -5,9 +5,9 @@
          O campo x_qz_print é só um lugar no formulário; quem age é este
          widget, que gera o PDF no servidor e o entrega ao QZ Tray do PC.
 
-         O dropdown de impressora é populado pela LISTA REAL do QZ Tray da
-         máquina (o servidor não vê as impressoras USB) e a sugestão inicial
-         segue o formato escolhido no wizard (confecção/bijuteria).
+         A impressora é DECIDIDA PELO FORMATO escolhido no wizard (confeccao →
+         fila "confecção", bijuteria → fila "bijuteria") — o operador não
+         escolhe impressora, o formato é a escolha.
 
          Asset de cliente: a raiz tem que ser <templates> e o nome do template
          usa o nome do módulo Python (meu_modulo_fiscal.), igual aos outros XML
@@ -15,33 +15,15 @@
          aqui: o bundle tenta ler <odoo> como um template e derruba o web client
          inteiro ("O nome do modelo está ausente"). -->
     <t t-name="meu_modulo_fiscal.XQzPrintField">
-        <div class="d-flex flex-column gap-1 w-100">
-            <div class="d-flex align-items-center gap-2">
-                <label class="text-nowrap small text-muted" t-esc="'Impressora'"/>
-                <select class="form-select form-select-sm"
-                        t-att-disabled="state.busy"
-                        t-model="state.printer"
-                        style="max-width: 22rem;">
-                    <t t-if="!state.impressoras.length">
-                        <option value="">(abra o QZ Tray e reimprima para listar)</option>
-                    </t>
-                    <t t-else="">
-                        <option t-foreach="state.impressoras" t-as="p" t-key="p" t-att-value="p" t-out="p"/>
-                    </t>
-                </select>
-            </div>
-            <div>
-                <button type="button"
-                        class="btn btn-primary"
-                        t-att-disabled="state.busy"
-                        t-on-click="onClick">
-                    <i t-att-class="state.busy ? 'fa fa-spinner fa-spin me-1' : 'fa fa-print me-1'"/>
-                    <t t-if="state.busy">Imprimindo...</t>
-                    <t t-else="">Imprimir direto (QZ Tray)</t>
-                </button>
-            </div>
-            <div t-if="state.status" class="text-muted small" t-out="state.status"/>
-        </div>
+        <button type="button"
+                class="btn btn-primary"
+                t-att-disabled="state.busy"
+                t-on-click="onClick">
+            <i t-att-class="state.busy ? 'fa fa-spinner fa-spin me-1' : 'fa fa-print me-1'"/>
+            <t t-if="state.busy">Imprimindo...</t>
+            <t t-else="">Imprimir direto (QZ Tray)</t>
+        </button>
+        <div t-if="state.status" class="text-muted small mt-1" t-out="state.status"/>
     </t>
 
 </templates>
