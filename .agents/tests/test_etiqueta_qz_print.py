@@ -39,7 +39,7 @@ ok("def x_get_print_payload" in py, "metodo x_get_print_payload existe")
 ok("base64.b64encode(pdf)" in py, "PDF vai em base64")
 for chave in ("report_name", "pdf_base64", "page"):
     ok(f"'{chave}'" in py, f"payload carrega '{chave}'")
-ok("rotate_pdf" in py, "usa o rotate_pdf do CORE (nao dependencia externa)")
+ok("mergeTransformedPage" in py, "gira o CONTEUDO via PyPDF2 (o /Rotate o QZ ignora)")
 ok("_X_LABEL_ROTATE_DEGREES = 180" in py, "rotacao 180 vem do servidor")
 ok("'confeccao': {'width': 105, 'height': 60}" in py, "confeccao = 105x60 (largura do ROLO)")
 

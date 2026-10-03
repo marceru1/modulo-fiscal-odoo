@@ -1,25 +1,55 @@
 from odoo import _, api, fields, models
 from odoo.exceptions import UserError
-from odoo.tools.pdf import rotate_pdf
 
 import base64
+import io
+
+import PyPDF2
+from PyPDF2.pdf import PageObject
 
 
 def _x_rotate_etiqueta_pdf(pdf, degrees):
-    """Gira o PDF em ``degrees`` (múltiplo de 90) usando o utilitário do core.
+    """Gira o CONTEUDO do PDF em ``degrees`` (multiplo de 90), via PyPDF2.
 
-    ``rotate_pdf`` do Odoo gira 90° por chamada, então 180° são duas chamadas.
-    Ele altera o ``/Rotate`` da página em vez de remontar as dimensões: em 180°
-    a folha continua 105x60 e só o conteúdo fica de cabeça pra baixo — que é o
-    efeito do "Retrato 180°" do driver da Elgin.
+    NAO basta setar o ``/Rotate`` da pagina: o QZ Tray o ignora ao rasterizar
+    (testado -- etiqueta continuou de cabeca pra baixo). Tambem NAO usa as
+    opcoes do QZ Tray: ``rotation`` a lib so declara como default (o app Java
+    ignora) e ``orientation`` TROCA a pagina (105x60 vira 60x105), fazendo o
+    ``scaleContent`` encolher a etiqueta.
 
-    NÃO usa as opções do QZ Tray para isso: ``rotation`` a lib só declara como
-    default (o app Java ignora) e ``orientation`` TROCA a página (105x60 vira
-    60x105), fazendo o ``scaleContent`` encolher a etiqueta.
+    Aqui o giro fica DENTRO do stream de conteudo: pagina nova do mesmo
+    tamanho recebe o desenho da original com a matriz de rotacao aplicada.
+    Em 180 graus a folha continua 105x60 e o conteudo sai invertido -- o
+    mesmo efeito do "Retrato 180" que o driver Elgin aplicava no BarTender.
     """
-    for _ in range((degrees // 90) % 4):
-        pdf = rotate_pdf(pdf)
-    return pdf
+    if (degrees % 360) == 0:
+        return pdf
+
+    import math
+    reader = PyPDF2.PdfFileReader(io.BytesIO(pdf), strict=False)
+    writer = PyPDF2.PdfFileWriter()
+    for i in range(reader.getNumPages()):
+        page = reader.getPage(i)
+        w = float(page.mediaBox.getWidth())
+        h = float(page.mediaBox.getHeight())
+        base = PageObject.createBlankPage(None, w, h)
+        rad = math.radians(-degrees)
+        cos, sin = math.cos(rad), math.sin(rad)
+        # CTM de rotacao em TORNO DO CENTRO da pagina:
+        # T(cx,cy) . R(-deg) . T(-cx,-cy), com cx=w/2, cy=h/2.
+        # (o sinal negativo gira o DESENHO; o /Rotate giraria o observador)
+        cx, cy = w / 2.0, h / 2.0
+        ctm = (
+            cos, sin,
+            -sin, cos,
+            cx - cos * cx + sin * cy,
+            cy - sin * cx - cos * cy,
+        )
+        base.mergeTransformedPage(page, ctm)
+        writer.addPage(base)
+    buf = io.BytesIO()
+    writer.write(buf)
+    return buf.getvalue()
 
 
 class XLabelLine(models.TransientModel):
