@@ -21,6 +21,7 @@
         'views/account_move_hide_outstanding.xml',
         'views/pos_session_fechamento_views.xml',
         'views/web_login_cleanup.xml',
+        'views/pos_order_report_analise_views.xml',
     ],
     'assets': {
         'point_of_sale._assets_pos': [
