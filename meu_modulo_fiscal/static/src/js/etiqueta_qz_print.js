@@ -64,10 +64,14 @@ export class XQzPrintField extends Component {
     }
 
     async _findPrinter(qz) {
-        // Atenção: uma máquina da loja tem "ELGIN i9(USB)" E "ELGIN L42PRO FULL".
-        // Casar /elgin/ pega a errada — o modelo L42 tem prioridade.
+        // A fila do Windows pode ter qualquer nome ("ELGIN L42Pro", "ELGIN L42PRO
+        // FULL", "Etiqueta Confecção"...). Casar /l42/ pega a L42 certa quando
+        // existe mais de uma Elgin; o /elgin/ generico e so ultimo recurso.
         const printers = await qz.printers.find();
-        return printers.find((n) => /l42/i.test(n)) || printers.find((n) => /elgin/i.test(n));
+        const lista = Array.isArray(printers) ? printers : (printers ? [printers] : []);
+        const escolhida =
+            lista.find((n) => /l42/i.test(n)) || lista.find((n) => /elgin/i.test(n));
+        return { escolhida, lista };
     }
 
     async onClick() {
@@ -98,9 +102,16 @@ export class XQzPrintField extends Component {
                 { context: this.wizard.context }
             );
 
-            const printer = this.state.printer || (await this._findPrinter(qz));
+            const { escolhida, lista } = await this._findPrinter(qz);
+            const printer = this.state.printer || escolhida;
             if (!printer) {
-                throw new Error("Não achei a impressora (ELGIN L42PRO). Ela está ligada e instalada neste PC?");
+                // Mostra a LISTA REAL: sem isso o usuario so ve "nao achei" e nao
+                // sabe se o QZ Tray nao devolveu nada ou se o nome nao casou.
+                throw new Error(
+                    lista.length
+                        ? `não achei a ELGIN na lista. O QZ Tray vê: ${lista.join(", ")}`
+                        : "o QZ Tray não devolveu nenhuma impressora (ele está aberto e rodando neste PC?)"
+                );
             }
             this.state.printer = printer;
 
