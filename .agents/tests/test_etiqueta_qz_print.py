@@ -49,8 +49,15 @@ ok('type: "pixel"' in js or "type: 'pixel'" in js, "usa o modo pixel (o unico qu
 ok('format: "pdf"' in js or "format: 'pdf'" in js, "envia PDF")
 ok("payload.rotation" in js, "usa a rotacao que veio do servidor")
 ok("payload.page" in js, "usa a geometria que veio do servidor")
-ok("/l42/i.test(n)" in js, "busca da impressora prioriza L42")
-ok(js.index("/l42/i") < js.index("/elgin/i"), "L42 avaliado ANTES do elgin generico")
+# Busca da impressora por PRIORIDADE. A fila real da loja se chama "confecção"
+# (nome que veio no header do .btw original), entao ela vem primeiro; o modelo e
+# o /elgin/ generico sao fallback. Um regex so de /l42/ escolheria a impressora
+# da BIJUTERIA quando as duas estao ligadas.
+ok("/confec[cç]/i" in js, "busca prioriza a fila 'confecção'")
+ok("/l42/i" in js, "tem o modelo L42 como fallback")
+ok("/elgin/i" in js, "tem Elgin generico como ultimo recurso")
+_ordem = [js.index("/confec[cç]/i"), js.index("/l42/i"), js.index("/elgin/i")]
+ok(_ordem == sorted(_ordem), "ordem de prioridade: confecção -> L42 -> elgin")
 ok('units: "mm"' in js, "tamanho em mm")
 ok("blackwhite" in js, "colorType blackwhite (etiqueta termica)")
 ok('registry.category("fields").add("x_qz_print"' in js, "campo x_qz_print registrado")

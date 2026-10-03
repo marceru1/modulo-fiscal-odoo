@@ -64,13 +64,20 @@ export class XQzPrintField extends Component {
     }
 
     async _findPrinter(qz) {
-        // A fila do Windows pode ter qualquer nome ("ELGIN L42Pro", "ELGIN L42PRO
-        // FULL", "Etiqueta Confecção"...). Casar /l42/ pega a L42 certa quando
-        // existe mais de uma Elgin; o /elgin/ generico e so ultimo recurso.
+        // A fila real da loja se chama "confecção" (é o nome que veio no header
+        // do .btw original: `Printer: Name=CONFECÇ...`). Busca por PRIORIDADE:
+        // primeiro a fila da confecção, depois o modelo, e o /elgin/ generico
+        // como ultimo recurso — assim não pega outra Elgin por engano.
+        // TODO: tornar bonito — o ideal é casar a fila com o FORMATO escolhido no
+        // wizard (a bijuteria usa outra impressora) e permitir escolher na tela.
+        const candidatos = [
+            /confec[cç]/i,   // fila real da loja (etiqueta de confecção)
+            /l42/i,          // modelo da impressora
+            /elgin/i,        // qualquer Elgin (último recurso)
+        ];
         const printers = await qz.printers.find();
         const lista = Array.isArray(printers) ? printers : (printers ? [printers] : []);
-        const escolhida =
-            lista.find((n) => /l42/i.test(n)) || lista.find((n) => /elgin/i.test(n));
+        const escolhida = candidatos.map((re) => lista.find((n) => re.test(n))).find(Boolean);
         return { escolhida, lista };
     }
 
