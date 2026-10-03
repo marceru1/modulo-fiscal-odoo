@@ -8,7 +8,7 @@
              num asset em `web.report_assets_common`: assim o reset de `body`
              vale só para ESTE documento renderizado, sem vazar para os demais
              relatórios do Odoo que compartilham o mesmo bundle de CSS. -->
-        <template id="etiqueta_styles">
+        <template id="etiqueta_styles" name="etiqueta_styles">
             <style>
                 /* O relatório do core usa `body.container`/`container-fluid`, cujo
                    padding (~3mm de cada lado) deslocaria a etiqueta dentro de uma
@@ -162,6 +162,90 @@
                     bottom: 5mm;
                 }
             </style>
+        </template>
+
+        <!-- Estilos da BIJUTERIA: a bobina é de UMA via (35 mm), então a
+             largura da linha-página é 34,8 mm (não os 105 mm do shared). Este
+             template vem DEPOIS do etiqueta_styles na ordem de t-call...
+             na verdade os dois são chamados em sequência; a última regra
+             ganha (mesma especificidade). -->
+        <template id="etiqueta_styles_bijuteria" inherit_id="etiqueta_styles">
+            <xpath expr="//style" position="replace">
+                <style>
+                    html, body, #wrapwrap, #wrapwrap > main {
+                        margin: 0 !important;
+                        padding: 0 !important;
+                        background: #fff;
+                    }
+                    /* A página tem a largura da VIA (35 mm — paperformat Integer
+                       arredondado; o conteúdo usa 34,8 mm). */
+                    html, body, #wrapwrap, #wrapwrap > main, .x_linha_etiquetas {
+                        width: 34.8mm !important;
+                    }
+                    .x_linha_etiquetas {
+                        display: table;
+                        table-layout: fixed;
+                        page-break-inside: avoid;
+                    }
+                    .x_linha_etiquetas + .x_linha_etiquetas {
+                        page-break-before: always;
+                    }
+                    .x_etiqueta {
+                        display: table-cell;
+                        box-sizing: border-box;
+                        overflow: hidden;
+                        position: relative;
+                        color: #000;
+                        background: #fff;
+                        font-family: Arial, Helvetica, sans-serif;
+                        text-align: center;
+                        vertical-align: top;
+                    }
+                    .x_etiqueta .x_eti_nome {
+                        font-weight: bold;
+                        text-transform: uppercase;
+                        line-height: 1.05;
+                        overflow: hidden;
+                    }
+                    .x_etiqueta .x_eti_ref {
+                        font-size: 0.85em;
+                        line-height: 1;
+                        overflow: hidden;
+                    }
+                    .x_etiqueta .x_eti_barcode img {
+                        display: block;
+                        margin: 0 auto;
+                    }
+                    .x_etiqueta .x_eti_digitos {
+                        font-size: 0.8em;
+                        line-height: 1;
+                        letter-spacing: 0.4px;
+                        white-space: nowrap;
+                    }
+                    .x_etiqueta .x_eti_preco {
+                        text-align: right;
+                        font-weight: bold;
+                        line-height: 1.1;
+                        white-space: nowrap;
+                    }
+                    /* Bijuteria — 20 mm de altura, fontes menores (o mesmo do
+                       bloco .x_etiqueta_bijuteria do estilo compartilhado). */
+                    .x_etiqueta_bijuteria {
+                        width: 34.8mm;
+                        height: 20mm;
+                        font-size: 7pt;
+                        line-height: 1.05;
+                        padding: 0.8mm 1.2mm 0.5mm;
+                    }
+                    .x_etiqueta_bijuteria .x_eti_barcode {
+                        padding-top: 0.8mm;
+                    }
+                    .x_etiqueta_bijuteria .x_eti_preco {
+                        font-size: 1.15em;
+                        margin-top: 1.2mm;
+                    }
+                </style>
+            </xpath>
         </template>
 
     </data>
