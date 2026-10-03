@@ -56,26 +56,30 @@ ok("payload.page" in js, "usa a geometria que veio do servidor")
 # girado do servidor (odoo.tools.pdf.rotate_pdf).
 ok("orientation:" not in js, "nao manda orientation pro QZ (trocaria a pagina)")
 ok("rotation:" not in js, "nao manda rotation pro QZ (o Java ignora)")
-# Busca da impressora por PRIORIDADE. A fila real da loja se chama "confecção"
-# (nome que veio no header do .btw original), entao ela vem primeiro; o modelo e
-# o /elgin/ generico sao fallback. Um regex so de /l42/ escolheria a impressora
-# da BIJUTERIA quando as duas estao ligadas.
-ok("/confec[cç]/i" in js, "busca prioriza a fila 'confecção'")
+# A impressora e decidida PELO FORMATO (dois ramos): bijuteria -> /bijut/
+# primeiro; confeccao (e vazio) -> /confec[cç]/ primeiro. Fallbacks L42 e
+# Elgin nos dois ramos. Um /l42/ so escolheria a fila errada quando as duas
+# Elgin estao ligadas.
+ok("/confec[cç]/i" in js, "confeccao casando com a fila dela")
+ok("/bijut/i" in js, "bijuteria casando com a fila dela")
 ok("/l42/i" in js, "tem o modelo L42 como fallback")
 ok("/elgin/i" in js, "tem Elgin generico como ultimo recurso")
-_ordem = [js.index("/confec[cç]/i"), js.index("/l42/i"), js.index("/elgin/i")]
-ok(_ordem == sorted(_ordem), "ordem de prioridade: confecção -> L42 -> elgin")
+_p_conf = js.index("/confec[cç]/i")
+_p_l42_2, _p_l42_1 = js.rindex("/l42/i"), js.index("/l42/i")   # 2 ramos usam L42
+_p_elg_2, _p_elg_1 = js.rindex("/elgin/i"), js.index("/elgin/i")
+_p_bij = js.index("/bijut/i")
+ok(_p_conf < _p_l42_2 < _p_elg_2, "ramo confeccao: confecção -> L42 -> elgin")
+ok(_p_bij < _p_l42_1, "ramo bijuteria: bijut antes dos fallbacks")
 ok('units: "mm"' in js, "tamanho em mm")
 ok("blackwhite" in js, "colorType blackwhite (etiqueta termica)")
 ok('registry.category("fields").add("x_qz_print"' in js, "campo x_qz_print registrado")
-# Seletor de impressora: dropdown populado pela LISTA REAL do QZ Tray (o
-# servidor nao ve USB), sugestao por FORMATO e memoria da ultima escolhida.
-ok("impressoras:" in js, "estado carrega a lista de impressoras")
-ok("_carregarImpressoras" in js, "popula o dropdown pelo QZ Tray")
-ok('/bijut/i' in js, "sugere a fila de bijuteria quando o formato e bijuteria")
-ok('/confec[cç]/i' in js, "sugere a fila de confecção quando o formato e confeccao")
-ok('localStorage.setItem("etiqueta_impressora"' in js, "lembra a ultima impressora usada")
-ok("t-model=\"state.printer\"" in xml, "dropdown ligado ao estado da impressora")
+# A IMPRESSORA E DECIDIDA PELO FORMATO (sem dropdown): confeccao -> fila
+# confecção, bijuteria -> fila bijuteria. Fallback L42/Elgin. A loja imprime
+# com o radio do formato; o operador nao escolhe fila.
+ok("impressoras:" not in js and "_carregarImpressoras" not in js, "sem dropdown de impressora (o formato decide)")
+ok('formato === "bijuteria"' in js and "/bijut/i" in js, "bijuteria casando com a fila dela")
+ok('"/confec[cç]/i"' in js or "/confec[cç]/i" in js, "confeccao casando com a fila dela")
+ok("select" not in xml, "template sem dropdown")
 # `qz.security.setPromise` NAO existe na API (e setCertificatePromise /
 # setSignaturePromise). Chamar a inexistente abortava a impressao antes de
 # conectar, e o QZ Tray nunca chegava a pedir permissao.
