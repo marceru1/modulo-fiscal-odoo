@@ -1,52 +1,71 @@
 from odoo import _, api, fields, models
 from odoo.exceptions import UserError
+from odoo.tools.pdf import (
+    DecodedStreamObject,
+    NameObject,
+    NumberObject,
+    PdfFileReader,
+    PdfFileWriter,
+)
 
 import base64
 import io
 
-import PyPDF2
-from PyPDF2.pdf import PageObject
-
 
 def _x_rotate_etiqueta_pdf(pdf, degrees):
-    """Gira o CONTEUDO do PDF em ``degrees`` (multiplo de 90), via PyPDF2.
+    """Gira o CONTEUDO do PDF, injetando a matriz ``cm`` no stream.
 
-    NAO basta setar o ``/Rotate`` da pagina: o QZ Tray o ignora ao rasterizar
-    (testado -- etiqueta continuou de cabeca pra baixo). Tambem NAO usa as
-    opcoes do QZ Tray: ``rotation`` a lib so declara como default (o app Java
-    ignora) e ``orientation`` TROCA a pagina (105x60 vira 60x105), fazendo o
-    ``scaleContent`` encolher a etiqueta.
+    Caminhos que NAO funcionam (testados de verdade):
+      - ``rotation: 180`` no config do QZ Tray: a lib so o declara como default
+        e o app Java ignora.
+      - ``orientation: 'reverse-portrait'``: TROCA a pagina (105x60 vira
+        60x105) e o ``scaleContent`` reescala, encolhendo a etiqueta.
+      - ``/Rotate`` na pagina: o rasterizador do QZ Tray ignora o flag.
+      - ``mergeTransformedPage`` com matriz crua: na PyPDF2 2.x (container) a
+        matriz e silenciosamente descartada (roda sem erro, PDF sai IGUAL).
 
-    Aqui o giro fica DENTRO do stream de conteudo: pagina nova do mesmo
-    tamanho recebe o desenho da original com a matriz de rotacao aplicada.
-    Em 180 graus a folha continua 105x60 e o conteudo sai invertido -- o
-    mesmo efeito do "Retrato 180" que o driver Elgin aplicava no BarTender.
+    O que funciona e injecao cirurgica: o stream ``/Contents`` da pagina e
+    envelopado em ``q <matriz> cm <conteudo> Q``. A matriz -1 0 0 -1 w h
+    espelha o desenho em torno do centro da folha (== girar 180). Qualquer
+    rasterizador APPLICA a matriz porque ela e parte do desenho.
+
+    A folha continua 105x60 e a pagina reutiliza mediaBox/objetos originais.
+
+    Imports SO via odoo.tools.pdf: o PyPDF2 do dev local (1.26) expoe
+    PageObject em PyPDF2.pdf, ja o do container (2.12.1) no pacote raiz --
+    importar direto quebra um dos dois lados. Os nomes reexportados pelo core
+    existem garantidamente em qualquer instalacao Odoo 18.
     """
-    if (degrees % 360) == 0:
+    resto = degrees % 360
+    if resto == 0:
         return pdf
+    if resto != 180:
+        raise UserError(_('Rotação de %s° não suportada (só 180).', degrees))
 
-    import math
-    reader = PyPDF2.PdfFileReader(io.BytesIO(pdf), strict=False)
-    writer = PyPDF2.PdfFileWriter()
+    reader = PdfFileReader(io.BytesIO(pdf), strict=False)
+    writer = PdfFileWriter()
+    # Matriz unica da rotacao 180 (espelha em torno do centro).
+    MATRIZ = b'q -1 0 0 -1 %.6f %.6f cm\n'
     for i in range(reader.getNumPages()):
         page = reader.getPage(i)
         w = float(page.mediaBox.getWidth())
         h = float(page.mediaBox.getHeight())
-        base = PageObject.createBlankPage(None, w, h)
-        rad = math.radians(-degrees)
-        cos, sin = math.cos(rad), math.sin(rad)
-        # CTM de rotacao em TORNO DO CENTRO da pagina:
-        # T(cx,cy) . R(-deg) . T(-cx,-cy), com cx=w/2, cy=h/2.
-        # (o sinal negativo gira o DESENHO; o /Rotate giraria o observador)
-        cx, cy = w / 2.0, h / 2.0
-        ctm = (
-            cos, sin,
-            -sin, cos,
-            cx - cos * cx + sin * cy,
-            cy - sin * cx - cos * cy,
-        )
-        base.mergeTransformedPage(page, ctm)
-        writer.addPage(base)
+        conteudo = page.getContents()
+        if conteudo is None:
+            bruto = b''
+        elif hasattr(conteudo, 'getData'):
+            # stream unico
+            bruto = conteudo.getData()
+        else:
+            # ArrayObject: varios streams (possivelmente IndirectObject)
+            bruto = b''.join(
+                (s.getData() if hasattr(s, 'getData') else s.getObject().getData())
+                for s in conteudo
+            )
+        novo = DecodedStreamObject()
+        novo.setData(MATRIZ % (w, h) + bruto + b'\nQ\n')
+        page[NameObject('/Contents')] = writer._add_object(novo)
+        writer.addPage(page)
     buf = io.BytesIO()
     writer.write(buf)
     return buf.getvalue()
