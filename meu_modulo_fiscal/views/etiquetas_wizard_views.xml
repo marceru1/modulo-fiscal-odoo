@@ -17,6 +17,7 @@
                 <form>
                     <group>
                         <field name="x_label_format" widget="radio" required="1"/>
+                        <field name="x_rotate_degrees" widget="radio"/>
                     </group>
                     <!-- Quantidade POR PRODUTO — uma linha por produto. -->
                     <field name="x_line_ids" nolabel="1">
