@@ -42,7 +42,7 @@ export class XQzPrintField extends Component {
 
     setup() {
         this.notification = useService("notification");
-        this.state = useState({ printer: "", busy: false, status: "" });
+        this.state = useState({ printer: "", impressoras: [], busy: false, status: "" });
     }
 
     get wizard() {
@@ -63,22 +63,60 @@ export class XQzPrintField extends Component {
         }
     }
 
+    /**
+     * Lista as impressoras que o QZ Tray desta máquina enxerga e DEFINE A
+     * SUGESTÃO conforme o formato escolhido no wizard (a loja tem uma fila
+     * para confecção e outra para bijuteria):
+     *   confeccao → fila "confecção"  |  bijuteria → fila "bijuteria"
+     *   fallbacks: L42 (modelo), Elgin genérico.
+     * Se o operador já escolheu uma na mão (dropdown), ela vence.
+     */
     async _findPrinter(qz) {
-        // A fila real da loja se chama "confecção" (é o nome que veio no header
-        // do .btw original: `Printer: Name=CONFECÇ...`). Busca por PRIORIDADE:
-        // primeiro a fila da confecção, depois o modelo, e o /elgin/ generico
-        // como ultimo recurso — assim não pega outra Elgin por engano.
-        // TODO: tornar bonito — o ideal é casar a fila com o FORMATO escolhido no
-        // wizard (a bijuteria usa outra impressora) e permitir escolher na tela.
-        const candidatos = [
-            /confec[cç]/i,   // fila real da loja (etiqueta de confecção)
-            /l42/i,          // modelo da impressora
-            /elgin/i,        // qualquer Elgin (último recurso)
-        ];
         const printers = await qz.printers.find();
         const lista = Array.isArray(printers) ? printers : (printers ? [printers] : []);
-        const escolhida = candidatos.map((re) => lista.find((n) => re.test(n))).find(Boolean);
+
+        const formato = this.wizard.model.root.data.x_label_format || "";
+        const sugestoes = [];
+        if (formato === "confeccao") {
+            sugestoes.push(/confec[cç]/i, /l42/i, /elgin/i);
+        } else if (formato === "bijuteria") {
+            sugestoes.push(/bijut/i, /l42/i, /elgin/i);
+        } else {
+            sugestoes.push(/confec[cç]/i, /bijut/i, /l42/i, /elgin/i);
+        }
+
+        const escolhida = this.state.printer ||
+            sugestoes.map((re) => lista.find((n) => re.test(n))).find(Boolean) ||
+            "";
         return { escolhida, lista };
+    }
+
+    /**
+     * Preenche o dropdown com a lista REAL do QZ Tray (o servidor não vê as
+     * impressoras USB — quem vê é o QZ Tray, na máquina que imprime).
+     * A memória da última impressora usada fica no localStorage da máquina.
+     */
+    async _carregarImpressoras(qz) {
+        try {
+            const printers = await qz.printers.find();
+            const lista = Array.isArray(printers) ? printers : (printers ? [printers] : []);
+            this.state.impressoras = lista;
+            if (!this.state.printer) {
+                const lembrada = localStorage.getItem("etiqueta_impressora") || "";
+                const formato = this.wizard.model.root.data.x_label_format || "";
+                const { escolhida } = await this._findPrinter(qz);
+                // Prioridade: sugestão do formato; se já imprimiu nesta máquina
+                // antes, usa a lembrada — mas a sugestão do formato vence quando
+                // difere (imprimir bijuteria na fila de confecção é o erro que
+                // este seletor existe para evitar).
+                const preferida = lembrada && formato === "" ? lembrada : escolhida;
+                if (preferida) {
+                    this.state.printer = preferida;
+                }
+            }
+        } catch (_e) {
+            this.state.impressoras = [];
+        }
     }
 
     async onClick() {
@@ -100,6 +138,7 @@ export class XQzPrintField extends Component {
 
             const qz = await loadQzTray();
             await this._connect(qz);
+            await this._carregarImpressoras(qz);
 
             this.state.status = "gerando o PDF...";
             const payload = await this.wizard.model.orm.call(
@@ -109,19 +148,18 @@ export class XQzPrintField extends Component {
                 { context: this.wizard.context }
             );
 
-            const { escolhida, lista } = await this._findPrinter(qz);
-            const printer = this.state.printer || escolhida;
+            const { lista } = await this._findPrinter(qz);
+            const printer = this.state.printer;
             if (!printer) {
                 // Mostra a LISTA REAL: sem isso o usuario so ve "nao achei" e nao
                 // sabe se o QZ Tray nao devolveu nada ou se o nome nao casou.
                 throw new Error(
                     lista.length
-                        ? `não achei a ELGIN na lista. O QZ Tray vê: ${lista.join(", ")}`
+                        ? `nenhuma impressora de etiqueta na lista. O QZ Tray vê: ${lista.join(", ")}`
                         : "o QZ Tray não devolveu nenhuma impressora (ele está aberto e rodando neste PC?)"
                 );
             }
-            this.state.printer = printer;
-
+            localStorage.setItem("etiqueta_impressora", printer);
             this.state.status = `enviando para ${printer}...`;
             const config = qz.configs.create(printer, {
                 colorType: "blackwhite",

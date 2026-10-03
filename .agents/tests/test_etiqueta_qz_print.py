@@ -68,6 +68,14 @@ ok(_ordem == sorted(_ordem), "ordem de prioridade: confecção -> L42 -> elgin")
 ok('units: "mm"' in js, "tamanho em mm")
 ok("blackwhite" in js, "colorType blackwhite (etiqueta termica)")
 ok('registry.category("fields").add("x_qz_print"' in js, "campo x_qz_print registrado")
+# Seletor de impressora: dropdown populado pela LISTA REAL do QZ Tray (o
+# servidor nao ve USB), sugestao por FORMATO e memoria da ultima escolhida.
+ok("impressoras:" in js, "estado carrega a lista de impressoras")
+ok("_carregarImpressoras" in js, "popula o dropdown pelo QZ Tray")
+ok('/bijut/i' in js, "sugere a fila de bijuteria quando o formato e bijuteria")
+ok('/confec[cç]/i' in js, "sugere a fila de confecção quando o formato e confeccao")
+ok('localStorage.setItem("etiqueta_impressora"' in js, "lembra a ultima impressora usada")
+ok("t-model=\"state.printer\"" in xml, "dropdown ligado ao estado da impressora")
 # `qz.security.setPromise` NAO existe na API (e setCertificatePromise /
 # setSignaturePromise). Chamar a inexistente abortava a impressao antes de
 # conectar, e o QZ Tray nunca chegava a pedir permissao.
