@@ -5,7 +5,7 @@
         <!-- Badge de preço: abaixo do nome, dentro do .product-content (mesma
              flex row do core). position="after" no node do nome — nunca replace. -->
         <xpath expr="//div[hasclass('product-name')]" position="after">
-            <span class="product-price-badge text-muted fw-semibold my-2" t-esc="priceDisplay" t-if="priceDisplay"/>
+            <span class="product-price-badge text-muted fw-semibold my-2 text-nowrap" t-esc="priceDisplay" t-if="priceDisplay"/>
         </xpath>
     </t>
 

@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <data>
+
+        <!-- Menu Etiquetas dentro do Inventário (grupo "Produtos"). Abre a
+             lista de produtos, de onde o operador seleciona os itens e usa
+             "Imprimir Etiquetas" (server action vinculada à lista). -->
+        <menuitem id="menu_etiquetas_produto"
+                  name="Etiquetas"
+                  parent="stock.menu_stock_inventory_control"
+                  action="action_etiquetas_produtos"
+                  sequence="10"/>
+
+    </data>
+</odoo>

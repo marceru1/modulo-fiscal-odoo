@@ -27,7 +27,11 @@ patch(ProductCard.prototype, {
                 return "";
             }
             const price = this.props.product.get_price(this.pos.getDefaultPricelist(), 1);
-            return this.env.utils.formatCurrency(price);
+            const moeda = this.pos.currency.symbol || "";
+            // Formata o número sem a moeda e prefixa o símbolo colado nele:
+            // formatCurrency insere NBSP (R$\u00a040,00) e a quebra de linha
+            // ficava entre "R$" e o número no card estreito.
+            return `${moeda} ${this.env.utils.formatCurrency(price, false)}`;
         } catch {
             return "";
         }
