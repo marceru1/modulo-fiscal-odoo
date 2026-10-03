@@ -37,9 +37,9 @@ manifest = MANIFEST.read_text()
 print("Python (payload):")
 ok("def x_get_print_payload" in py, "metodo x_get_print_payload existe")
 ok("base64.b64encode(pdf)" in py, "PDF vai em base64")
-for chave in ("report_name", "pdf_base64", "page", "rotation"):
+for chave in ("report_name", "pdf_base64", "page", "orientation"):
     ok(f"'{chave}'" in py, f"payload carrega '{chave}'")
-ok("_X_LABEL_ROTATION = 180" in py, "rotacao 180 vem do servidor")
+ok("_X_LABEL_ORIENTATION = 'reverse-portrait'" in py, "orientacao reverse-portrait vem do servidor")
 ok("'confeccao': {'width': 105, 'height': 60}" in py, "confeccao = 105x60 (largura do ROLO)")
 
 print("\nJS (widget):")
@@ -47,7 +47,7 @@ ok("loadQzTray" in js, "carrega o qz-tray.js sob demanda")
 ok("x_get_print_payload" in js, "chama o metodo que gera o PDF")
 ok('type: "pixel"' in js or "type: 'pixel'" in js, "usa o modo pixel (o unico que imprime)")
 ok('format: "pdf"' in js or "format: 'pdf'" in js, "envia PDF")
-ok("payload.rotation" in js, "usa a rotacao que veio do servidor")
+ok("payload.orientation" in js, "usa a orientacao que veio do servidor")
 ok("payload.page" in js, "usa a geometria que veio do servidor")
 # Busca da impressora por PRIORIDADE. A fila real da loja se chama "confecção"
 # (nome que veio no header do .btw original), entao ela vem primeiro; o modelo e
