@@ -101,6 +101,7 @@ class PosOrder(models.Model):
     # DADOS CAPTURADOS DO CONSUMIDOR NA TELA DO CAIXA
     # ==========================================================
     x_cpf_nota = fields.Char(string="CPF na nota", help="CPF informado pelo cliente para a via do consumidor.")
+    x_cnpj_nota = fields.Char(string="CNPJ na nota", help="CNPJ informado pelo cliente (destinatário não contribuinte, indIEDest=9).")
     x_confirmacao_venda = fields.Boolean(string="Venda enviada?", help="Flag que dita se o PDV já sincronizou a criação offline dessa venda.")
     x_amount_other_value = fields.Float(
         string="Outras Despesas (vOutro)",
@@ -149,7 +150,7 @@ class PosOrder(models.Model):
         vals = super(PosOrder, self)._order_fields(ui_order)
         
         campos_para_sincronizar = [
-            'x_cpf_nota', 'x_contingencia_payload',
+            'x_cpf_nota', 'x_cnpj_nota', 'x_contingencia_payload',
             'x_fiscal_numero', 'x_fiscal_serie', 'x_fiscal_status',
             'x_fiscal_chave', 'x_fiscal_mensagem',
             'x_fiscal_qrcode_url', 'x_fiscal_qrcode_b64',
@@ -336,6 +337,7 @@ class PosOrder(models.Model):
             'cliente': {
                 'nome': 'CONSUMIDOR FINAL',
                 'cpf': self.x_cpf_nota or None,
+                'cnpj': self.x_cnpj_nota or None,
             },
             'produtos': dados_dos_produtos,
             'pagamentos': pagamentos,
@@ -535,6 +537,7 @@ class PosSession(models.Model):
             'x_fiscal_protocolo',
             'x_fiscal_qrcode_b64',
             'x_cpf_nota',
+            'x_cnpj_nota',
             'x_contingencia_payload',
             'x_amount_other_value',
             'x_discount_value',
@@ -666,7 +669,9 @@ class PosSession(models.Model):
             cash_details, total_sangrias, total_suprimentos,
             recebimentos_por_metodo, fundo_caixa,
         )
-        dinheiro_liquido = self._calc_dinheiro_liquido(cash_details, total_sangrias)
+        dinheiro_liquido = self._calc_dinheiro_liquido(
+            cash_details, total_sangrias,
+        )
 
         return {
             'empresa': empresa,
@@ -764,10 +769,6 @@ class PosSession(models.Model):
         recebimentos e vendas de outros métodos), este é especificamente o
         dinheiro físico: o que entrou em vendas à vista menos o que foi
         retirado em sangrias (RF-01/RF-05).
-
-        Args:
-            cash_details: dict com os detalhes de dinheiro (default_cash_details).
-            total_sangrias: float com o total retirado em sangrias.
 
         Returns:
             float: dinheiro líquido esperado na gaveta.

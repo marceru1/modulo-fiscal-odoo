@@ -1,12 +1,47 @@
-/* preco-badge-produto-pdv: badge de preço abaixo do nome no card do produto.
-   .product-content é flex-row no core (nome | qty). flex-direction: column
-   empilha nome → badge → contador do carrinho, sem tocar no DOM do core
-   (article já é position-relative, badges de info/combo intocadas). */
+/* preco-badge-produto-pdv: valor do produto no card, ABAIXO do nome.
+
+   O .product-content do core é `d-flex flex-row` — Bootstrap traz
+   `.d-flex{display:flex!important}` e `.flex-row{flex-direction:row!important}`,
+   então nenhuma regra sem !important mexe no layout dele (o
+   `flex-direction: column` que existia aqui desde 28/09 era código MORTO: o
+   valor sempre ficou AO LADO do nome e cortava ele — "Bermuda" saía "ermud").
+
+   Solução: o container vira GRID de 2 colunas.
+     coluna 1 = nome (linha 1) + valor (linha 2)
+     coluna 2 = contador do carrinho (span das 2 linhas, alinhado embaixo)
+   O contador continua à direita e o valor ganha a largura toda para si.
+
+   Medido ao vivo (card 141px @ viewport 1698px, nomes reais do banco):
+   - antes: nome 45px clipado (scrollWidth > clientWidth), valor 15.2px invadindo
+     o selo de info
+   - grid: nome sem corte (1 ou 2 linhas), valor abaixo alinhado à esquerda,
+     contador intacto; card sem imagem 116px, com imagem 204px (+15px)
+   Alternativas descartadas: flex-wrap + flex-basis 100% no valor (jogava o
+   contador pra linha de baixo: 148px sem imagem / 252px com imagem) e
+   flex-direction: column + !important (mesmo problema do contador: 187px). */
 .product .product-content {
-    flex-direction: column;
+    display: grid !important;
+    grid-template-columns: 1fr auto;
+    align-content: center;
+    column-gap: 0.25rem;
+}
+
+.product .product-content .product-name {
+    grid-area: 1 / 1;
+    /* my-2 do core sai: o espaçamento entre nome e valor é do badge */
+    margin-bottom: 0.25rem !important;
 }
 
 .product-price-badge {
-    font-size: 0.95rem;
+    grid-area: 2 / 1;
+    /* Fonte menor que o nome do produto (14px do core): 0.75rem = 12px */
+    font-size: 0.75rem;
     line-height: 1.1;
+    margin-top: 0 !important;
+    margin-bottom: 0 !important;
+}
+
+.product .product-content .product-cart-qty {
+    grid-area: 1 / 2 / span 2 / span 1;
+    align-self: end;
 }

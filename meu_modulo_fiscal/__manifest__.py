@@ -14,6 +14,14 @@
     'data': [
         'data/br.ncm.csv',
         'security/ir.model.access.csv',
+        # etiquetas-produto-impressao: paperformats, reports e templates QWeb
+        # antes das views — a view do wizard referencia a action registrada aqui.
+        'report/etiquetas_reports.xml',
+        'report/etiqueta_styles.xml',
+        'report/etiqueta_bijuteria_template.xml',
+        'report/etiqueta_confeccao_template.xml',
+        'views/etiquetas_wizard_views.xml',
+        'views/etiquetas_menu_views.xml',
         'views/campos_fiscais_views.xml',
         'views/res_company_views.xml',
         'views/res_config_settings_views.xml',
@@ -21,6 +29,7 @@
         'views/account_move_hide_outstanding.xml',
         'views/pos_session_fechamento_views.xml',
         'views/web_login_cleanup.xml',
+        'views/pos_order_report_analise_views.xml',
     ],
     'assets': {
         'point_of_sale._assets_pos': [
@@ -73,7 +82,11 @@
             'meu_modulo_fiscal/static/src/js/atualizar_button.js',
             'meu_modulo_fiscal/static/src/xml/atualizar_button.xml',
             # Logo Grupo 20+ na navbar do POS (override point_of_sale.Navbar)
+            # + nome do caixa ao lado da logo (getter caixaLabel do patch).
+            # JS antes do XML — o template usa o getter do patch.
+            'meu_modulo_fiscal/static/src/js/pos_navbar_logo.js',
             'meu_modulo_fiscal/static/src/xml/pos_navbar_logo.xml',
+            'meu_modulo_fiscal/static/src/css/pos_navbar_caixa.css',
 
             # filtro-pedidos-pagos-pos: filtros client-side na lista de pedidos
             # pagos (chips de tipo de pagamento + search "Valor"/"Data / Hora").
@@ -100,6 +113,14 @@
             'meu_modulo_fiscal/static/src/xml/atalhos_legend.xml',
             'meu_modulo_fiscal/static/src/css/atalhos_legend.css',
 
+            # atalhos-pagamento-setas: setas percorrem métodos + Validar e
+            # Enter aciona o item destacado (entradas arrowup/arrowdown/enter
+            # na tabela acima). O JS de ação vem ANTES da tabela porque a
+            # tabela importa as funções dele; o destaque é atributo de DOM
+            # pintado pelo CSS (não há template novo).
+            'meu_modulo_fiscal/static/src/js/atalhos_pagamento_setas.js',
+            'meu_modulo_fiscal/static/src/css/atalhos_pagamento_setas.css',
+
         ],
         'web.assets_web': [
             'meu_modulo_fiscal/static/src/js/user_menu_cleanup.js',
@@ -108,6 +129,11 @@
         # (stock.picking internal/incoming) em vez de download de PDF.
         'web.assets_backend': [
             'meu_modulo_fiscal/static/src/js/picking_print_helper.js',
+            # etiquetas-produto-impressao: botão de impressão direta no wizard de
+            # etiquetas. O JS registra o campo que fala com o QZ Tray (instalado
+            # no PC da impressora); o XML o renderiza. JS antes do XML.
+            'meu_modulo_fiscal/static/src/js/etiqueta_qz_print.js',
+            'meu_modulo_fiscal/static/src/xml/etiqueta_qz_print.xml',
             # selo-ambiente-teste: badge "TESTE" no navbar (só renderiza com
             # env var ODOO_ENV_LABEL setada no container; PROD não recebe).
             'meu_modulo_fiscal/static/src/js/env_badge.js',

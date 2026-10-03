@@ -139,18 +139,24 @@ patch(PaymentScreen.prototype, {
         }
 
         // ============================================
-        // CPF NA NOTA (obrigatório quando emite NFC-e)
+        // CPF/CNPJ NA NOTA (obrigatório quando emite NFC-e)
         // ============================================
         if (emitirNfce) {
-            const cpf = await makeAwaitable(this.dialog, CpfInputPopup, {
-                title: _t("Informe o CPF do cliente"),
-                placeholder: "Digite apenas números",
-                startingValue: order.x_cpf_nota || "",
+            const doc = await makeAwaitable(this.dialog, CpfInputPopup, {
+                title: _t("Informe o CPF ou CNPJ do cliente"),
+                placeholder: "CPF: 11 dígitos | CNPJ: 14 dígitos",
+                startingValue: order.x_cpf_nota || order.x_cnpj_nota || "",
             });
-            // O Esc do CpfInputPopup manda "" explícito (recusarCpf); o clique
-            // fora resolve undefined e cai no mesmo "" (consumidor final).
-            const cpfLimpo = (cpf || "").replace(/\D/g, "");
-            order.x_cpf_nota = cpfLimpo;
+            // O Esc do CpfInputPopup manda "" explícito (recusarDocumento); o
+            // clique fora resolve undefined e cai no mesmo "" (consumidor final).
+            const docLimpo = (doc || "").replace(/\D/g, "");
+            if (docLimpo.length === 14) {
+                order.x_cnpj_nota = docLimpo;
+                order.x_cpf_nota = "";
+            } else {
+                order.x_cpf_nota = docLimpo;
+                order.x_cnpj_nota = "";
+            }
         }
 
 

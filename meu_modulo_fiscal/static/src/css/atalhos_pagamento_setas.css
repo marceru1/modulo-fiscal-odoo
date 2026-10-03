@@ -1,0 +1,50 @@
+/* Destaque do item navegado pelas setas ↑/↓ na PaymentScreen
+ * (feature atalhos-pagamento-setas).
+ *
+ * O anel é `outline`, não `border`: outline não ocupa espaço no layout, então
+ * o botão NÃO muda de tamanho nem empurra os vizinhos ao ser destacado (com
+ * border era preciso compensar o px extra no padding). `outline-offset`
+ * positivo deixa uma folga e faz o anel aparecer tanto no botão claro de
+ * método quanto no botão roxo do Validar.
+ * !important porque o `.btn` do Bootstrap define borda/fundo próprios.
+ *
+ * Cores: o roxo #4a3f75 é o mesmo tom da legenda de atalhos (#5b4f8c) escurecido
+ * — mesma família cromática, mas com contraste maior sobre o fundo branco do
+ * card, que é o que faz o item destacado saltar aos olhos do operador. O anel
+ * tem 4px (não 3px) pelo mesmo motivo.
+ */
+[data-atalho-destacado] {
+    outline: 4px solid #4a3f75 !important;
+    outline-offset: 3px;
+}
+
+/* Só os métodos ganham fundo: um lilás mais saturado que antes (#e6e0f5 no
+ * lugar de #f3f1f9), na mesma família do anel. O Validar fica SEM fundo de
+ * propósito — ele é btn-primary (roxo com texto branco) e pintá-lo de lilás
+ * derrubaria o contraste do texto. */
+.paymentmethods .paymentmethod[data-atalho-destacado] {
+    background: #e6e0f5 !important;
+}
+
+/* ── Métodos em coluna única (um embaixo do outro) ─────────────────────────── */
+/*
+ * O core monta a lista com `d-grid` (display: grid !important) +
+ * `grid-template-columns: repeat(2, 1fr)` (payment_screen.scss:15-17): dois
+ * métodos por linha. Para empilhar, o display tem que virar flex —
+ * `grid-template-columns: 1fr` NÃO resolve: num grid, os itens que sobram criam
+ * colunas IMPLÍCITAS (medido ao vivo: com 1fr os 5 botões continuavam em 2
+ * colunas, 713px + 230px). Com flex-column cada botão ocupa a linha inteira.
+ *
+ * !important nos dois: o `d-grid` do Bootstrap carrega `display: grid
+ * !important` e a regra do core fixa as 2 colunas (que precisa ser
+ * neutralizada para o caso de algum tema reativar o grid).
+ *
+ * O container (.paymentmethods-container) já é o filho elástico com
+ * overflow-y: auto (atalhos_legend.css): se os métodos não couberem na altura,
+ * a lista rola em vez de empurrar o teclado e o rodapé para fora da tela.
+ */
+.paymentmethods {
+    display: flex !important;
+    flex-direction: column !important;
+    grid-template-columns: none !important;
+}

@@ -1,0 +1,78 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <!-- ========================================== -->
+    <!-- SEARCH VIEW HERDADA -->
+    <!-- ========================================== -->
+    <record id="view_report_pos_order_search_inherit_analise" model="ir.ui.view">
+        <field name="name">report.pos.order.search.inherit.analise</field>
+        <field name="model">report.pos.order</field>
+        <field name="inherit_id" ref="point_of_sale.view_report_pos_order_search"/>
+        <field name="arch" type="xml">
+            <!-- Adiciona campo 'user_id' de busca com autocomplete antes dos filtros predefinidos -->
+            <xpath expr="//field[@name='date']" position="after">
+                <field name="user_id" string="Operador" widget="many2one"/>
+            </xpath>
+            <!-- Adiciona filtro rápido 'Meu Operador' -->
+            <xpath expr="//filter[@name='filter_date']" position="before">
+                <filter name="my_operator" string="Meu Operador" domain="[('user_id', '=', uid)]"/>
+                <separator/>
+            </xpath>
+        </field>
+    </record>
+
+    <!-- ========================================== -->
+    <!-- PIVOT VIEW HERDADA -->
+    <!-- ========================================== -->
+    <record id="view_report_pos_order_pivot_inherit_analise" model="ir.ui.view">
+        <field name="name">report.pos.order.pivot.inherit.analise</field>
+        <field name="model">report.pos.order</field>
+        <field name="inherit_id" ref="point_of_sale.view_report_pos_order_pivot"/>
+        <field name="arch" type="xml">
+            <!-- Adiciona desconto (por linha) como medida agregável -->
+            <xpath expr="//field[@name='price_total']" position="after">
+                <field name="total_discount" type="measure"/>
+            </xpath>
+        </field>
+    </record>
+
+    <!-- ========================================== -->
+    <!-- GRAPH VIEW HERDADA -->
+    <!-- ========================================== -->
+    <record id="view_report_pos_order_graph_inherit_analise" model="ir.ui.view">
+        <field name="name">report.pos.order.graph.inherit.analise</field>
+        <field name="model">report.pos.order</field>
+        <field name="inherit_id" ref="point_of_sale.view_report_pos_order_graph"/>
+        <field name="arch" type="xml">
+            <xpath expr="//field[@name='price_total']" position="after">
+                <field name="total_discount" type="measure"/>
+            </xpath>
+        </field>
+    </record>
+
+    <!-- ========================================== -->
+    <!-- LIST VIEW HERDADA -->
+    <!-- ========================================== -->
+    <record id="report_pos_order_view_tree_inherit_analise" model="ir.ui.view">
+        <field name="name">report.pos.order.view.list.inherit.analise</field>
+        <field name="model">report.pos.order</field>
+        <field name="inherit_id" ref="point_of_sale.report_pos_order_view_tree"/>
+        <field name="arch" type="xml">
+            <xpath expr="//field[@name='partner_id']" position="after">
+                <field name="user_id" optional="show"/>
+            </xpath>
+            <xpath expr="//field[@name='price_total']" position="after">
+                <field name="total_discount" optional="show"/>
+                <field name="amount_acrescimo" optional="hide"/>
+            </xpath>
+        </field>
+    </record>
+
+    <!-- ========================================== -->
+    <!-- ACTION HERDADA (TICKET 03) -->
+    <!-- ========================================== -->
+    <!-- No Odoo, para adicionar um modo de visão novo (list), podemos usar o ID externo para sobrescrever -->
+    <record id="point_of_sale.action_report_pos_order_all" model="ir.actions.act_window">
+        <!-- Substituindo de 'graph,pivot' para 'graph,pivot,list' -->
+        <field name="view_mode">graph,pivot,list</field>
+    </record>
+</odoo>

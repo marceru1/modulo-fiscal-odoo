@@ -10,6 +10,13 @@
  * (atalhos_legend.js). Acrescentar/remover um atalho é mexer só nesta tabela —
  * não há segunda lista para dessincronizar (ticket 05).
  *
+ * Campos de uma entrada:
+ *   tecla    — a hotkey (nome de KeyboardEvent.key, minúsculo)
+ *   rotulo   — como a tecla aparece na legenda, quando difere de tecla.toUpperCase()
+ *              (setas: "↑"/"↓" em vez de "ARROWUP"/"ARROWDOWN")
+ *   acao     — o texto do chip
+ *   executar — a ação (recebe a instância do componente)
+ *
  * ── APIs verificadas no source do Odoo 18 (ticket 02) ────────────────────────
  *   onProductInfoClick(product)  → product_screen.js:527 (reusado p/ C)      ✓
  *   get_selected_orderline()     → app/models/pos_order.js:574 (método)      ✓
@@ -22,6 +29,10 @@
  *   pos.onDeleteOrder(order)     → pos_store.js:417 (ARG OBRIGATÓRIO,
  *                                  confirmação interna)  ⚠ ver DEC-009      ✓
  *   pos.cashMove()               → pos_store.js:364                         ✓
+ *   pos.pay()                    → pos_store.js:1296 (mesmo handler do botão
+ *                                  "Payment" do Actionpad; guards internos:
+ *                                  canPay() = cupom não vazio
+ *                                  [pos_order.js:298] + lotes/serial)         ✓
  *   pos.closeSession()           → pos_store.js:368 (abre ClosePosPopup)
  *                                  ⚠ DEC-008: NÃO é closePos(), que faz
  *                                  redirectToBackend() no Odoo 18           ✓
@@ -29,10 +40,22 @@
  *                                  (navbar.xml:5 + input.xml:20-24; o
  *                                  spec supunha name="search-product-input",
  *                                  que não existe)  ⚠ ver DEC-009          ✓
+ *   getSelectedOrder()           → ticket_screen.js:325 (cupom selecionado
+ *                                  na lista de vendas)                      ✓
+ *   this.dialog / this.ui        → ticket_screen.js:61-62 (já vêm do setup do
+ *                                  core — NÃO precisa de patch extra como o
+ *                                  ticket 06 supunha)                       ✓
+ *   ui.block()/ui.unblock()      → web ui_service.js:161-180 (closures sobre
+ *                                  blockCount, não usam `this` — funcionam
+ *                                  através do useState(useService("ui")) do
+ *                                  TicketScreen)                            ✓
  *
  * Nenhuma dessas letras colide com hotkey do core: o único useHotkey() do
  * point_of_sale é o "enter" de partner_list.js:34, e o number_buffer só
  * consome dígitos/+-., (ALLOWED_KEYS) — nenhuma letra da tabela é engolida.
+ * Varredura repetida ao entrar hotkeys de letra: nenhum useHotkey de letra
+ * em point_of_sale/ nem em pos_restaurant/ (o TicketScreen é compartilhado
+ * com o módulo de restaurante).
  *
  * ── Proteções ────────────────────────────────────────────────────────────────
  * Popup aberto e input focado são tratados pelo hotkey_service do core (o
@@ -48,6 +71,11 @@ import { TicketScreen } from "@point_of_sale/app/screens/ticket_screen/ticket_sc
 import { Navbar } from "@point_of_sale/app/navbar/navbar";
 import { patch } from "@web/core/utils/patch";
 import { useHotkey } from "@web/core/hotkeys/hotkey_hook";
+import {
+    acionarDestacado,
+    limparDestaque,
+    moverDestaque,
+} from "./atalhos_pagamento_setas";
 
 // ── Guards e ações (os corpos que a tabela referencia) ───────────────────────
 
@@ -138,6 +166,27 @@ function abrirListaDeVendas(tela) {
  */
 export const ATALHOS = {
     PaymentScreen: [
+        // ↑/↓ percorrem os itens da tela (métodos e, no fim, o Validar);
+        // Enter aciona o item destacado. NÃO ciclam: param nas pontas, para o
+        // operador não pular do Validar de volta pro primeiro método.
+        {
+            tecla: "arrowdown",
+            rotulo: "↓",
+            acao: "Próximo",
+            executar: (tela) => moverDestaque(tela, 1),
+        },
+        {
+            tecla: "arrowup",
+            rotulo: "↑",
+            acao: "Anterior",
+            executar: (tela) => moverDestaque(tela, -1),
+        },
+        {
+            tecla: "enter",
+            rotulo: "ENTER",
+            acao: "Selecionar",
+            executar: () => acionarDestacado(),
+        },
         { tecla: "a", acao: "Acréscimo", executar: (tela) => tela.clickAcrescimoButton() },
         { tecla: "d", acao: "Desconto", executar: (tela) => tela.clickDescontoButton() },
     ],
@@ -153,6 +202,7 @@ export const ATALHOS = {
         { tecla: "l", acao: "Buscar produto", executar: focarBuscaDeProduto },
         { tecla: "p", acao: "Excluir cupom", executar: excluirCupom },
         { tecla: "q", acao: "Cancelar item", executar: cancelarItemSelecionado },
+        { tecla: "s", acao: "Receber pagamento", executar: (tela) => tela.pos.pay() },
         { tecla: "v", acao: "Vendas", executar: abrirListaDeVendas },
     ],
     // Globais: vivem no Navbar, que fica montado enquanto o POS está aberto
@@ -185,9 +235,15 @@ function registrarAtalhos(tela, entradas) {
     }
 }
 
-// ── PaymentScreen: A = Acréscimo, D = Desconto ────────────────────────────────
+// ── PaymentScreen: ↑/↓ percorrem métodos/Validar, ENTER aciona, A/D = Acréscimo/Desconto ──
 // Handlers dos patches existentes (acrescimo_popup.js / desconto_popup.js) —
-// zero lógica nova aqui. Sem Enter (fora de escopo nesta feature).
+// zero lógica nova aqui.
+// ENTER deixou de ser "validar": agora é hotkey da tabela (aciona o item
+// destacado — método ou o botão Validar). O triggerAtEnter que este patch
+// instalou em 55ec546 foi REMOVIDO junto: com ele, o keydown acionaria o item
+// destacado e o keyup do MESMO Enter validaria a venda por cima (o
+// number_buffer do core escuta Enter e `useWithBarcode` atrasa o handler ~150ms
+// — ver atalhos_pagamento_setas.js).
 patch(PaymentScreen.prototype, {
     setup() {
         super.setup();
@@ -196,9 +252,13 @@ patch(PaymentScreen.prototype, {
 });
 
 // ── ProductScreen: C E F I J L P Q V ─────────────────────────────────────────
+// limparDestaque: sair da PaymentScreen pelo botão Voltar deixa o atributo
+// pintado no DOM até o Owl re-renderizar o t-foreach — limpar na montagem da
+// tela de destino evita reabrir o pagamento com o destaque da visita anterior.
 patch(ProductScreen.prototype, {
     setup() {
         super.setup();
+        limparDestaque();
         registrarAtalhos(this, ATALHOS.ProductScreen);
     },
 });

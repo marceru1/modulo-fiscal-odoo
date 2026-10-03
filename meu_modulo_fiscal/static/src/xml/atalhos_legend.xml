@@ -11,7 +11,9 @@
     <t t-name="meu_modulo.AtalhosLegend">
         <div class="atalhos-legend" aria-hidden="true">
             <span class="atalhos-legend-chip" t-foreach="chips" t-as="chip" t-key="chip.tecla">
-                <kbd class="atalhos-legend-kbd" t-esc="chip.tecla.toUpperCase()" />
+                <!-- `rotulo` sobrepõe o nome cru da tecla: as setas aparecem
+                     como ↑/↓, não como ARROWUP/ARROWDOWN. -->
+                <kbd class="atalhos-legend-kbd" t-esc="chip.rotulo || chip.tecla.toUpperCase()" />
                 <span class="atalhos-legend-acao" t-esc="chip.acao" />
             </span>
         </div>
