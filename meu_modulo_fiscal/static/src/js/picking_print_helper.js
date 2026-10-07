@@ -6,8 +6,11 @@
  * stock.report_deliveryslip) e abre o print dialog do navegador em vez de
  * baixar o PDF.
  *
- * Escopo (D2): apenas pickings internal/incoming. Outgoing continua com
- * download normal (T3).
+ * Escopo (pedido do Marcelo, 2026-10-07): TODOS os pickings — o operador não
+ * quer download, quer o dialog de imprimir do navegador. (Antes: só
+ * internal/incoming; outgoing caía no download default do core, que usa
+ * /report/download com Content-Disposition: attachment — report.py:138 —
+ * e salvava o PDF.)
  *
  * Bundle: web.assets_backend (NÃO POS).
  *
@@ -39,7 +42,6 @@ import { user } from "@web/core/user";
 import { _t } from "@web/core/l10n/translation";
 
 const DELIVERY_SLIP_REPORT_NAME = "stock.report_deliveryslip";
-const PRINT_TYPES = new Set(["internal", "incoming"]);
 
 registry.category("ir.actions.report handlers").add(
     "meu_modulo_fiscal.picking_print",
@@ -58,7 +60,9 @@ registry.category("ir.actions.report handlers").add(
             // "Document is empty" — bug do core, fora do nosso escopo.
             return;
         }
-        // D2: só intercepta internal/incoming. RPC para ler picking_type_code.
+        // RPC para checar que os registros ainda existem (o core estouraria
+        // ParserError num id órfão). O tipo (internal/incoming/outgoing) NÃO
+        // decide mais: o operador pediu o dialog em todos os casos.
         let records;
         try {
             records = await env.services.orm.read(
@@ -70,11 +74,8 @@ registry.category("ir.actions.report handlers").add(
             // offline/erro de RPC — cai no handler default (download)
             return;
         }
-        if (
-            !records.length ||
-            !records.every((r) => PRINT_TYPES.has(r.picking_type_code))
-        ) {
-            return; // outgoing ou misto — cai no handler default
+        if (!records.length) {
+            return; // ids órfãos — cai no handler default
         }
         return _openPickingPrintDialog(action, env);
     }

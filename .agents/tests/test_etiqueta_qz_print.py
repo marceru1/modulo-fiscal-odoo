@@ -44,6 +44,14 @@ ok("_X_LABEL_ROTATE_DEFAULT = '0'" in py, "rotação 0 é o default da classe (d
 ok("x_rotate_degrees" in py, "rotação é campo do wizard (por impressão)")
 ok("_x_rotate_degrees" in py, "resolução: wizard -> default")
 ok("'confeccao': {'width': 105, 'height': 60}" in py, "confeccao = 105x60 (largura do ROLO)")
+# MediaBox = papel físico: o wkhtmltopdf emite página inteira (34,925x20,108
+# quando o CSS usa 34,8) e o driver da bobina NÃO repagina — páginas
+# consecutivas andam pra frente e a etiqueta sai em cima da outra.
+ok("_x_normalizar_mediabox" in py, "MediaBox normalizado pro papel físico")
+ok("def _x_render_etiqueta_pdf" in py, "render ÚNICO (cobre QZ direto e Ctrl+P)")
+import re as _re_proc
+_proc_codigo = _re_proc.sub(r"#[^\n]*", "", py[py.index("def process"):py.index("def process") + 900])
+ok("_x_render_etiqueta_pdf" in _proc_codigo, "process() passa pelo render único (Ctrl+P também sai normalizado)")
 
 print("\nJS (widget):")
 ok("loadQzTray" in js, "carrega o qz-tray.js sob demanda")
