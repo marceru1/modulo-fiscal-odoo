@@ -184,10 +184,11 @@
                                 padding: 0 !important;
                                 background: #fff;
                             }
-                            /* A página tem a largura da VIA (35 mm — paperformat
-                               Integer arredondado; o conteúdo usa 34,8 mm). */
+                            /* Bobina da bijuteria tem 3 VIAS no rolo de 105mm:
+                               a linha-página vale a largura do ROLO (105mm =
+                               3 colunas de 35mm). */
                             html, body, #wrapwrap, #wrapwrap > main, .x_linha_etiquetas {
-                                width: 34.8mm !important;
+                                width: 105mm !important;
                             }
                             .x_linha_etiquetas {
                                 display: table;
@@ -235,10 +236,10 @@
                                 line-height: 1.1;
                                 white-space: nowrap;
                             }
-                            /* Bijuteria — 35 x 20 mm (bobina real 34,8 mm; o papel
-                               do paperformat é Integer e vai a 35 mm, então o
-                               conteúdo usa 34.8mm e sobra 0,1mm de sangria de cada
-                               lado). */
+                            /* Bijuteria — via de 35 x 20 mm DENTRO da linha de
+                               105mm (3 vias no rolo; a etiqueta real é 34,8 mm
+                               de largura, o papel vai a 35 mm — 0,1mm de
+                               sangria de cada lado). */
                             .x_etiqueta_bijuteria {
                                 width: 34.8mm;
                                 height: 20mm;

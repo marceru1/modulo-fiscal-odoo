@@ -44,6 +44,9 @@ ok("_X_LABEL_ROTATE_DEFAULT = '0'" in py, "rotação 0 é o default da classe (d
 ok("x_rotate_degrees" in py, "rotação é campo do wizard (por impressão)")
 ok("_x_rotate_degrees" in py, "resolução: wizard -> default")
 ok("'confeccao': {'width': 105, 'height': 60}" in py, "confeccao = 105x60 (largura do ROLO)")
+ok("'bijuteria': {'width': 105, 'height': 20}" in py, "bijuteria = 105x20 (ROLO de 3 vias) — mono-via empilhava na coluna da esquerda")
+ok('per_page" t-value="3"' in open(BASE / "report" / "etiqueta_bijuteria_template.xml").read(),
+   "bijuteria: template monta 3 colunas por página (mesma arquitetura da confeccao)")
 # MediaBox = papel físico: o wkhtmltopdf emite página inteira (34,925x20,108
 # quando o CSS usa 34,8) e o driver da bobina NÃO repagina — páginas
 # consecutivas andam pra frente e a etiqueta sai em cima da outra.

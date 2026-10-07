@@ -166,10 +166,11 @@ class ProductLabelLayout(models.TransientModel):
     )
 
     #: Formato → geometria da página em mm, para o QZ Tray.
-    #: A largura é a do ROLO (na confecção são 3 etiquetas de 35mm lado a lado),
-    #: não a de uma etiqueta — é o tamanho que o driver deve receber.
+    #: A largura é a do ROLO em AMBOS os formatos (a bobina da bijuteria
+    #: também é de 3 vias de 35mm lado a lado — confirmado na loja; na
+    #: confecção idem) — é o tamanho que o driver deve receber.
     _X_LABEL_PAGE_MM = {
-        'bijuteria': {'width': 35, 'height': 20},
+        'bijuteria': {'width': 105, 'height': 20},
         'confeccao': {'width': 105, 'height': 60},
     }
 
