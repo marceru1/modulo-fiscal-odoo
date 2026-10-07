@@ -79,16 +79,31 @@ function buildHandler(openPrintDialogMock) {
     )(DELIVERY_SLIP_REPORT_NAME, PRINT_TYPES, openPrintDialogMock);
 }
 
-// _openPickingPrintDialog: injeta getReportUrl + window + user (singleton
-// importado no módulo: `import { user } from "@web/core/user"`).
-function buildOpenPrintDialog({ getReportUrl, window }) {
+// _openPickingPrintDialog: injeta getReportUrl + window + user + _t + fetch +
+// timers (o módulo usa fetch() e setTimeout() resolvidos no browser global).
+function buildOpenPrintDialog({ getReportUrl, window, fetch, timers }) {
     return new Function(
         "getReportUrl",
         "window",
         "user",
         "_t",
+        "fetch",
+        "setTimeout",
         `return async function(action, env) { ${openBody} }`
-    )(getReportUrl, window, { context: { lang: "pt_BR" } }, (s) => s);
+    )(
+        getReportUrl,
+        window,
+        { context: { lang: "pt_BR" } },
+        (s) => s,
+        fetch || ((url) => Promise.resolve({ ok: true, text: () => Promise.resolve("") })),
+        (fn, ms) => {
+            if (timers && timers.immediate) {
+                fn(); // teste: dispara sincronamente
+            } else {
+                setTimeout(fn, ms); // produção
+            }
+        }
+    );
 }
 
 // ── Caso 1: report não é o delivery slip → fall through ─────────────────────
@@ -234,23 +249,46 @@ async function main() {
     console.log("✓ Caso 7: popup bloqueado → notificação + true (T7)");
 }
 
-// ── Caso 8: popup abre → win.onload setado + true ──────────────────────────
+// ── Caso 8: popup abre → HTML buscado, escrito na janela e win.print() ──────
 {
-    let onloadSet = false;
+    let wroteHtml = "";
+    let printed = false;
+    const docStub = {
+        open: () => {},
+        close: () => {},
+        write: (html) => {
+            wroteHtml = html;
+        },
+        fonts: null, // ramo do setTimeout direto (dispara em 400ms)
+    };
     const win = {
-        set onload(fn) {
-            onloadSet = true;
-            this._onload = fn;
+        document: docStub,
+        focus: () => {},
+        print: () => {
+            printed = true;
         },
-        get onload() {
-            return this._onload;
+    };
+    // fetch do /report/html: devolve um HTML pequeno qualquer
+    const globalFetch = (url) => {
+        assert(
+            url.startsWith("/report/html/stock.report_deliveryslip/1"),
+            `fetch deve ir na rota HTML com os docids (foi: ${url})`
+        );
+        return Promise.resolve({ ok: true, text: () => Promise.resolve("<html><body>ok</body></html>") });
+    };
+    const winObj = {
+        open: (url) => {
+            // a janela abre em branco — o conteúdo entra por document.write
+            assert.strictEqual(url, "", "popup deve abrir about:blank (url vazia)");
+            return win;
         },
-        print: () => {},
     };
     const env = makeEnv({ records: [] });
     const openPrintDialog = buildOpenPrintDialog({
         getReportUrl: (action, type) => `/report/${type}/${action.report_name}/1`,
-        window: { open: () => win },
+        window: winObj,
+        fetch: globalFetch,
+        timers: { immediate: true }, // dispara disparar() sincronamente pro teste
     });
 
     const result = await openPrintDialog(
@@ -259,8 +297,9 @@ async function main() {
     );
 
     assert.strictEqual(result, true, "Deve interceptar (true)");
-    assert.strictEqual(onloadSet, true, "win.onload deve ser registrado");
-    console.log("✓ Caso 8: popup abre → win.onload + true");
+    assert.ok(wroteHtml.includes("<body>ok</body>"), "HTML da rota deve ser escrito na janela");
+    assert.strictEqual(printed, true, "win.print() deve disparar o dialog");
+    console.log("✓ Caso 8: popup abre → fetch HTML + write + win.print()");
 }
 
 // ── Integração: JS e Python apontam pro mesmo report (T04) ─────────────────
