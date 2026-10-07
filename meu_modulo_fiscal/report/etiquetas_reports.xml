@@ -7,15 +7,15 @@
              ir.actions.report converte nas flags de tamanho de página do
              wkhtmltopdf (ir_actions_report.py:316). -->
         <record id="paperformat_etiqueta_bijuteria" model="report.paperformat">
-            <field name="name">Etiqueta Bijuteria (35 x 20 mm)</field>
+            <field name="name">Etiqueta Bijuteria (105 x 20 mm)</field>
             <field name="format">custom</field>
             <field name="page_height">20</field>
-            <!-- page_width/page_height são Integer em Odoo 18
-                 (report_paperformat.py:177-178), então a largura real da bobina
-                 (34,8 mm) é arredondada para 35 mm: "34.8" quebra o install com
-                 ValueError. O CSS da etiqueta usa 34.8mm como largura de
-                 conteúdo, então o corte continua fiel. -->
-            <field name="page_width">35</field>
+            <!-- Largura do ROLO (3 vias de 35mm lado a lado — MESMA arquitetura
+                 da confecção), não de uma etiqueta: o driver não reorganiza o
+                 PDF, o template monta as 3 colunas dentro da página. Antes era
+                 35 (mono-via) e as etiquetas saíam empilhadas na coluna da
+                 esquerda. -->
+            <field name="page_width">105</field>
             <field name="orientation">Portrait</field>
             <field name="margin_top">0</field>
             <field name="margin_bottom">0</field>

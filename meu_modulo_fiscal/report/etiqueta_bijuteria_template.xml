@@ -2,21 +2,20 @@
 <odoo>
     <data>
 
-        <!-- Etiqueta Bijuteria — 34,8 x 20 mm (paperformat_etiqueta_bijuteria).
-             Conteúdo: nome, referência (se houver), Code128 do EAN, dígitos do
-             EAN e preço. Sem rodapé (paridade com o layout A do BarTender).
+        <!-- Etiqueta Bijuteria — 35 x 20 mm em bobina de 3 vias no ROLO de
+             105 mm (confirmado pelo Marcelo em 07/10/2026: "ele imprime
+             primeiro da esquerda pra direita... ele tem 3 colunas" — a bobina
+             da bijuteria NÃO é mono-via; era o pressuposto do per_page=1, que
+             fazia o driver imprimir TODAS as etiquetas empilhadas na coluna
+             da esquerda).
 
-             Bobina de UMA via: UMA etiqueta por página do PDF. Mesma arquitetura
-             da confeccao (que multiplica a quantidade certa): achata
-             {produto: [(barcode, qtd)]} numa fila e monta UMA .x_linha_etiquetas
-             (== uma página) por etiqueta, com per_page=1. A quebra de página vem
-             da regra `.x_linha_etiquetas + .x_linha_etiquetas { page-break-before
-             }` do etiqueta_styles — célula de tabela não quebra página no
-             wkhtmltopdf; a quebra tem que ser entre blocos de LINHA (foi este o
-             bug da quantidade ignorada na bijuteria). -->
+             Mesma arquitetura da Confecção (que já imprime certo): página do
+             PDF = largura do rolo (105mm), 3 colunas de 35mm preenchidas da
+             esquerda pra direita, quebra de página ENTRE linhas. Achata
+             {produto: [(barcode, qtd)]} numa fila e usa per_page=3. -->
         <template id="report_etiqueta_bijuteria">
             <t t-set="full_width" t-value="True"/>
-            <t t-set="per_page" t-value="1"/>
+            <t t-set="per_page" t-value="3"/>
             <t t-set="pages" t-value="(total_quantity + per_page - 1) // per_page"/>
             <t t-call="web.html_container">
                 <t t-call="meu_modulo_fiscal.etiqueta_styles_bijuteria"/>
@@ -57,6 +56,11 @@
                                         <t t-out="product.lst_price" t-options="{'widget': 'float', 'precision': 2}"/>
                                     </div>
                                 </div>
+                            </t>
+                            <t t-else="">
+                                <!-- Coluna vazia: reserva o lugar para as demais
+                                     não escorregarem para a esquerda. -->
+                                <div class="x_etiqueta x_etiqueta_bijuteria x_etiqueta_vazia"/>
                             </t>
                         </t>
                     </div>
