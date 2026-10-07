@@ -8,8 +8,8 @@
  *      e o corpo de _openPickingPrintDialog de picking_print_helper.js.
  *   2. Executa com mocks de action/env/window — valida o contrato:
  *        - Não-delivery-slip → fall through (undefined)
- *        - Delivery slip outgoing → fall through (undefined)
- *        - Delivery slip internal/incoming → print dialog (true)
+ *        - Delivery slip com picking ativo → print dialog (qualquer tipo)
+ *        - Delivery slip sem active_ids → fall through (undefined)
  *        - RPC falha → fall through (undefined)
  *        - Popup bloqueado → notificação + true
  *
@@ -79,13 +79,16 @@ function buildHandler(openPrintDialogMock) {
     )(DELIVERY_SLIP_REPORT_NAME, PRINT_TYPES, openPrintDialogMock);
 }
 
-// _openPickingPrintDialog: injeta getReportUrl + window
+// _openPickingPrintDialog: injeta getReportUrl + window + user (singleton
+// importado no módulo: `import { user } from "@web/core/user"`).
 function buildOpenPrintDialog({ getReportUrl, window }) {
     return new Function(
         "getReportUrl",
         "window",
+        "user",
+        "_t",
         `return async function(action, env) { ${openBody} }`
-    )(getReportUrl, window);
+    )(getReportUrl, window, { context: { lang: "pt_BR" } }, (s) => s);
 }
 
 // ── Caso 1: report não é o delivery slip → fall through ─────────────────────
@@ -125,10 +128,13 @@ async function main() {
     console.log("✓ Caso 2: delivery slip sem active_ids → fall through");
 }
 
-// ── Caso 3: delivery slip outgoing → fall through (T3) ─────────────────────
+// ── Caso 3: delivery slip outgoing → print dialog (pedido do Marcelo:
+//             "não quero que salve o pdf") — contrato NOVO ────────────────────
 {
-    const openMock = () => {
-        throw new Error("Outgoing não pode abrir print dialog");
+    let opened = false;
+    const openMock = async (action, env) => {
+        opened = true;
+        return true;
     };
     const handler = buildHandler(openMock);
     const env = makeEnv({ records: [{ id: 1, picking_type_code: "outgoing" }] });
@@ -139,8 +145,9 @@ async function main() {
         env
     );
 
-    assert.strictEqual(result, undefined, "Outgoing deve cair no default (download)");
-    console.log("✓ Caso 3: delivery slip outgoing → fall through (T3)");
+    assert.strictEqual(result, true, "Outgoing DEVE interceptar agora (dialog)");
+    assert.strictEqual(opened, true, "Outgoing deve abrir print dialog");
+    console.log("✓ Caso 3: delivery slip outgoing → print dialog (novo contrato)");
 }
 
 // ── Caso 4: delivery slip internal → print dialog (T1) ─────────────────────
