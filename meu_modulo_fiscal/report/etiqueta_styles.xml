@@ -2,13 +2,19 @@
 <odoo>
     <data>
 
-        <!-- Estilos compartilhados das etiquetas.
+        <!-- Estilos COMPARTILHADOS (usados pelo template da Confecção).
 
-             Fica num template próprio (chamado pelos dois relatórios) em vez de
+             Fica num template próprio (chamado pelo relatório) em vez de
              num asset em `web.report_assets_common`: assim o reset de `body`
              vale só para ESTE documento renderizado, sem vazar para os demais
-             relatórios do Odoo que compartilham o mesmo bundle de CSS. -->
-        <template id="etiqueta_styles">
+             relatórios do Odoo que compartilham o mesmo bundle de CSS.
+
+             ATENÇÃO: a Bijuteria NÃO herda deste template (view extension se
+             aplica a TODO render da mãe — `ir_ui_view._get_combined_arch()`,
+             ir_ui_view.py:936 — e um `position="replace"` no `<style>` inteiro
+             trocava o CSS também no render da Confecção). A Bijuteria tem view
+             QWeb própria, standalone, logo abaixo. -->
+        <template id="etiqueta_styles" name="etiqueta_styles">
             <style>
                 /* O relatório do core usa `body.container`/`container-fluid`, cujo
                    padding (~3mm de cada lado) deslocaria a etiqueta dentro de uma
@@ -100,26 +106,6 @@
                     white-space: nowrap;
                 }
 
-                /* Bijuteria — 35 x 20 mm (bobina real 34,8 mm; o papel do
-                   paperformat é Integer e vai a 35 mm, então o conteúdo usa
-                   34.8mm e sobra 0,1mm de sangria de cada lado). */
-                .x_etiqueta_bijuteria {
-                    width: 34.8mm;
-                    height: 20mm;
-                    font-size: 7pt;
-                    line-height: 1.05;
-                    padding: 0.8mm 1.2mm 0.5mm;
-                }
-
-                .x_etiqueta_bijuteria .x_eti_barcode {
-                    padding-top: 0.8mm;
-                }
-
-                .x_etiqueta_bijuteria .x_eti_preco {
-                    font-size: 1.15em;
-                    margin-top: 1.2mm;
-                }
-
                 /* Confecção — 35 x 60 mm.
                    ATENÇÃO: a faixa superior (~19 mm) da etiqueta é PRÉ-IMPRESSA
                    com o logotipo da loja e não pode receber impressão nenhuma
@@ -163,6 +149,116 @@
                 }
             </style>
         </template>
+
+        <!-- Estilos da BIJUTERIA — view QWeb PRÓPRIA (standalone), declarada
+             como <record> e NÃO como <template inherit_id>.
+
+             Por quê não extension: herança de template QWeb (`<template
+             inherit_id>`) é aplicada a TODO render da mãe
+             (ir_ui_view._get_combined_arch, ir_ui_view.py:936) — o
+             position="replace" no <style> inteiro apagava as regras de 105mm
+             da Confecção (bug de 2026-10-06: conteúdo amassado no terço
+             esquerdo da página e por cima da faixa pré-impressa).
+
+             Por quê <record> (e não <template> standalone): o registro já
+             existe no banco como EXTENSION da etiqueta_styles, e o -u não
+             remove o inherit_id de um registro que o XML parou de declarar —
+             o <record> converte o MESMO registro em view primária completa
+             (mode="primary" + inherit_id=False), em lugar de deixar um
+             extension órfão arquivado no banco.
+
+             A bobina da bijuteria é de UMA via (35 mm): a largura da
+             linha-página é 34,8 mm (não os 105 mm do estilo da Confecção). -->
+        <record id="etiqueta_styles_bijuteria" model="ir.ui.view">
+            <field name="name">etiqueta_styles_bijuteria</field>
+            <field name="key">meu_modulo_fiscal.etiqueta_styles_bijuteria</field>
+            <field name="type">qweb</field>
+            <field name="mode">primary</field>
+            <field name="inherit_id" eval="False"/>
+            <field name="arch" type="xml">
+                <templates>
+                    <template t-name="meu_modulo_fiscal.etiqueta_styles_bijuteria">
+                        <style>
+                            html, body, #wrapwrap, #wrapwrap > main {
+                                margin: 0 !important;
+                                padding: 0 !important;
+                                background: #fff;
+                            }
+                            /* Bobina da bijuteria tem 3 VIAS no rolo de 105mm:
+                               a linha-página vale a largura do ROLO (105mm =
+                               3 colunas de 35mm). */
+                            html, body, #wrapwrap, #wrapwrap > main, .x_linha_etiquetas {
+                                width: 105mm !important;
+                            }
+                            .x_linha_etiquetas {
+                                display: table;
+                                table-layout: fixed;
+                                page-break-inside: avoid;
+                            }
+                            .x_linha_etiquetas + .x_linha_etiquetas {
+                                page-break-before: always;
+                            }
+                            .x_etiqueta {
+                                display: table-cell;
+                                box-sizing: border-box;
+                                overflow: hidden;
+                                position: relative;
+                                color: #000;
+                                background: #fff;
+                                font-family: Arial, Helvetica, sans-serif;
+                                text-align: center;
+                                vertical-align: top;
+                            }
+                            .x_etiqueta .x_eti_nome {
+                                font-weight: bold;
+                                text-transform: uppercase;
+                                line-height: 1.05;
+                                overflow: hidden;
+                            }
+                            .x_etiqueta .x_eti_ref {
+                                font-size: 0.85em;
+                                line-height: 1;
+                                overflow: hidden;
+                            }
+                            .x_etiqueta .x_eti_barcode img {
+                                display: block;
+                                margin: 0 auto;
+                            }
+                            .x_etiqueta .x_eti_digitos {
+                                font-size: 0.8em;
+                                line-height: 1;
+                                letter-spacing: 0.4px;
+                                white-space: nowrap;
+                            }
+                            .x_etiqueta .x_eti_preco {
+                                text-align: right;
+                                font-weight: bold;
+                                line-height: 1.1;
+                                white-space: nowrap;
+                            }
+                            /* Bijuteria — via de 35 x 20 mm DENTRO da linha de
+                               105mm (3 vias no rolo; a etiqueta real é 34,8 mm
+                               de largura, o papel vai a 35 mm — 0,1mm de
+                               sangria de cada lado). */
+                            .x_etiqueta_bijuteria {
+                                width: 34.8mm;
+                                height: 20mm;
+                                font-size: 7pt;
+                                line-height: 1.05;
+                                padding: 0.8mm 1.2mm 0.5mm;
+                            }
+                            .x_etiqueta_bijuteria .x_eti_barcode {
+                                padding-top: 0.8mm;
+                            }
+                            .x_etiqueta_bijuteria .x_eti_preco {
+                                font-size: 1.15em;
+                                margin-top: 1.2mm;
+                            }
+                        </style>
+                    </template>
+                </templates>
+            </field>
+        </record>
 
     </data>
 </odoo>

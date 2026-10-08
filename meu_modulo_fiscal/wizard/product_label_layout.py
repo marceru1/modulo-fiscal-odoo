@@ -3,13 +3,43 @@ from odoo.exceptions import UserError
 from odoo.tools.pdf import (
     DecodedStreamObject,
     NameObject,
-    NumberObject,
     PdfFileReader,
     PdfFileWriter,
+    generic,
 )
 
 import base64
 import io
+
+
+def _x_normalizar_mediabox(pdf, largura_mm, altura_mm):
+    """Força o MediaBox de TODAS as páginas = tamanho físico da etiqueta.
+
+    Por quê: o wkhtmltopdf só emite páginas inteiras. Com conteúdo CSS de
+    34,8mm em papel de 35mm ele devolve página de 99,0x57,0pt
+    (34,925x20,108mm) — UM FIO maior que a mídia da bobina. A Confecção
+    (conteudo == papel, 105/60) fica dentro, mas a Bijuteria estoura e o
+    driver da L42Pro Full não repagina: páginas consecutivas andam pra
+    frente e "uma etiqueta sai em cima da outra".
+
+    A página é REESCRITA como ``RectangleObject([0, 0, w, h])`` (FloatObject
+    implícito): alvo 99,2126x56,6929pt == 35,0x20,0mm EXATOS. Provas:
+    normalização aplicada ao PDF real (render local) manteve conteúdo
+    íntegro (mesmas imagens/words) e fitz mediu 35,0000x20,0000mm.
+    """
+    MM = 72.0 / 25.4
+    w, h = largura_mm * MM, altura_mm * MM
+    reader = PdfFileReader(io.BytesIO(pdf), strict=False)
+    writer = PdfFileWriter()
+    for page in reader.pages:
+        page.mediaBox = generic.RectangleObject([0, 0, w, h])
+        for box in ('/CropBox', '/BleedBox', '/TrimBox', '/ArtBox'):
+            if box in page:
+                page[NameObject(box)] = generic.RectangleObject([0, 0, w, h])
+        writer.addPage(page)
+    buf = io.BytesIO()
+    writer.write(buf)
+    return buf.getvalue()
 
 
 def _x_rotate_etiqueta_pdf(pdf, degrees):
@@ -136,10 +166,11 @@ class ProductLabelLayout(models.TransientModel):
     )
 
     #: Formato → geometria da página em mm, para o QZ Tray.
-    #: A largura é a do ROLO (na confecção são 3 etiquetas de 35mm lado a lado),
-    #: não a de uma etiqueta — é o tamanho que o driver deve receber.
+    #: A largura é a do ROLO em AMBOS os formatos (a bobina da bijuteria
+    #: também é de 3 vias de 35mm lado a lado — confirmado na loja; na
+    #: confecção idem) — é o tamanho que o driver deve receber.
     _X_LABEL_PAGE_MM = {
-        'bijuteria': {'width': 35, 'height': 20},
+        'bijuteria': {'width': 105, 'height': 20},
         'confeccao': {'width': 105, 'height': 60},
     }
 
@@ -190,16 +221,6 @@ class ProductLabelLayout(models.TransientModel):
         }
         return self._x_get_report_xml_id(), data
 
-    def process(self):
-        self.ensure_one()
-        if not self.x_label_format:
-            return super().process()
-
-        xml_id, data = self._prepare_report_data()
-        report_action = self.env.ref(xml_id).report_action(None, data=data, config=False)
-        report_action.update({'close_on_report_download': True})
-        return report_action
-
     @api.model
     def _x_rotate_degrees(self):
         """Valor corrente de rotação: wizard → sistema → default da classe.
@@ -230,7 +251,7 @@ class ProductLabelLayout(models.TransientModel):
         direta: o navegador roda na mesma máquina do QZ Tray, então ele entrega
         este PDF ao QZ Tray, que rasteriza e manda pra impressora USB.
 
-        Devolve ``{'report_name', 'pdf_base64', 'page', 'rotation'}``.
+        Devolve ``{'report_name', 'pdf_base64', 'page'}``.
 
         O PDF sai girado conforme ``x_rotate_degrees`` (0 ou 180) — a folha
         fica 105x60 e o conteúdo gira dentro do stream (a matriz injetada).
@@ -238,10 +259,7 @@ class ProductLabelLayout(models.TransientModel):
         processa a folha girada (180°).
         """
         self.ensure_one()
-        xml_id, data = self._prepare_report_data()
-        report = self.env.ref(xml_id)
-        pdf, _ext = report._render_qweb_pdf(xml_id, res_ids=None, data=data)
-        pdf = _x_rotate_etiqueta_pdf(pdf, self._x_rotate_degrees())
+        pdf = self._x_render_etiqueta_pdf()
         page = self._X_LABEL_PAGE_MM.get(self.x_label_format)
         if not page:
             raise UserError(_('Formato de etiqueta inválido: %s', self.x_label_format))
@@ -250,3 +268,41 @@ class ProductLabelLayout(models.TransientModel):
             'pdf_base64': base64.b64encode(pdf).decode('ascii'),
             'page': page,
         }
+
+    def _x_render_etiqueta_pdf(self):
+        """PDF da etiqueta do formato atual, já normalizado pro papel físico.
+
+        Ponto ÚNICO de render dos dois formatos (os dois caminhos de impressão
+        passam aqui):
+          - botão "Imprimir (PDF)" → ``process()`` → action report → core
+          - botão direto (QZ Tray) → ``x_get_print_payload()`` → este método
+
+        Normalização do MediaBox depois do render: o wkhtmltopdf devolve
+        página 34,925x20,108mm quando o conteúdo CSS é menor que o papel —
+        estoura a mídia da bobina e o driver imprime em cima (ver
+        ``_x_normalizar_mediabox``).
+        """
+        self.ensure_one()
+        xml_id, data = self._prepare_report_data()
+        report = self.env.ref(xml_id)
+        pdf, _ext = report._render_qweb_pdf(xml_id, res_ids=None, data=data)
+        page = self._X_LABEL_PAGE_MM.get(self.x_label_format)
+        if not page:
+            raise UserError(_('Formato de etiqueta inválido: %s', self.x_label_format))
+        pdf = _x_normalizar_mediabox(pdf, page['width'], page['height'])
+        pdf = _x_rotate_etiqueta_pdf(pdf, self._x_rotate_degrees())
+        return pdf
+
+    def process(self):
+        self.ensure_one()
+        if not self.x_label_format:
+            return super().process()
+
+        # Mesma normalização do payload do QZ: o PDF que o navegador entrega
+        # (Ctrl+P) tem que ter o MediaBox = papel físico, senão o driver da
+        # loja anda o papel a cada página (etiqueta em cima da outra).
+        self._x_render_etiqueta_pdf()
+        xml_id, data = self._prepare_report_data()
+        report_action = self.env.ref(xml_id).report_action(None, data=data, config=False)
+        report_action.update({'close_on_report_download': True})
+        return report_action

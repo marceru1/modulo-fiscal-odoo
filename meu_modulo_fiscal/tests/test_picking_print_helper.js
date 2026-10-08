@@ -8,8 +8,8 @@
  *      e o corpo de _openPickingPrintDialog de picking_print_helper.js.
  *   2. Executa com mocks de action/env/window — valida o contrato:
  *        - Não-delivery-slip → fall through (undefined)
- *        - Delivery slip outgoing → fall through (undefined)
- *        - Delivery slip internal/incoming → print dialog (true)
+ *        - Delivery slip com picking ativo → print dialog (qualquer tipo)
+ *        - Delivery slip sem active_ids → fall through (undefined)
  *        - RPC falha → fall through (undefined)
  *        - Popup bloqueado → notificação + true
  *
@@ -79,13 +79,31 @@ function buildHandler(openPrintDialogMock) {
     )(DELIVERY_SLIP_REPORT_NAME, PRINT_TYPES, openPrintDialogMock);
 }
 
-// _openPickingPrintDialog: injeta getReportUrl + window
-function buildOpenPrintDialog({ getReportUrl, window }) {
+// _openPickingPrintDialog: injeta getReportUrl + window + user + _t + fetch +
+// timers (o módulo usa fetch() e setTimeout() resolvidos no browser global).
+function buildOpenPrintDialog({ getReportUrl, window, fetch, timers }) {
     return new Function(
         "getReportUrl",
         "window",
+        "user",
+        "_t",
+        "fetch",
+        "setTimeout",
         `return async function(action, env) { ${openBody} }`
-    )(getReportUrl, window);
+    )(
+        getReportUrl,
+        window,
+        { context: { lang: "pt_BR" } },
+        (s) => s,
+        fetch || ((url) => Promise.resolve({ ok: true, text: () => Promise.resolve("") })),
+        (fn, ms) => {
+            if (timers && timers.immediate) {
+                fn(); // teste: dispara sincronamente
+            } else {
+                setTimeout(fn, ms); // produção
+            }
+        }
+    );
 }
 
 // ── Caso 1: report não é o delivery slip → fall through ─────────────────────
@@ -125,10 +143,13 @@ async function main() {
     console.log("✓ Caso 2: delivery slip sem active_ids → fall through");
 }
 
-// ── Caso 3: delivery slip outgoing → fall through (T3) ─────────────────────
+// ── Caso 3: delivery slip outgoing → print dialog (pedido do Marcelo:
+//             "não quero que salve o pdf") — contrato NOVO ────────────────────
 {
-    const openMock = () => {
-        throw new Error("Outgoing não pode abrir print dialog");
+    let opened = false;
+    const openMock = async (action, env) => {
+        opened = true;
+        return true;
     };
     const handler = buildHandler(openMock);
     const env = makeEnv({ records: [{ id: 1, picking_type_code: "outgoing" }] });
@@ -139,8 +160,9 @@ async function main() {
         env
     );
 
-    assert.strictEqual(result, undefined, "Outgoing deve cair no default (download)");
-    console.log("✓ Caso 3: delivery slip outgoing → fall through (T3)");
+    assert.strictEqual(result, true, "Outgoing DEVE interceptar agora (dialog)");
+    assert.strictEqual(opened, true, "Outgoing deve abrir print dialog");
+    console.log("✓ Caso 3: delivery slip outgoing → print dialog (novo contrato)");
 }
 
 // ── Caso 4: delivery slip internal → print dialog (T1) ─────────────────────
@@ -227,23 +249,46 @@ async function main() {
     console.log("✓ Caso 7: popup bloqueado → notificação + true (T7)");
 }
 
-// ── Caso 8: popup abre → win.onload setado + true ──────────────────────────
+// ── Caso 8: popup abre → HTML buscado, escrito na janela e win.print() ──────
 {
-    let onloadSet = false;
+    let wroteHtml = "";
+    let printed = false;
+    const docStub = {
+        open: () => {},
+        close: () => {},
+        write: (html) => {
+            wroteHtml = html;
+        },
+        fonts: null, // ramo do setTimeout direto (dispara em 400ms)
+    };
     const win = {
-        set onload(fn) {
-            onloadSet = true;
-            this._onload = fn;
+        document: docStub,
+        focus: () => {},
+        print: () => {
+            printed = true;
         },
-        get onload() {
-            return this._onload;
+    };
+    // fetch do /report/html: devolve um HTML pequeno qualquer
+    const globalFetch = (url) => {
+        assert(
+            url.startsWith("/report/html/stock.report_deliveryslip/1"),
+            `fetch deve ir na rota HTML com os docids (foi: ${url})`
+        );
+        return Promise.resolve({ ok: true, text: () => Promise.resolve("<html><body>ok</body></html>") });
+    };
+    const winObj = {
+        open: (url) => {
+            // a janela abre em branco — o conteúdo entra por document.write
+            assert.strictEqual(url, "", "popup deve abrir about:blank (url vazia)");
+            return win;
         },
-        print: () => {},
     };
     const env = makeEnv({ records: [] });
     const openPrintDialog = buildOpenPrintDialog({
         getReportUrl: (action, type) => `/report/${type}/${action.report_name}/1`,
-        window: { open: () => win },
+        window: winObj,
+        fetch: globalFetch,
+        timers: { immediate: true }, // dispara disparar() sincronamente pro teste
     });
 
     const result = await openPrintDialog(
@@ -252,8 +297,9 @@ async function main() {
     );
 
     assert.strictEqual(result, true, "Deve interceptar (true)");
-    assert.strictEqual(onloadSet, true, "win.onload deve ser registrado");
-    console.log("✓ Caso 8: popup abre → win.onload + true");
+    assert.ok(wroteHtml.includes("<body>ok</body>"), "HTML da rota deve ser escrito na janela");
+    assert.strictEqual(printed, true, "win.print() deve disparar o dialog");
+    console.log("✓ Caso 8: popup abre → fetch HTML + write + win.print()");
 }
 
 // ── Integração: JS e Python apontam pro mesmo report (T04) ─────────────────

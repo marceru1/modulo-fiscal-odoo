@@ -6,8 +6,11 @@
  * stock.report_deliveryslip) e abre o print dialog do navegador em vez de
  * baixar o PDF.
  *
- * Escopo (D2): apenas pickings internal/incoming. Outgoing continua com
- * download normal (T3).
+ * Escopo (pedido do Marcelo, 2026-10-07): TODOS os pickings — o operador não
+ * quer download, quer o dialog de imprimir do navegador. (Antes: só
+ * internal/incoming; outgoing caía no download default do core, que usa
+ * /report/download com Content-Disposition: attachment — report.py:138 —
+ * e salvava o PDF.)
  *
  * Bundle: web.assets_backend (NÃO POS).
  *
@@ -39,7 +42,6 @@ import { user } from "@web/core/user";
 import { _t } from "@web/core/l10n/translation";
 
 const DELIVERY_SLIP_REPORT_NAME = "stock.report_deliveryslip";
-const PRINT_TYPES = new Set(["internal", "incoming"]);
 
 registry.category("ir.actions.report handlers").add(
     "meu_modulo_fiscal.picking_print",
@@ -58,7 +60,9 @@ registry.category("ir.actions.report handlers").add(
             // "Document is empty" — bug do core, fora do nosso escopo.
             return;
         }
-        // D2: só intercepta internal/incoming. RPC para ler picking_type_code.
+        // RPC para checar que os registros ainda existem (o core estouraria
+        // ParserError num id órfão). O tipo (internal/incoming/outgoing) NÃO
+        // decide mais: o operador pediu o dialog em todos os casos.
         let records;
         try {
             records = await env.services.orm.read(
@@ -70,27 +74,39 @@ registry.category("ir.actions.report handlers").add(
             // offline/erro de RPC — cai no handler default (download)
             return;
         }
-        if (
-            !records.length ||
-            !records.every((r) => PRINT_TYPES.has(r.picking_type_code))
-        ) {
-            return; // outgoing ou misto — cai no handler default
+        if (!records.length) {
+            return; // ids órfãos — cai no handler default
         }
         return _openPickingPrintDialog(action, env);
     }
 );
 
 /**
- * Abre o PDF do picking em nova aba e dispara window.print().
- * Fallback (D4/F3): notificação Odoo se popup for bloqueado.
+ * Abre o dialog de imprimir do navegador com o relatório do picking.
+ *
+ * IMPORTANTE (bug encontrado em 07/10/2026): NÃO abrir o PDF direto. O
+ * Chrome renderiza o PDF no VISOR embutido dele, que NÃO é scriptável —
+ * `win.onload` não dispara e `win.print()` nunca roda: fica só a aba com
+ * o PDF e nenhum dialog (o sintoma que o Marcelo viu).
+ *
+ * Caminho que funciona (mesma técnica do printFallback dos comprovantes
+ * térmicos, que imprime certo na loja): popup about:blank herda a origem
+ * da janela, busca o HTML do relatório na rota /report/html/ (mesmo
+ * template, o core suporta converter=html para qualquer qweb-pdf), injeta
+ * na janela e chama win.print() — documento HTML normal, dialog abre.
+ * O PDF fica só como fallback se a rota HTML falhar.
  *
  * @param {object} action - action ir.actions.report
  * @param {object} env - ambiente Odoo OWL (env.services.notification)
  * @returns {true} sempre true — o download default é pulado
  */
 async function _openPickingPrintDialog(action, env) {
-    const url = getReportUrl(action, "pdf", user.context);
-    const win = window.open(url, "_blank");
+    const ids = action.context?.active_ids || [];
+    const contexto = encodeURIComponent(JSON.stringify(user.context || {}));
+    const urlHtml = `/report/html/${action.report_name}/${ids.join(",")}?context=${contexto}`;
+    const urlPdf = getReportUrl(action, "pdf", user.context);
+
+    const win = window.open("", "_blank");
     if (!win) {
         env.services.notification.add(
             _t(
@@ -100,12 +116,42 @@ async function _openPickingPrintDialog(action, env) {
         );
         return true;
     }
-    win.onload = () => {
-        try {
-            win.print();
-        } catch (_) {
-            // silencioso — browser pode bloquear win.print() em cross-origin
+    try {
+        const html = await fetch(urlHtml, { credentials: "same-origin" }).then(
+            (r) => {
+                if (!r.ok) {
+                    throw new Error(`/report/html respondeu ${r.status}`);
+                }
+                return r.text();
+            }
+        );
+        win.document.open();
+        win.document.write(html);
+        win.document.close();
+
+        // Espera a fonte/estilos carregarem (mesma regra do printFallback):
+        // imprimir antes disso sai com fonte errada/sem estilo. O load do
+        // documento escrito não é confiável em todos os browsers — race de 1,5s.
+        const disparar = () => {
+            try {
+                win.focus();
+                win.print();
+            } catch (_) {
+                // silencioso — browser pode bloquear win.print()
+            }
+        };
+        const fontsReady = win.document.fonts && win.document.fonts.ready;
+        if (fontsReady) {
+            Promise.race([
+                fontsReady,
+                new Promise((r) => setTimeout(r, 1500)),
+            ]).then(() => setTimeout(disparar, 200));
+        } else {
+            setTimeout(disparar, 400);
         }
-    };
+    } catch (_) {
+        // HTML falhou (rota indisponível/rede) — comportamento anterior: PDF.
+        window.open(urlPdf, "_blank");
+    }
     return true;
 }
