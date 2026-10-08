@@ -126,20 +126,36 @@
 
                 .x_etiqueta_confeccao .x_eti_nome {
                     font-size: 1.15em;
+                    /* Nome comprido NAO pode crescer eterno: cada linha extra
+                       empurra barcode/preco pra baixo, a celula de 60mm estoura
+                       e o wkhtmltopdf derrama a sobra no TOPO da pagina seguinte
+                       (conteudo nasce dentro da faixa pre-impressa). Cap de 4
+                       linhas: nome max 14.2mm + ref + bar 1+8 + dig 2.95 +
+                       preco .5+5.3 — com nome de 4 linhas o fundo fica em
+                       55.3mm, sem tocar o rodape (52.6) nem estourar o papel.
+                       (-webkit-line-clamp testado: o Qt/WK emite '...' na 3a
+                       linha e desenha a 4a mesma assim — mentira visual.) */
+                    max-height: 14.2mm;
+                    overflow: hidden;
                 }
 
                 .x_etiqueta_confeccao .x_eti_barcode {
-                    padding-top: 4.5mm;
+                    /* 1.5mm (antes 4.5mm): com nome de 3 linhas o stack de
+                       baixo fica apertado — o respiro grande empurrava o
+                       preco pra cima do rodape @insta. 3 linhas + ref cabem:
+                       nome ate 31.1 + ref 2.7 + bar 1.0+8 + dig 2.95 +
+                       preco 0.5+5.3 = fundo 51.6 vs rodape em 52.6. */
+                    padding-top: 1.0mm;
                 }
 
                 .x_etiqueta_confeccao .x_eti_digitos {
                     font-size: 0.9em;
-                    margin-top: 0.5mm;
+                    margin-top: 0;
                 }
 
                 .x_etiqueta_confeccao .x_eti_preco {
                     font-size: 1.7em;
-                    margin-top: 3.5mm;
+                    margin-top: 0.5mm;
                 }
 
                 /* Rodapé: a spec pede a faixa 52–55 mm, ou seja 5 mm de
@@ -209,13 +225,16 @@
                                 text-align: center;
                                 vertical-align: top;
                             }
-                            .x_etiqueta .x_eti_nome {
-                                font-weight: bold;
-                                text-transform: uppercase;
-                                line-height: 1.05;
+                            .x_etiqueta_bijuteria .x_eti_nome {
+                                /* Cap de 1 linha: a via tem 20mm — nome de 2+
+                                   linhas empurrava o preco pra FORA da celula e
+                                   ele derramava no topo da folha seguinte (fitz:
+                                   'R$ 129,90' em y=0 da folha seguinte). Nome
+                                   comprido sai truncado, etiqueta funcional. */
+                                max-height: 2.7mm;
                                 overflow: hidden;
                             }
-                            .x_etiqueta .x_eti_ref {
+                            .x_etiqueta_bijuteria .x_eti_ref {
                                 font-size: 0.85em;
                                 line-height: 1;
                                 overflow: hidden;
