@@ -147,6 +147,32 @@ def main():
         if records.get(local(ref)) != "ir.actions.act_window":
             failures.append(f"server action: env.ref('{ref}') não é act_window")
 
+    # Guard anti-regressão (bug de 06/10/2026): estilos de etiqueta NUNCA como
+    # herança de view QWeb — extension se aplica a TODO render da mãe
+    # (ir_ui_view._get_combined_arch) e o position="replace" no <style> inteiro
+    # apagava o CSS de 105mm da Confecção. A Bijuteria tem que ser view PRÓPRIA
+    # (record de ir.ui.view, mode primary, sem inherit_id).
+    tree_styles = etree.parse(os.path.join(MODULE_DIR, "report", "etiqueta_styles.xml"))
+    for template_el in tree_styles.iter("template"):
+        if template_el.get("inherit_id") and "etiqueta_styles" in template_el.get("inherit_id"):
+            failures.append(
+                "etiqueta_styles.xml: template %s herda de %s — estilos de etiqueta "
+                "não podem ser view extension (aplica no render da mãe também)"
+                % (template_el.get("id"), template_el.get("inherit_id"))
+            )
+    if records.get("etiqueta_styles_bijuteria") != "ir.ui.view":
+        failures.append(
+            "etiqueta_styles_bijuteria deve ser <record> de ir.ui.view (view própria "
+            "standalone), não <template inherit_id>")
+    rec_bij = tree_styles.find("record[@id='etiqueta_styles_bijuteria']")
+    if rec_bij is not None:
+        mode = rec_bij.find("field[@name='mode']")
+        inherit = rec_bij.find("field[@name='inherit_id']")
+        if mode is None or mode.get("eval") != "primary":
+            failures.append("etiqueta_styles_bijuteria: mode deve ser primary")
+        if inherit is None or inherit.get("eval") != "False":
+            failures.append("etiqueta_styles_bijuteria: inherit_id deve ser False")
+
     if failures:
         print("FALHAS:")
         for failure in failures:
