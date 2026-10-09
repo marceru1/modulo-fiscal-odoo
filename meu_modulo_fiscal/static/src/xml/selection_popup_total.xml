@@ -1,0 +1,28 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<templates id="template" xml:space="preserve">
+
+    <!--
+        SelectionPopup + linha de TOTAL no rodapé (recebimento-total-faturas).
+
+        t-inherit-mode="primary" — MESMA receita do confirm_sale_popup.xml:
+        "extension" apenas anexaria operações ao template pai e o assetsbundle
+        (assetsbundle.py:471-480) ignora o t-name nesse modo, além de alterar o
+        SelectionPopup GLOBALMENTE (proibido — ver DEC-006).
+
+        O xpath ancora no <Dialog> (selection_popup.xml:5, 1 nó — verificado com
+        xmllint). position="inside" só acrescenta filho: nada de position="replace".
+
+        O totalLabel chega pronto do backend (pos.session.faturas_aberto_data —
+        soma em Python, server-first). Aqui é só t-esc de texto já montado.
+    -->
+    <t t-name="meu_modulo_fiscal.SelectionPopupComTotal"
+       t-inherit="point_of_sale.SelectionPopup"
+       t-inherit-mode="primary">
+        <xpath expr="//Dialog" position="inside">
+            <footer class="modal-footer d-flex justify-content-between align-items-center pt-2 mt-2 border-top">
+                <span class="fw-bold" t-esc="props.totalLabel"/>
+            </footer>
+        </xpath>
+    </t>
+
+</templates>

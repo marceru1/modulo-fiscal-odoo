@@ -76,6 +76,12 @@
             'meu_modulo_fiscal/static/src/xml/comprovante_parcial_receipt.xml',
             'meu_modulo_fiscal/static/src/js/recebimento_button.js',
             'meu_modulo_fiscal/static/src/xml/recebimento_button.xml',
+            # recebimento-total-faturas: popup de faturas com TOTAL no rodapé.
+            # A soma é server-side (pos.session.faturas_aberto_data). A subclasse
+            # do SelectionPopup existe para NÃO patchar o popup do core (que
+            # mudaria todos os popups de seleção do Odoo). JS antes do XML.
+            'meu_modulo_fiscal/static/src/js/selection_popup_total.js',
+            'meu_modulo_fiscal/static/src/xml/selection_popup_total.xml',
             # botao-atualizar-pdv: item "Atualizar" no menu sanduíche (recupera
             # tela travada sem F5). O XML ancora no node criado por
             # recebimento_button.xml — precisa vir DEPOIS dele nesta lista.

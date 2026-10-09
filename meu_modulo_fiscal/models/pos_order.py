@@ -917,6 +917,45 @@ class PosSession(models.Model):
             'target': 'new',
         }
 
+    @api.model
+    def faturas_aberto_data(self, partner_id, limit=50):
+        """Faturas em aberto de um parceiro + o TOTAL residual, tudo no backend.
+
+        Fonte unica da verdade do popup de Recebimento: o JS exibe o que
+        o backend devolve e nao soma nada client-side — a conta do total
+        vive aqui (e é a MESMA soma que o Odoo vê no cadastro do cliente).
+
+        Args:
+            partner_id (int): ID do res.partner.
+            limit (int): teto de faturas (o popup nao pagina; 50 cobre o
+                caso real de uso).
+
+        Returns:
+            dict: {'faturas': [{id, name, invoice_date_due, amount_residual,
+            payment_state}...], 'total_residual': float} — faturas ordenadas
+            por vencimento (a mesma ordem que o popup ja mostrava).
+        """
+        domain = [
+            ('partner_id', '=', partner_id),
+            ('move_type', '=', 'out_invoice'),
+            ('payment_state', 'in', ['not_paid', 'partial']),
+            ('state', '=', 'posted'),
+        ]
+        faturas = self.env['account.move'].search_read(
+            domain,
+            ['name', 'invoice_date_due', 'amount_residual', 'payment_state'],
+            limit=limit,
+            order='invoice_date_due',
+        )
+        # `date` cru não sobe por JSON (TypeError no serializador): normaliza
+        # para string 'YYYY-MM-DD' — o JS já fatia ano-mês-dia no label.
+        for f in faturas:
+            f['invoice_date_due'] = str(f['invoice_date_due'] or '')
+        # Soma no Python: os registros já vieram lidos; uma segunda query de
+        # aggregate (read_group) gastaria um round-trip e duplicaria o domínio.
+        total = sum((f['amount_residual'] for f in faturas), 0.0)
+        return {'faturas': faturas, 'total_residual': total}
+
     def create_recebimento(self, invoice_id, amount=None, payment_method_name='', payment_method_id=None):
         """Cria um recebimento (account.payment inbound) para uma fatura
         especifica, reconciliando automaticamente o pagamento com a fatura.

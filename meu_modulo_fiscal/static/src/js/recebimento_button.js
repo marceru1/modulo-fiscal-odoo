@@ -5,6 +5,7 @@ import { useService } from "@web/core/utils/hooks";
 import { renderToElement } from "@web/core/utils/render";
 import { PartnerList } from "@point_of_sale/app/screens/partner_list/partner_list";
 import { SelectionPopup } from "@point_of_sale/app/utils/input_popups/selection_popup";
+import { SelectionPopupComTotal } from "./selection_popup_total";
 import { NumberPopup } from "@point_of_sale/app/utils/input_popups/number_popup";
 import { makeAwaitable, ask } from "@point_of_sale/app/store/make_awaitable_dialog";
 import { printFallback } from "./receipt_print_helper";
@@ -30,30 +31,22 @@ patch(Navbar.prototype, {
             return;
         }
 
-        // ── 2. Buscar faturas em aberto do parceiro via ORM ─────────────────────
-        let invoices = [];
+        // ── 2. Buscar faturas em aberto do parceiro via ORM (SERVER-FIRST) ──────
+        // pos.session.faturas_aberto_data busca as faturas E soma o total em
+        // Python: o JS exibe o que o backend devolve, não recalcula nada.
+        let faturasData = null;
         try {
-            invoices = await this.orm.call(
-                "account.move",
-                "search_read",
-                [
-                    [
-                        ["partner_id", "=", selectedPartner.id],
-                        ["move_type", "=", "out_invoice"],
-                        ["payment_state", "in", ["not_paid", "partial"]],
-                        ["state", "=", "posted"],
-                    ],
-                    ["name", "invoice_date_due", "amount_total", "amount_residual", "payment_state", "state"],
-                    0,
-                    50,
-                    "invoice_date_due",
-                ]
+            faturasData = await this.orm.call(
+                "pos.session",
+                "faturas_aberto_data",
+                [[selectedPartner.id]]
             );
         } catch (e) {
             console.error("[RECEBIMENTO] Erro ao buscar faturas:", e);
             this.notification.add("Erro ao consultar faturas do cliente.", { type: "danger" });
             return;
         }
+        const invoices = faturasData ? faturasData.faturas : [];
 
         if (!invoices || invoices.length === 0) {
             this.notification.add(
@@ -88,9 +81,10 @@ patch(Navbar.prototype, {
             item: inv,
         }));
 
-        const selectedItem = await makeAwaitable(this.dialog, SelectionPopup, {
+        const selectedItem = await makeAwaitable(this.dialog, SelectionPopupComTotal, {
             title: `Faturas em aberto — ${selectedPartner.name}`,
             list: invoiceItems,
+            totalLabel: `Total em aberto: ${formatCurrency(faturasData.total_residual)}`,
         });
 
         if (!selectedItem) {
