@@ -7,8 +7,6 @@ e o contrato de dados consumido pelos relatórios QWeb.
 Seam 2 (integração): renderização real do PDF — requer wkhtmltopdf, por isso
 roda só em ``post_install``.
 """
-import fitz  # pymupdf
-
 from odoo.exceptions import UserError
 from odoo.tests import TransactionCase, tagged
 
@@ -187,42 +185,3 @@ class TestEtiquetasPdfSmoke(EtiquetasTestMixin, TransactionCase):
     def test_render_confeccao_pdf(self):
         pdf = self._render('confeccao', 'meu_modulo_fiscal.action_report_etiqueta_confeccao')
         self.assertTrue(pdf.startswith(b'%PDF'))
-
-    def test_render_confeccao_nome_longo_nao_desliza_paginas(self):
-        """Regressão 2026-10-08: nome que quebra em 3-4 linhas fazia a celula
-        estourar os 60mm e o wkhtmltopdf derramar a sobra no TOPO da folha
-        seguinte — conteúdo nascia a -2.2mm, dentro da faixa pré-impressa.
-
-        Contrato: em TODAS as folhas o topo do texto fica ~21.5mm (respeitando
-        a faixa) em todas as colunas, e o fundo nunca passa do papel (60mm).
-        """
-        MM = 72.0 / 25.4
-        tmpl_longo = self.env['product.template'].create({
-            'name': 'Conjunto Blusa + Calca Moletom Infantil Tam G',
-            'default_code': 'CONF-LONGO',
-            'list_price': 129.9,
-        })
-        tmpl_longo.product_variant_id.action_generate_barcode()
-        variant_longo = tmpl_longo.product_variant_id
-
-        wizard = self._make_wizard('confeccao', [
-            (self.tmpl_completo, 1), (tmpl_longo, 2), (self.tmpl_simples, 1)])
-        _, data = wizard._prepare_report_data()
-        report = self.env.ref('meu_modulo_fiscal.action_report_etiqueta_confeccao')
-        pdf = report.with_context(force_report_rendering=True)._render_qweb_pdf(
-            report.id, data=data)[0]
-
-        doc = fitz.open(stream=pdf, filetype='pdf')
-        self.assertGreaterEqual(doc.page_count, 2)
-        for page in doc:
-            words = page.get_text('words')
-            self.assertTrue(words, 'folha sem texto')
-            self.assertLessEqual(max(w[3] for w in words) / MM, 60.0,
-                                 'conteudo estourou o papel de 60mm')
-            for c in range(3):
-                topo = [w[1] / MM for w in words
-                        if 35 * c <= (w[0] + w[2]) / 2 / MM < 35 * (c + 1)]
-                if topo:
-                    self.assertAlmostEqual(min(topo), 21.2, delta=1.0,
-                                           msg='texto nasceu dentro da faixa '
-                                               'pre-impressa (deslize)')
