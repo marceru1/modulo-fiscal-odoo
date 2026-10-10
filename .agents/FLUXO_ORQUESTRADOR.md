@@ -53,6 +53,7 @@ orca terminal split --terminal <handle-da-pane-hermes> --direction horizontal \
 O prompt monta com:
 - A skill `fiscal-planner`
 - A descrição da feature expandida com as respostas do pre-grill
+- Vault grounding: "antes de grillar, leia o vault" (Mapa do Módulo/nota do projeto) + componentes existentes (REUSE) e ADRs da área embutidos no prompt
 - Instrução de encadear `fiscal-taskbreaker` quando a spec ficar pronta
 
 **Importante:** o handle alvo do split é o da pane do Hermes (ou da pane ativa no my_addons), NUNCA o de outra sessão. O `split` retorna o handle da nova pane em `result.split.handle` — usar esse handle pra leituras posteriores (`terminal read`). Antes de enviar prompt pra pane recém-criada, esperar o TUI inicializar (`orca terminal wait --terminal <handle> --for tui-idle`).
@@ -71,10 +72,10 @@ O Hermes atualiza o task pra A Fazer e cria subtasks com os tickets.
 
 ```bash
 orca terminal split --terminal <handle-da-pane-hermes> --direction horizontal \
-  --command "rtk ollama launch claude --model deepseek-v4-flash:cloud --yes -- '<PROMPT DO CODER>'" --json
+  --command "rtk ollama launch claude --model deepseek-v4.1-flash:cloud --yes -- '<PROMPT DO CODER>'" --json
 ```
 
-Mesmo workspace: o coder cria a branch da feature (`git checkout -b feat/<slug>`) e trabalha nela. Prompt do coder: carrega `fiscal-coder`, implementa os tickets um por um com TDD, lê a spec em `.agents/specs/<feature>.md`, pula verificação de ambiente (Odoo não roda local), não faz push nem abre PR, e escreve relatório em `.agents/code-reports/<feature>.md`.
+Mesmo workspace: o Hermes cria a branch `feat/<slug>` (a partir de dev, `git status` limpo) ANTES do split — o coder trabalha nela. Prompt do coder: carrega `fiscal-coder`, implementa os tickets um por um com TDD, lê a spec em `.agents/specs/<feature>.md`, **atualiza o `**Status:**` de cada ticket ao concluir**, roda o **converge** (append-only — anexa trabalho restante, nunca reescreve), escreve relatório em `.agents/code-reports/<feature>.md` e para. Para validar Python pode rodar a suíte local (skill `odoo18-local-verify` — o Odoo RODA no Mac; **nunca** pule verificação alegando o contrário). Não faz push nem abre PR.
 
 O usuário aceita as permissões de escrita manualmente no terminal (y/Enter).
 
@@ -97,7 +98,7 @@ O reviewer le o relatório do coder, revisa o diff desde dev nos 5 eixos e salva
 
 ### Passo 9 — Resultado
 
-- **Review passou** → Hermes move pra Teste → usuário testa manualmente no PDV → PR (`feat/<slug>` → dev) → merge → Hermes limpa branch e move pra Concluído
+- **Review passou** → Hermes move pra Teste → usuário testa manualmente no PDV → push/PR **quando o usuário pedir** (`feat/<slug>` → dev) → merge → Hermes limpa branch e move pra Concluído
 - **Review falhou** → Hermes move pra Em Andamento e splita novo terminal do coder com o relatório da review
 
 ## Features em paralelo (exceção)
@@ -120,7 +121,7 @@ Cada feature na sua worktree; ao mergear, `orca worktree rm --worktree branch:<f
 | Pre-grill sempre | 3 perguntas antes de abrir o agy |
 | Split no mesmo workspace | Uma pane por fase, todas filhas da pane do Hermes |
 | Sem worktree por padrão | Worktree só pra features em paralelo |
-| Branch da feature no coder | `git checkout -b feat/<slug>` (a partir de dev) |
+| Branch da feature | Hermes cria `feat/<slug>` a partir de dev ANTES do split do coder (main tree; no paralelo o Orca nomeia `<slug>`) |
 | Usuário avisa entre fases | "spec pronta", "código pronto", "review passou" |
 | Bugfix não precisa de pipeline | Hermes faz direto se for uma linha/import |
 | Pergunta não precisa de pipeline | Hermes responde direto |
@@ -129,9 +130,9 @@ Cada feature na sua worktree; ao mergear, `orca worktree rm --worktree branch:<f
 
 | Fase | Ferramenta | Modelo | Skills |
 |------|-----------|--------|--------|
-| Pre-grill | Hermes | GLM 5.2 | — |
+| Pre-grill | Hermes | — | — |
 | Planner + Taskbreaker | AGY (split) | Claude Sonnet 4.6 | `fiscal-planner`, `fiscal-taskbreaker` |
-| Coder | Claude Code (split) | DeepSeek V4 Flash | `fiscal-coder`, `source-driven-development`, `doubt-driven-development` |
+| Coder | Claude Code (split) | DeepSeek v4.1 Flash | `fiscal-coder`, `source-driven-development`, `doubt-driven-development` |
 | Reviewer | Claude Code (split) | Kimi K2.7 | `fiscal-reviewer`, `code-simplification` |
 
 ## Por que não `worker-start` supervisionado
