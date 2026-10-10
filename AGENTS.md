@@ -1,4 +1,4 @@
-# AGENTS.md — Workspace Odoo 18 Fiscal Module
+# AGENTS.md — Workspace Odoo 18 Fiscal Module (my_addons)
 
 ## Propósito
 
@@ -62,9 +62,9 @@ my_addons/
 
 O Hermes é o orchestrador. O usuário descreve o que quer e o Hermes decide:
 
-1. **Feature nova** (precisa de grill + spec + tickets + code + review) → cria task no Obsidian PM (Backlog), faz pre-grill de 3 perguntas basicas com o usuario, monta o prompt completo, e abre terminal do agy no Orca
-2. **"puxa do backlog"** → le tasks no Obsidian PM com status `todo`, lista pro usuario escolher, faz pre-grill da escolhida e abre terminal do agy na worktree da feature
-3. **"puxa tudo do backlog"** → le todos os tasks com status `todo`, mostra todos de uma vez com 1 pergunta essencial cada, usuario responde tudo junto, Hermes cria worktree + terminal do agy pra cada feature em paralelo
+1. **Feature nova** (grill + spec + tickets + code + review) → cria task no Obsidian PM (Backlog), faz pre-grill de 3 perguntas basicas com o usuario, monta o prompt completo, e splita o terminal do agy no Orca (regra de ouro: **o Hermes executa `orca terminal ...` diretamente — o usuario nunca roda comando**)
+2. **"puxa do backlog"** → le tasks no Obsidian PM com status `todo`, lista pro usuario escolher, faz pre-grill da escolhida e splita o terminal do agy (mesmo workspace)
+3. **"puxa tudo do backlog"** → le todos os tasks com status `todo`, mostra todos de uma vez com 1 pergunta essencial cada, usuario responde tudo junto, Hermes cria worktree + terminal do agy pra cada feature em paralelo (unico caso com worktree)
 4. **Bugfix simples** (uma linha, um import) → faz direto no Hermes
 5. **Pergunta** (status, dúvida, explicação) → responde direto
 
@@ -132,7 +132,7 @@ Editar o campo `status` no frontmatter do `.md`:
 - Coder começou → `in-progress`
 - Código pronto, PR aberto → `review`
 - Review passou → `testing`
-- Mergeiado em dev → `done`
+- Teste manual OK + branch contida na dev → `done` (merge sozinho NAO fecha o card)
 
 ### Documentação do projeto (Obsidian vault)
 
@@ -157,17 +157,20 @@ O Hermes faz 3 perguntas rapidas pra montar o prompt com contexto maximo:
 2. Quais modelos/telas do Odoo sao afetados? (ex: pos.order, receibo, fechamento)
 3. Tem que funcionar em contingencia/offline?
 
+**Vault pass (SEMPRE, antes de montar o prompt):** o Hermes lê o Mapa do Modulo / nota de feature no vault e embute no prompt: componentes existentes pra REUSE, ADRs anteriores da area, pitfalls conhecidos e features ja tentadas/revertidas (propor re-grill v2). O prompt abre com "antes de grillar, leia o vault: <paths>" — e a skill `fiscal-planner` manda o mesmo na Phase 0.
+
 Com as respostas, o Hermes:
 1. Cria o task no Obsidian PM (Backlog)
-2. Monta o prompt completo pro agy com a skill certa + contexto + encadeamento de fases
+2. Monta o prompt completo pro agy com a skill certa + contexto (vault pass incluido) + encadeamento de fases
 
-### Comando base pra abrir terminal do agy no Orca
+### Comando base pra splittar terminal do agy no Orca (o Hermes executa)
 
 ```bash
-orca terminal create --worktree active --title "<skill>" \
-  --command "rtk agy --model claude-sonnet-4-6 --prompt-interactive '<PROMPT COM A SKILL E A DESCRICAO DA FEATURE>'" \
-  --focus
+orca terminal split --terminal <handle-do-hermes> --direction horizontal \
+  --command "<launcher com o prompt montado>" --json
 ```
+
+`split` não aceita `--focus` (só `terminal create`); o prompt longo nunca vai inline (quebra no shell) — vai num arquivo lido por um launcher (ver `run-agent.sh` na skill `odoo-fiscal-workflow`). Esperar o TUI (`orca terminal wait --for tui-idle`) e ler o pane antes de assumir que subiu.
 
 O Hermes monta o prompt com:
 - A skill certa (`fiscal-planner`, `fiscal-coder`, `fiscal-reviewer`)
@@ -182,65 +185,58 @@ BACKLOG → A FAZER → EM ANDAMENTO → REVISÃO → TESTE → CONCLUÍDO
 
 **A FAZER:**
 
-1. **Abrir terminal do planner no Orca** (Hermes gera o comando, você roda):
+1. **Hermes splita o terminal do planner** (o Hermes executa; o usuário não roda nada):
 
 ```bash
-orca terminal create --worktree active --title "fiscal-planner" \
-  --command "rtk agy --model claude-sonnet-4-6 --prompt-interactive 'Carrega a skill fiscal-planner e me grilla sobre: <DESCREVA A FEATURE>'" \
-  --focus
+orca terminal split --terminal <handle-do-hermes> --direction horizontal \
+  --command "<launcher: agy --model claude-sonnet-4-6 com o prompt em arquivo>" --json
 ```
 
-O agy abre no workspace com Claude Sonnet 4.6, carrega AGENTS.md automático, e inicia o grill. Ao final: spec em `.agents/specs/<feature>.md` + ADRs + título do task no Obsidian PM.
+O agy abre no workspace, carrega AGENTS.md automático, e inicia o grill. Ao final: spec em `.agents/specs/<feature>.md` + ADRs + título do task no Obsidian PM.
 
-2. **Abrir terminal do taskbreaker** (depois que a spec estiver pronta):
+2. **Encadear o taskbreaker** — instrução no MESMO prompt inicial (não abrir nova pane):
 
-```bash
-orca terminal create --worktree active --title "fiscal-taskbreaker" \
-  --command "rtk agy --model claude-sonnet-4-6 --prompt-interactive 'Carrega a skill fiscal-taskbreaker e quebra a spec em .agents/specs/<feature>.md em tickets'" \
-  --focus
+```
+Apos a spec ficar pronta, carrega a skill fiscal-taskbreaker e quebra a spec em tickets.
 ```
 
 3. No Obsidian PM: cria task no projeto "Modulo Odoo" com o título sugerido, anexa checklist, move pra Em andamento
 
 **EM ANDAMENTO:**
 
-1. **Criar worktree isolada pra feature** (cada feature roda em paralelo sem conflito):
+1. **Hermes cria a branch da feature no main tree** (default = split no MESMO workspace; worktree SÓ pra 2+ features em paralelo):
 
 ```bash
-orca worktree create --name <feature-slug> --base-branch dev --activate
+cd /Users/marceloC/Desktop/odoo-18.0/my_addons
+git status   # tem que estar limpo
+git checkout -b feat/<feature-slug>   # a partir de dev
 ```
 
-Isso cria um checkout isolado em `/Users/marceloC/orca/workspaces/my_addons/<feature-slug>` com branch `<feature-slug>` a partir de dev. Multiplas features podem rodar em paralelo, cada uma na sua worktree.
+Todas as panes (planner, coder, reviewer) enxergam o mesmo checkout — spec/tickets/código/relatórios visíveis na hora, sem cópia de artefato.
 
-2. **Abrir terminal do coder na worktree da feature** (com prompt ja embutido no comando):
+2. **Hermes splita o terminal do coder** (com prompt ja embutido via launcher):
 
 ```bash
-orca terminal create --worktree branch:<feature-slug> --title "fiscal-coder" \
-  --command "rtk ollama launch claude --model deepseek-v4-flash:cloud --yes -- 'Carrega a skill fiscal-coder e implementa os tickets em .agents/tickets/<feature-slug>/ um por um com TDD. Le a spec em .agents/specs/<feature-slug>.md. PULA verificacao de ambiente (Odoo nao roda local) — vai direto pra implementacao lendo os arquivos do modulo. NAO faca push nem abra PR. Ao terminar, escreve um relatorio em .agents/code-reports/<feature-slug>.md com: resumo do que fez, arquivos alterados, decisoes tecnicas, testes rodados, e pontos de atencao pro reviewer.'" \
-  --focus
+orca terminal split --terminal <handle-do-hermes> --direction horizontal \
+  --command "bash <scratch>/run-agent.sh <scratch>/prompt-<feature-slug>.txt deepseek-v4.1-flash:cloud" --json
 ```
 
-O Claude Code abre na worktree com DeepSeek em MODO INTERATIVO — o prompt ja vem enviado, e o usuario aceita as permissoes de escrita manualmente no terminal (y/Enter). Implementa tickets com TDD, commita local, e gera relatorio em `.agents/code-reports/<feature-slug>.md` pra ser passado pro reviewer. Sub-skills `source-driven-development` e `doubt-driven-development` disparam automatic.
+O Claude Code abre no mesmo workspace com DeepSeek v4.1 em MODO INTERATIVO — o prompt ja vem enviado, e o usuario aceita as permissoes de escrita manualmente no terminal (y/Enter). Implementa tickets com TDD, atualiza o `**Status:**` de cada ticket ao concluir, roda o **converge** (append-only — anexa trabalho restante, nunca reescreve), commita local por ticket, e gera relatorio em `.agents/code-reports/<feature-slug>.md` pra ser passado pro reviewer. Para validar Python, roda a suite local (skill `odoo18-local-verify` — o Odoo RODA no Mac). Sub-skills `source-driven-development` e `doubt-driven-development` disparam automatic.
 
-3. Push + PR (`<feature-slug>` → dev)
+3. Push + PR (`feat/<feature-slug>` → dev) — **somente depois do teste manual** e quando o usuario pedir
 
-4. **Abrir terminal do reviewer na worktree da feature** (com prompt ja embutido no comando):
+4. **Hermes splita o terminal do reviewer** (com prompt ja embutido via launcher):
 
 ```bash
-orca terminal create --worktree branch:<feature-slug> --title "fiscal-reviewer" \
-  --command "rtk ollama launch claude --model kimi-k2.7-code:cloud --yes -- 'Carrega a skill fiscal-reviewer. Le o relatorio do coder em .agents/code-reports/<feature-slug>.md. Revisa o diff desde dev com git diff dev...HEAD nos 5 eixos (Correctness, Readability, Architecture, Security, Performance). Salva o relatorio em .agents/reviews/<feature-slug>-<data>.md. NAO faca push nem abra PR.'" \
-  --focus
+orca terminal split --terminal <handle-do-hermes> --direction horizontal \
+  --command "bash <scratch>/run-agent.sh <scratch>/prompt-review-<feature-slug>.txt kimi-k2.7-code:cloud" --json
 ```
 
 O Claude Code abre com Kimi K2.7 em MODO INTERATIVO — o prompt ja vem enviado, e o usuario aceita as permissoes manualmente. Le o relatorio do coder, revisa o diff nos 5 eixos, e salva o relatorio. Sub-skill `code-simplification` dispara se achar smell.
 
-5. Se reviewer achar problemas → corrige no mesmo terminal do coder, commita, pusha
+5. Se reviewer achar problemas → corrige no mesmo terminal do coder, commita (push/PR so quando o usuario pedir)
 
-6. **Remover worktree quando concluir** (apos merge):
-
-```bash
-orca worktree rm --worktree branch:<feature-slug> --force
-```
+6. **Limpar quando concluir** (apos merge): deletar a branch `feat/<feature-slug>` (local + remota). Se rodou em worktree (modo paralelo): `orca worktree rm --worktree path:<worktree-path> --force`
 
 ### Ver worktrees ativas
 
@@ -253,7 +249,7 @@ orca worktree list --json     # detalhado
 
 **TESTE:** manual no PDV — venda, recibo, offline/contingência, log middleware. Se falhar, usar sub-skill `debugging-and-error-recovery`.
 
-**CONCLUÍDO:** mergeia PR (dev ← feat/<slug>), deleta branches, volta pra dev.
+**CONCLUÍDO:** apos o teste manual OK, push/PR quando o usuario pedir (feat/<slug> → dev) ou merge local direto na dev; deleta branches, volta pra dev.
 
 ### Ver diffs no Orca
 
@@ -277,9 +273,9 @@ orca terminal read --terminal <handle>   # ler output de um terminal
 | 1 task = 1 feature | Nunca misturar duas features no mesmo task |
 | Subtasks = tickets | Cada ticket do taskbreaker vira uma subtask no Obsidian PM |
 | Só move pra Em andamento | Depois que as subtasks estiverem criadas no task |
-| Só move pra Concluído | Depois do merge do PR em dev |
-| Branch sempre `feat/` | a partir de dev |
-| PR sempre | Nunca mergear direto na dev sem PR |
+| Só move pra Concluído | Depois do teste manual OK e merge na dev (PR so quando o usuário pedir) |
+| Branch da feature | Hermes cria `feat/<slug>` a partir de dev ANTES do split do coder (no paralelo o Orca nomeia `<slug>`) |
+| Coder nunca pusha | Commita local; push/PR so quando o usuário pedir e o teste manual passar |
 
 ---
 
