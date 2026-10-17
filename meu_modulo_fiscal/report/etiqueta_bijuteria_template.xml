@@ -37,14 +37,21 @@
                                 <t t-set="product" t-value="fila[idx][0]"/>
                                 <t t-set="barcode" t-value="fila[idx][1]"/>
                                 <div class="x_etiqueta x_etiqueta_bijuteria">
-                                    <div class="x_eti_nome" t-out="product.name.upper()"/>
+                                    <div class="x_eti_nome" t-out="nome_etiqueta(product)"/>
                                     <div class="x_eti_ref" t-if="product.default_code" t-out="product.default_code"/>
                                     <!-- barcode do t-set (fila), não product.barcode: há
                                          produto sem código, e aí o bloco de barras não
-                                         sai. width/height intrínsecos (930x180) mantêm a
-                                         proporção do img_style (31 x 6 mm). -->
+                                         sai. Largura 28 mm (antes 31): com 31 mm as barras
+                                         começavam a ~1,6 mm da borda da via e a impressora
+                                         cortava as primeiras barras (leitura falhava).
+                                         28 mm centralizado deixa ~3,5 mm livres de cada
+                                         lado. Altura 5 mm (antes 6): o nome de até 25
+                                         caracteres pode quebrar em 2 linhas e a via tem só
+                                         20 mm — com 6 mm o preço derramava na via seguinte.
+                                         width/height intrínsecos (840x150) mantêm a
+                                         proporção do img_style (28 x 5 mm). -->
                                     <div class="x_eti_barcode" t-if="barcode">
-                                        <t t-out="barcode" t-options="{'widget': 'barcode', 'symbology': 'Code128', 'quiet': 0, 'width': 930, 'height': 180, 'img_style': 'width:31mm;height:6mm'}"/>
+                                        <t t-out="barcode" t-options="{'widget': 'barcode', 'symbology': 'Code128', 'quiet': 0, 'width': 840, 'height': 150, 'img_style': 'width:28mm;height:5mm'}"/>
                                     </div>
                                     <div class="x_eti_digitos" t-if="barcode" t-out="barcode"/>
                                     <div class="x_eti_preco">

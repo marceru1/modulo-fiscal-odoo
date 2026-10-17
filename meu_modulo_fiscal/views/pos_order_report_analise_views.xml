@@ -17,6 +17,18 @@
                 <filter name="my_operator" string="Meu Operador" domain="[('user_id', '=', uid)]"/>
                 <separator/>
             </xpath>
+            <!-- Filtros rápidos de data: defaults que o painel abre com -->
+            <xpath expr="//filter[@name='filter_date']" position="before">
+                <filter name="hoje" string="Hoje" domain="[('date', '&gt;=', (datetime.datetime.combine(context_today(), datetime.time(0,0,0))).to_utc()), ('date', '&lt;=', (datetime.datetime.combine(context_today(), datetime.time(23,59,59))).to_utc())]"/>
+                <filter name="ontem" string="Ontem" domain="[('date', '&gt;=', (datetime.datetime.combine(context_today() - datetime.timedelta(days=1), datetime.time(0,0,0))).to_utc()), ('date', '&lt;=', (datetime.datetime.combine(context_today() - datetime.timedelta(days=1), datetime.time(23,59,59))).to_utc())]"/>
+                <filter name="sete_dias" string="Últimos 7 dias" domain="[('date', '&gt;=', (context_today() - datetime.timedelta(days=6)).to_utc())]"/>
+                <filter name="trinta_dias" string="Últimos 30 dias" domain="[('date', '&gt;=', (context_today() - datetime.timedelta(days=29)).to_utc())]"/>
+                <separator/>
+            </xpath>
+            <!-- Agrupamento por dia (mesmo 'date' do core com intervalo explícito) -->
+            <xpath expr="//filter[@name='order_month']" position="after">
+                <filter string="Order Date (Day)" name="order_day" context="{'group_by': 'date:day'}"/>
+            </xpath>
         </field>
     </record>
 
@@ -59,6 +71,7 @@
         <field name="arch" type="xml">
             <xpath expr="//field[@name='partner_id']" position="after">
                 <field name="user_id" optional="show"/>
+                <field name="payment_method_id" optional="show"/>
             </xpath>
             <xpath expr="//field[@name='price_total']" position="after">
                 <field name="total_discount" optional="show"/>

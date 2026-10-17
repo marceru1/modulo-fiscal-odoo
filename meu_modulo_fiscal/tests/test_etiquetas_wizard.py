@@ -159,6 +159,33 @@ class TestEtiquetasReportValues(EtiquetasTestMixin, TransactionCase):
 
         self.assertEqual(len(values['quantity']), 1)
 
+    # ── nome limitado a 25 caracteres (decisão da loja 2026-10-10) ──────────
+    def _nome(self, name):
+        report = self.env['report.meu_modulo_fiscal.report_etiqueta_confeccao']
+        tmpl = self.env['product.template'].create({'name': name})
+        return report._x_nome_etiqueta(tmpl.product_variant_id)
+
+    def test_nome_curto_sai_inteiro_em_maiusculo(self):
+        self.assertEqual(self._nome('Anel de Prata'), 'ANEL DE PRATA')
+
+    def test_nome_longo_corta_em_25_caracteres_contando_espaco_e_numero(self):
+        nome = self._nome('Conjunto Blusa 2 Calca Moletom Infantil Tam G')
+        self.assertEqual(nome, 'CONJUNTO BLUSA 2 CALCA MO')
+        self.assertEqual(len(nome), 25)
+
+    def test_nome_cortado_nao_termina_em_espaco(self):
+        # 'COLAR PINGENTE CORACAO 1' tem 24 chars; o 25º é espaço → é removido.
+        self.assertEqual(self._nome('Colar Pingente Coracao 1 Dourado'), 'COLAR PINGENTE CORACAO 1')
+        # Corte exato em 25 sem espaço sobrando.
+        self.assertEqual(self._nome('Brinco Argola Grande Ouro Prata'), 'BRINCO ARGOLA GRANDE OURO')
+
+    def test_report_values_expoe_nome_etiqueta_para_os_dois_formatos(self):
+        wizard = self._make_wizard('bijuteria', [(self.tmpl_completo, 1)])
+        _, data = wizard._prepare_report_data()
+        for fmt in ('bijuteria', 'confeccao'):
+            values = self.env['report.meu_modulo_fiscal.report_etiqueta_%s' % fmt]._get_report_values(None, data)
+            self.assertEqual(values['nome_etiqueta'](self.variant_completo), 'ANEL DE PRATA')
+
 
 @tagged('post_install', '-at_install')
 class TestEtiquetasPdfSmoke(EtiquetasTestMixin, TransactionCase):

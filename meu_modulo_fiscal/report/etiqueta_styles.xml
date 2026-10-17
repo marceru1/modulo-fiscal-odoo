@@ -128,8 +128,11 @@
                     font-size: 1.15em;
                 }
 
+                /* Espaços verticais calibrados para nome de até 25 caracteres
+                   (pode quebrar em 2–3 linhas): com 4,5mm/3,5mm o preço de um
+                   nome de 2 linhas já encostava no rodapé @instagram. */
                 .x_etiqueta_confeccao .x_eti_barcode {
-                    padding-top: 4.5mm;
+                    padding-top: 1.5mm;
                 }
 
                 .x_etiqueta_confeccao .x_eti_digitos {
@@ -139,7 +142,7 @@
 
                 .x_etiqueta_confeccao .x_eti_preco {
                     font-size: 1.7em;
-                    margin-top: 3.5mm;
+                    margin-top: 1.5mm;
                 }
 
                 /* Rodapé: a spec pede a faixa 52–55 mm, ou seja 5 mm de
@@ -247,12 +250,15 @@
                                 line-height: 1.05;
                                 padding: 0.8mm 1.2mm 0.5mm;
                             }
+                            /* Espaços apertados para caber nome de 2 linhas
+                               (limite de 25 caracteres) + ref + barras de 5mm +
+                               dígitos + preço dentro dos 20mm da via. */
                             .x_etiqueta_bijuteria .x_eti_barcode {
-                                padding-top: 0.8mm;
+                                padding-top: 0.5mm;
                             }
                             .x_etiqueta_bijuteria .x_eti_preco {
                                 font-size: 1.15em;
-                                margin-top: 1.2mm;
+                                margin-top: 0.4mm;
                             }
                         </style>
                     </template>

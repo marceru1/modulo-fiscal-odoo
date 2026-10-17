@@ -1,6 +1,6 @@
 from collections import defaultdict
 
-from odoo import models
+from odoo import api, models
 
 
 class ReportEtiqueta(models.AbstractModel):
@@ -14,6 +14,19 @@ class ReportEtiqueta(models.AbstractModel):
     """
     _name = 'report.meu_modulo_fiscal.report_etiqueta'
     _description = 'Dados comuns dos relatórios de etiqueta'
+
+    #: Máximo de caracteres do nome na etiqueta (espaços e números contam).
+    #: Decisão da loja (2026-10-10): nome comprido quebrava em várias linhas,
+    #: a célula estourava a altura da via e o resto (preço/rodapé) derramava
+    #: no TOPO da etiqueta seguinte. O corte é explícito no texto — não por
+    #: max-height no CSS, que escondia linhas pela metade (revert 1733dae).
+    _X_NOME_MAX_CHARS = 25
+
+    @api.model
+    def _x_nome_etiqueta(self, product):
+        """Nome do produto como sai impresso: até 25 caracteres, MAIÚSCULO."""
+        nome = (product.name or '')[:self._X_NOME_MAX_CHARS]
+        return nome.rstrip().upper()
 
     def _get_report_values(self, docids, data=None):
         data = data or {}
@@ -38,6 +51,7 @@ class ReportEtiqueta(models.AbstractModel):
             'quantity': quantity,
             'total_quantity': total_quantity,
             'layout_wizard': self.env['product.label.layout'].browse(data.get('layout_wizard')),
+            'nome_etiqueta': self._x_nome_etiqueta,
         }
 
 
