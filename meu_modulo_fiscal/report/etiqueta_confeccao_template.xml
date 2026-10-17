@@ -49,7 +49,7 @@
                                 <t t-set="product" t-value="fila[idx][0]"/>
                                 <t t-set="barcode" t-value="fila[idx][1]"/>
                                 <div class="x_etiqueta x_etiqueta_confeccao">
-                                    <div class="x_eti_nome" t-out="product.name.upper()"/>
+                                    <div class="x_eti_nome" t-out="nome_etiqueta(product)"/>
                                     <div class="x_eti_ref" t-if="product.default_code" t-out="product.default_code"/>
                                     <div class="x_eti_barcode" t-if="barcode">
                                         <!-- 8 mm de altura conforme a spec da bobina (203 dpi).
