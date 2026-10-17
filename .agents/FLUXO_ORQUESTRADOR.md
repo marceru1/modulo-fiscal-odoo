@@ -123,7 +123,7 @@ Cada feature na sua worktree; ao mergear, `orca worktree rm --worktree branch:<f
 | Sem worktree por padrão | Worktree só pra features em paralelo |
 | Branch da feature | Hermes cria `feat/<slug>` a partir de dev ANTES do split do coder (main tree; no paralelo o Orca nomeia `<slug>`) |
 | Usuário avisa entre fases | "spec pronta", "código pronto", "review passou" |
-| Bugfix não precisa de pipeline | Hermes faz direto se for uma linha/import |
+| Fix rápido | Pane curta do Claude Code deepseek (`rtk ollama launch claude --model deepseek-v4.1-flash:cloud`) — sem pipeline; agy só pra feat nova e fix complexo |
 | Pergunta não precisa de pipeline | Hermes responde direto |
 
 ## Ferramentas por Fase

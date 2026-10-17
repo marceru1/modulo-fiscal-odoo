@@ -62,10 +62,10 @@ my_addons/
 
 O Hermes é o orchestrador. O usuário descreve o que quer e o Hermes decide:
 
-1. **Feature nova** (grill + spec + tickets + code + review) → cria task no Obsidian PM (Backlog), faz pre-grill de 3 perguntas basicas com o usuario, monta o prompt completo, e splita o terminal do agy no Orca (regra de ouro: **o Hermes executa `orca terminal ...` diretamente — o usuario nunca roda comando**)
+1. **Feature nova ou fix complexo** (grill + spec + tickets + code + review) → cria task no Obsidian PM (Backlog), faz pre-grill de 3 perguntas basicas com o usuario, monta o prompt completo, e splita o terminal do agy no Orca (regra de ouro: **o Hermes executa `orca terminal ...` diretamente — o usuario nunca roda comando**)
 2. **"puxa do backlog"** → le tasks no Obsidian PM com status `todo`, lista pro usuario escolher, faz pre-grill da escolhida e splita o terminal do agy (mesmo workspace)
 3. **"puxa tudo do backlog"** → le todos os tasks com status `todo`, mostra todos de uma vez com 1 pergunta essencial cada, usuario responde tudo junto, Hermes cria worktree + terminal do agy pra cada feature em paralelo (unico caso com worktree)
-4. **Bugfix simples** (uma linha, um import) → faz direto no Hermes
+4. **Fix rápido** (uma linha, um import) → pane curta do Claude Code (`rtk ollama launch claude --model deepseek-v4.1-flash:cloud`, prompt em arquivo, MODO INTERATIVO, sem grill/pipeline) — Hermes só orquestra, nunca edita código; exceção: co-piloto mãos-na-massa ("aplica aí")
 5. **Pergunta** (status, dúvida, explicação) → responde direto
 
 ### Obsidian PM (Kanban)
@@ -625,6 +625,7 @@ Salvar em `.agents/reviews/<feature-slug>-<date>.md`. Sempre incluir pelo menos 
 - `super.method(...arguments)` em overrides
 - `this.env.services` para ORM, dialog, notification
 - RPC: `this.env.services.orm.call("model", "method", [args])`
+- `user`/`_t` NÃO existem em `env.services` — importar `user` de `@web/core/user` e `_t` de `@web/core/l10n/translation` (senão: `TypeError: reading 'context'`)
 - `order.payment_ids` (não `payment_ids`)
 - `order.get_partner()` (não `get_client()`)
 - `order.set_to_invoice(true)` (não `to_invoice = true`)
