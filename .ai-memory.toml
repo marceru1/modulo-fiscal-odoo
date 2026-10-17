@@ -1,0 +1,9 @@
+# ai-memory — escopo + fronteira de captura deste checkout.
+# Compartilhado por todos os agentes (Hermes, Claude Code, agy/Antigravity)
+# que rodam neste repositório: todos leem/escrevem o MESMO project.
+workspace = "default"
+project = "marceru1-modulo-fiscal-odoo"
+
+[capture]
+# Segredos nunca entram no spool local, no wire, nem na wiki (root e aninhados).
+ignore_paths = [".env", ".env.*", "**/.env", "**/.env.*"]
