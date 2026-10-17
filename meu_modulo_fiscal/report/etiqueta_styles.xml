@@ -219,7 +219,7 @@
                                 overflow: hidden;
                             }
                             .x_etiqueta .x_eti_ref {
-                                font-size: 0.85em;
+                                font-size: 0.95em;
                                 line-height: 1;
                                 overflow: hidden;
                             }
@@ -228,7 +228,7 @@
                                 margin: 0 auto;
                             }
                             .x_etiqueta .x_eti_digitos {
-                                font-size: 0.8em;
+                                font-size: 0.9em;
                                 line-height: 1;
                                 letter-spacing: 0.4px;
                                 white-space: nowrap;
@@ -243,21 +243,26 @@
                                105mm (3 vias no rolo; a etiqueta real é 34,8 mm
                                de largura, o papel vai a 35 mm — 0,1mm de
                                sangria de cada lado). */
+                            /* Fontes maiores (pedido 2026-10-17: "informações muito
+                               pequenas") — a medição do baseline mostrou o conteúdo
+                               terminando em ~16mm dos 20mm da via (~4mm de folga),
+                               então cabem sem re-arranjo. LATERAIS INTACTAS: padding
+                               horizontal 1.2mm e barcode 28×5mm (regra do corte). */
                             .x_etiqueta_bijuteria {
                                 width: 34.8mm;
                                 height: 20mm;
-                                font-size: 7pt;
+                                font-size: 8pt;
                                 line-height: 1.05;
                                 padding: 0.8mm 1.2mm 0.5mm;
                             }
-                            /* Espaços apertados para caber nome de 2 linhas
-                               (limite de 25 caracteres) + ref + barras de 5mm +
-                               dígitos + preço dentro dos 20mm da via. */
+                            /* Espaços calculados para nome de 2 linhas (limite de
+                               25 caracteres) + ref + barras de 5mm + dígitos + preço
+                               dentro dos 20mm da via. */
                             .x_etiqueta_bijuteria .x_eti_barcode {
                                 padding-top: 0.5mm;
                             }
                             .x_etiqueta_bijuteria .x_eti_preco {
-                                font-size: 1.15em;
+                                font-size: 1.4em;
                                 margin-top: 0.4mm;
                             }
                         </style>
