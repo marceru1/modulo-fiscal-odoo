@@ -258,12 +258,24 @@
                             /* Espaços calculados para nome de 2 linhas (limite de
                                25 caracteres) + ref + barras de 5mm + dígitos + preço
                                dentro dos 20mm da via. */
+                            /* Ajustes visuais (pedido 2026-10-19): nome um pouco
+                               menor (8pt -> 7,5pt), preço sobe encostando nos
+                               dígitos (0,4mm) e o código de barras (img + os
+                               dígitos juntos, pra não desalinharem) puxa
+                               ~1,5mm pra direita do centro. */
+                            .x_etiqueta_bijuteria .x_eti_nome {
+                                font-size: 7.5pt;
+                            }
                             .x_etiqueta_bijuteria .x_eti_barcode {
                                 padding-top: 0.5mm;
+                                padding-left: 3mm;
+                            }
+                            .x_etiqueta_bijuteria .x_eti_digitos {
+                                padding-left: 3mm;
                             }
                             .x_etiqueta_bijuteria .x_eti_preco {
                                 font-size: 1.4em;
-                                margin-top: 0.4mm;
+                                margin-top: 0;
                             }
                         </style>
                     </template>
