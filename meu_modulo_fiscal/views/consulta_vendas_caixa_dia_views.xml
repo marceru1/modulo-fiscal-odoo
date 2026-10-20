@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <!-- consulta-vendas-caixa-dia: tela guiada caixa -> dia -> tabela.
+         Client action no backend web (não é tela do PDV). -->
+    <record id="action_consulta_vendas_caixa_dia" model="ir.actions.client">
+        <field name="name">Vendas por caixa e dia</field>
+        <field name="tag">meu_modulo_fiscal.consulta_vendas_caixa_dia</field>
+    </record>
+
+    <menuitem id="menu_consulta_vendas_caixa_dia"
+              name="Vendas por caixa e dia"
+              action="action_consulta_vendas_caixa_dia"
+              parent="point_of_sale.menu_point_rep"
+              sequence="6"/>
+</odoo>
