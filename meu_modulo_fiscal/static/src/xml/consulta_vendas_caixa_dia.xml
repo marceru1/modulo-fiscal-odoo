@@ -1,0 +1,131 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<templates xml:space="preserve">
+
+    <t t-name="meu_modulo_fiscal.ConsultaVendasCaixaDia">
+        <div class="o_action">
+            <div class="o_content p-3">
+                <div class="mb-3">
+                    <h2 class="mb-1">Vendas por caixa e dia</h2>
+                    <p class="text-muted mb-0">
+                        Selecione o caixa e o dia para consultar as vendas.
+                    </p>
+                </div>
+
+                <div class="d-flex flex-wrap gap-3 align-items-end mb-3">
+                    <div>
+                        <label for="consulta_vendas_caixa" class="form-label">Caixa</label>
+                        <select id="consulta_vendas_caixa"
+                                class="form-select"
+                                t-att-disabled="state.carregando"
+                                t-on-change="onConfigChange">
+                            <option value="">Selecione um caixa</option>
+                            <t t-foreach="state.caixas" t-as="caixa" t-key="caixa.id">
+                                <option t-att-value="caixa.id"
+                                        t-att-selected="caixa.id === state.configId"
+                                        t-esc="caixa.name"/>
+                            </t>
+                        </select>
+                    </div>
+                    <div>
+                        <label for="consulta_vendas_data" class="form-label">Data</label>
+                        <input id="consulta_vendas_data"
+                               type="date"
+                               class="form-control"
+                               t-att-disabled="!state.configId || state.carregando"
+                               t-att-value="state.data"
+                               t-on-change="onDataChange"/>
+                    </div>
+                    <div>
+                        <button type="button"
+                                class="btn btn-primary"
+                                t-att-disabled="!podeConsultar"
+                                t-on-click="consultar">
+                            <t t-if="state.carregando">
+                                <i class="fa fa-spinner fa-spin me-1" role="img" aria-label="Carregando"/>
+                                Consultando...
+                            </t>
+                            <t t-else="">Consultar</t>
+                        </button>
+                    </div>
+                </div>
+
+                <div t-if="state.erro" class="alert alert-danger" role="alert">
+                    <t t-esc="state.erro"/>
+                    <div class="small mt-1">
+                        A seleção foi mantida. Tente consultar novamente.
+                    </div>
+                </div>
+
+                <div t-if="!state.resultado and !state.erro and !state.carregando"
+                     class="alert alert-info">
+                    <t t-esc="mensagemInicial"/>
+                </div>
+
+                <t t-if="state.resultado">
+                    <h4 class="mt-2">
+                        <t t-esc="state.resultado.caixa.nome"/> —
+                        <t t-esc="formatarData(state.resultado.data)"/>
+                    </h4>
+
+                    <div t-if="!state.resultado.vendas.length" class="alert alert-warning">
+                        Nenhuma venda encontrada para este caixa nesta data
+                    </div>
+
+                    <div t-else="" class="table-responsive">
+                        <table class="table table-sm table-striped table-hover align-middle">
+                            <thead>
+                                <tr>
+                                    <th scope="col">Data e hora</th>
+                                    <th scope="col">Venda / cupom</th>
+                                    <th scope="col">Operador</th>
+                                    <th scope="col">Cliente</th>
+                                    <th scope="col" class="text-end">Valor total</th>
+                                    <th scope="col">Situação</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                <tr t-foreach="state.resultado.vendas" t-as="venda" t-key="venda.id">
+                                    <td class="text-nowrap"
+                                        t-esc="formatarDataHora(venda.date_order)"/>
+                                    <td>
+                                        <a href="#"
+                                           t-on-click.prevent="() => this.abrirVenda(venda)"
+                                           t-esc="venda.cupom"/>
+                                    </td>
+                                    <td t-esc="venda.operador"/>
+                                    <td t-esc="venda.cliente || 'Consumidor não identificado'"/>
+                                    <td class="text-end text-nowrap"
+                                        t-esc="formatarValor(venda.valor, venda.currency_id)"/>
+                                    <td t-esc="venda.situacao"/>
+                                </tr>
+                            </tbody>
+                        </table>
+                    </div>
+
+                    <div class="d-flex flex-wrap justify-content-between gap-2 border-top pt-2">
+                        <span>
+                            <strong t-esc="state.resultado.resumo.quantidade"/>
+                            cupom(ns)
+                            <t t-if="state.resultado.resumo.quantidade_devolucoes">
+                                · <t t-esc="state.resultado.resumo.quantidade_devolucoes"/>
+                                devolução(ões)
+                            </t>
+                        </span>
+                        <span class="text-end">
+                            <t t-foreach="state.resultado.resumo.totais"
+                               t-as="total"
+                               t-key="total.currency_id">
+                                <span class="ms-3">
+                                    Total<t t-if="state.resultado.resumo.totais.length > 1">
+                                        (<t t-esc="total.moeda"/>)
+                                    </t>:
+                                    <strong t-esc="formatarValor(total.total, total.currency_id)"/>
+                                </span>
+                            </t>
+                        </span>
+                    </div>
+                </t>
+            </div>
+        </div>
+    </t>
+</templates>
