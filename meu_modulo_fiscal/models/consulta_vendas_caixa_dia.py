@@ -43,8 +43,8 @@ class PosOrder(models.Model):
                 'fuso': str,
                 'vendas': [{
                     'id', 'date_order' (UTC), 'cupom', 'pos_reference',
-                    'operador', 'cliente', 'valor', 'currency_id', 'moeda',
-                    'state', 'situacao',
+                    'operador', 'valor', 'currency_id', 'moeda',
+                    'formas_pagamento',
                 }],
                 'resumo': {
                     'quantidade': int,
@@ -96,9 +96,7 @@ class PosOrder(models.Model):
             expression.OR(janelas),
         ]), order='date_order desc, id desc')
 
-        rotulos_estado = dict(
-            self._fields['state']._description_selection(self.env)
-        )
+        formas_por_pedido = self._formas_pagamento_por_pedido(pedidos.ids)
         vendas = []
         devolucoes = 0
         for pedido in pedidos:
@@ -112,12 +110,10 @@ class PosOrder(models.Model):
                 'cupom': pedido.name,
                 'pos_reference': pedido.pos_reference or '',
                 'operador': pedido.user_id.name or '',
-                'cliente': pedido.partner_id.display_name or '',
                 'valor': pedido.amount_total,
                 'currency_id': moeda.id,
                 'moeda': moeda.name,
-                'state': pedido.state,
-                'situacao': rotulos_estado.get(pedido.state, pedido.state),
+                'formas_pagamento': formas_por_pedido.get(pedido.id, ''),
             })
 
         return {
@@ -152,6 +148,38 @@ class PosOrder(models.Model):
                 limite=self.MAX_DIAS_POR_CONSULTA,
             ))
         return sorted(dias)
+
+    def _formas_pagamento_por_pedido(self, pedido_ids):
+        """Formas de pagamento por cupom, lidas em lote (uma query só).
+
+        São os métodos DISTINTOS dos pagamentos do cupom, na ordem em que
+        foram registrados (pos.payment.payment_method_id → nome do
+        pos.payment.method): pagamento único mostra um nome; dividido mostra
+        os nomes unidos ("Dinheiro + Cartão"). Cupom sem pagamento fica ''.
+        """
+        if not pedido_ids:
+            return {}
+
+        pagamentos = self.env['pos.payment'].search_read(
+            [('pos_order_id', 'in', list(pedido_ids))],
+            ['pos_order_id', 'payment_method_id'],
+            order='id asc',
+        )
+        nomes_por_pedido = {}
+        for pagamento in pagamentos:
+            pedido = pagamento['pos_order_id']
+            metodo = pagamento['payment_method_id']
+            if not pedido or not metodo:
+                continue
+            pedido_id = pedido[0] if isinstance(pedido, (list, tuple)) else pedido
+            nomes = nomes_por_pedido.setdefault(pedido_id, [])
+            if metodo[1] not in nomes:
+                nomes.append(metodo[1])
+
+        return {
+            pedido_id: ' + '.join(nomes)
+            for pedido_id, nomes in nomes_por_pedido.items()
+        }
 
     def _totais_por_moeda(self, vendas):
         """Soma os valores por moeda — moedas diferentes nunca se misturam.
