@@ -29,11 +29,13 @@ patch(ClosePosPopup.prototype, {
     // pos_web criar OUTRA pos.session (opening_control) na hora — e no dia
     // seguinte o operador abre o caixa com a sessão de ontem. Quando o backend
     // confirma o fechamento, trocamos a URL para a home do Odoo antes do
-    // reload do core: o próprio reload do core cai em /odoo, sem reabrir o POS.
+    // reload do core: location.reload() recarrega a URL corrente (já trocada
+    // pelo replaceState), então o POS não reabre. Não navegamos por conta
+    // própria aqui — duas navegações concorrentes com o reload do core
+    // poderiam competir; deixamos o core fazer o reload.
     async closeSession() {
         const dataService = this.pos.data;
         const originalCall = dataService.call;
-        let fechou = false;
         dataService.call = async (...args) => {
             const response = await originalCall.apply(dataService, args);
             if (
@@ -42,7 +44,6 @@ patch(ClosePosPopup.prototype, {
                 response &&
                 response.successful
             ) {
-                fechou = true;
                 window.history.replaceState(null, "", "/odoo");
             }
             return response;
@@ -50,12 +51,8 @@ patch(ClosePosPopup.prototype, {
         try {
             return await super.closeSession(...arguments);
         } finally {
+            // Restaura mesmo se o core lançar (ex.: ConnectionLostError).
             dataService.call = originalCall;
-            if (fechou) {
-                // Se o core não chegou a recarregar (ou o reload foi
-                // cancelado), navega direto para a home.
-                window.location.href = "/odoo";
-            }
         }
     },
 

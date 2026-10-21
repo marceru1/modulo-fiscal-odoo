@@ -635,6 +635,10 @@ class PosSession(models.Model):
         }
 
         # === USUÁRIO E DATAS ===
+        # stop_at só é gravado quando o backend conclui o fechamento. Na
+        # impressão feita pelo popup (antes do close_session_from_ui) ele
+        # ainda está vazio: o fallback usa "agora" (UTC) e o recibo mostra o
+        # instante da impressão, não uma data de fechamento persistida.
         identificacao = {
             'usuario': self.user_id.name or '',
             'data_abertura': self._fmt_manaus(self.start_at),
