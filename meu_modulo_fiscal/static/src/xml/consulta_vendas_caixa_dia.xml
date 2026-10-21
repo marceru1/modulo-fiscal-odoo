@@ -7,12 +7,12 @@
                 <div class="mb-3">
                     <h2 class="mb-1">Vendas por caixa e dia</h2>
                     <p class="text-muted mb-0">
-                        Selecione o caixa e o dia para consultar as vendas.
+                        Selecione o caixa e marque um ou mais dias para consultar as vendas.
                     </p>
                 </div>
 
-                <div class="d-flex flex-wrap gap-3 align-items-end mb-3">
-                    <div>
+                <div class="row g-3 mb-3">
+                    <div class="col-12 col-md-4">
                         <label for="consulta_vendas_caixa" class="form-label">Caixa</label>
                         <select id="consulta_vendas_caixa"
                                 class="form-select"
@@ -25,19 +25,8 @@
                                         t-esc="caixa.name"/>
                             </t>
                         </select>
-                    </div>
-                    <div>
-                        <label for="consulta_vendas_data" class="form-label">Data</label>
-                        <input id="consulta_vendas_data"
-                               type="date"
-                               class="form-control"
-                               t-att-disabled="!state.configId || state.carregando"
-                               t-att-value="state.data"
-                               t-on-change="onDataChange"/>
-                    </div>
-                    <div>
                         <button type="button"
-                                class="btn btn-primary"
+                                class="btn btn-primary mt-3"
                                 t-att-disabled="!podeConsultar"
                                 t-on-click="consultar">
                             <t t-if="state.carregando">
@@ -46,6 +35,81 @@
                             </t>
                             <t t-else="">Consultar</t>
                         </button>
+                    </div>
+
+                    <div class="col-12 col-md-5">
+                        <label class="form-label">Dias</label>
+                        <div class="card">
+                            <div class="card-body p-2">
+                                <div class="d-flex justify-content-between align-items-center mb-2">
+                                    <button type="button"
+                                            class="btn btn-sm btn-light"
+                                            t-att-disabled="!state.configId || state.carregando"
+                                            t-on-click="() => this.mudarMes(-1)"
+                                            aria-label="Mês anterior">
+                                        <i class="fa fa-chevron-left"/>
+                                    </button>
+                                    <strong t-esc="rotuloMesVisivel"/>
+                                    <button type="button"
+                                            class="btn btn-sm btn-light"
+                                            t-att-disabled="!state.configId || state.carregando"
+                                            t-on-click="() => this.mudarMes(1)"
+                                            aria-label="Próximo mês">
+                                        <i class="fa fa-chevron-right"/>
+                                    </button>
+                                </div>
+                                <table class="table table-sm table-borderless text-center mb-0">
+                                    <thead>
+                                        <tr class="text-muted small">
+                                            <th scope="col">D</th>
+                                            <th scope="col">S</th>
+                                            <th scope="col">T</th>
+                                            <th scope="col">Q</th>
+                                            <th scope="col">Q</th>
+                                            <th scope="col">S</th>
+                                            <th scope="col">S</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        <tr t-foreach="linhasDoMes" t-as="semana" t-key="semana_index">
+                                            <td t-foreach="semana" t-as="celula" t-key="celula_index" class="p-0 py-1 px-1">
+                                                <t t-if="celula">
+                                                    <button type="button"
+                                                            t-attf-class="btn btn-sm w-100 py-1 #{celula.marcado ? 'btn-primary' : 'btn-light border'}"
+                                                            t-att-disabled="!state.configId || state.carregando"
+                                                            t-on-click="() => this.toggleDia(celula.data)"
+                                                            t-esc="celula.dia"/>
+                                                </t>
+                                            </td>
+                                        </tr>
+                                    </tbody>
+                                </table>
+
+                                <div t-if="state.dias.length" class="d-flex flex-wrap align-items-center gap-1 mt-2">
+                                    <span t-foreach="state.dias"
+                                          t-as="dia"
+                                          t-key="dia"
+                                          class="badge rounded-pill bg-secondary d-inline-flex align-items-center">
+                                        <t t-esc="formatarData(dia)"/>
+                                        <button type="button"
+                                                class="btn btn-sm p-0 ms-1 text-white"
+                                                t-att-disabled="state.carregando"
+                                                t-on-click.stop="() => this.toggleDia(dia)"
+                                                aria-label="Remover dia">
+                                            <i class="fa fa-times"/>
+                                        </button>
+                                    </span>
+                                    <button type="button"
+                                            class="btn btn-sm btn-link"
+                                            t-att-disabled="state.carregando"
+                                            t-on-click="limparDias">Limpar</button>
+                                </div>
+
+                                <div t-if="state.aviso" class="alert alert-warning py-1 px-2 mb-0 mt-2 small" role="alert">
+                                    <t t-esc="state.aviso"/>
+                                </div>
+                            </div>
+                        </div>
                     </div>
                 </div>
 
@@ -64,11 +128,11 @@
                 <t t-if="state.resultado">
                     <h4 class="mt-2">
                         <t t-esc="state.resultado.caixa.nome"/> —
-                        <t t-esc="formatarData(state.resultado.data)"/>
+                        <t t-esc="formatarDias(state.resultado.datas)"/>
                     </h4>
 
                     <div t-if="!state.resultado.vendas.length" class="alert alert-warning">
-                        Nenhuma venda encontrada para este caixa nesta data
+                        Nenhuma venda encontrada para este caixa nos dias selecionados
                     </div>
 
                     <div t-else="" class="table-responsive">
@@ -105,10 +169,10 @@
                     <div class="d-flex flex-wrap justify-content-between gap-2 border-top pt-2">
                         <span>
                             <strong t-esc="state.resultado.resumo.quantidade"/>
-                            cupom(ns)
+                            <t t-esc="rotuloCupons(state.resultado.resumo.quantidade)"/>
                             <t t-if="state.resultado.resumo.quantidade_devolucoes">
                                 · <t t-esc="state.resultado.resumo.quantidade_devolucoes"/>
-                                devolução(ões)
+                                <t t-esc="rotuloDevolucoes(state.resultado.resumo.quantidade_devolucoes)"/>
                             </t>
                         </span>
                         <span class="text-end">
@@ -116,7 +180,7 @@
                                t-as="total"
                                t-key="total.currency_id">
                                 <span class="ms-3">
-                                    Total<t t-if="state.resultado.resumo.totais.length > 1">
+                                    Total do conjunto<t t-if="state.resultado.resumo.totais.length > 1">
                                         (<t t-esc="total.moeda"/>)
                                     </t>:
                                     <strong t-esc="formatarValor(total.total, total.currency_id)"/>

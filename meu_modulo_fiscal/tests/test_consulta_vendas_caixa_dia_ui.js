@@ -8,11 +8,14 @@
  *   - action client cujo tag casa com o registry da tela
  *   - menu em Ponto de Venda → Relatórios, sem grupo restrito
  *   - dropdown lê pos.config em runtime (nada hardcoded de Caixa 1/2/3/Biju)
- *   - estados: data desabilitada sem caixa, Consultar bloqueado, loading sem
- *     consulta dupla, erro != vazio, resultado velho limpo ao trocar filtros
+ *   - estados: calendário desabilitado sem caixa, Consultar bloqueado, loading
+ *     sem consulta dupla, erro != vazio, resultado velho limpo ao trocar filtros
+ *   - calendário próprio de multisseleção (dias avulsos): grid do mês, toggle,
+ *     chips removíveis, Limpar, navegação de mês e limite de 31 dias
  *   - detalhe da venda abre read-only (create/edit/delete: false)
  *   - manifest: tela no web.assets_backend, NUNCA no bundle do POS
- *   - comportamento dos helpers puros (podeConsultar/formatarData/mensagemErro)
+ *   - comportamento dos helpers puros (podeConsultar/formatarDias/celulasDoMes
+ *     /podeMarcarDia/formatarData/mensagemErro)
  *
  * Rodar: node meu_modulo_fiscal/tests/test_consulta_vendas_caixa_dia_ui.js
  */
@@ -132,8 +135,8 @@ function extractBody(src, signature) {
 // ── 5: chamada do método server-side ───────────────────────────────────────
 {
     assert(
-        /orm\.call\(\s*"pos\.order",\s*"get_vendas_caixa_dia",\s*\[this\.state\.configId,\s*this\.state\.data\]/.test(js),
-        "deve chamar pos.order.get_vendas_caixa_dia com caixa e data"
+        /orm\.call\(\s*"pos\.order",\s*"get_vendas_caixa_dia",\s*\[this\.state\.configId,\s*this\.state\.dias\]/.test(js),
+        "deve chamar pos.order.get_vendas_caixa_dia com caixa e lista de dias"
     );
     console.log("✓ 5: chama o método server-side do ticket 01");
 }
@@ -142,30 +145,35 @@ function extractBody(src, signature) {
 {
     // Abertura: orientação e nenhuma consulta automática.
     assert(
-        (js + xml).includes("Selecione um caixa e uma data para consultar as vendas"),
+        (js + xml).includes("Selecione um caixa e ao menos um dia para consultar as vendas"),
         "mensagem inicial"
     );
     assert(!/onWillStart\([^)]*consultar/.test(js), "não consultar ao abrir");
 
-    // Caixa selecionado habilita a data.
-    assert(/t-att-disabled="!state\.configId \|\| state\.carregando"/.test(xml), "data desabilitada sem caixa");
+    // Caixa selecionado habilita o calendário.
+    assert(/t-att-disabled="!state\.configId \|\| state\.carregando"/.test(xml),
+        "calendário desabilitado sem caixa");
 
-    // Consultar habilita só com caixa + data e nunca durante loading.
+    // Consultar habilita só com caixa + ao menos um dia e nunca durante loading.
     assert(/get podeConsultar\(\)/.test(js), "getter podeConsultar");
-    assert(/!\s*this\.state\.carregando/.test(extractBody(js, "get podeConsultar()")), "loading impede consulta");
+    const podeConsultarBody = extractBody(js, "get podeConsultar()");
+    assert(/dias\.length/.test(podeConsultarBody), "Consultar exige ao menos um dia");
+    assert(/!\s*this\.state\.carregando/.test(podeConsultarBody), "loading impede consulta");
 
     // Loading visível.
     assert(xml.includes("Consultando..."), "indicador de carregamento");
 
     // Erro != vazio.
     assert(/state\.erro = this\.mensagemErro\(error\)/.test(js), "erro tratado à parte");
-    assert(xml.includes("Nenhuma venda encontrada para este caixa nesta data"), "mensagem de dia vazio");
+    assert(xml.includes("Nenhuma venda encontrada para este caixa nos dias selecionados"),
+        "mensagem de dias sem vendas");
 
     // Trocar filtro limpa o resultado velho.
     const limpar = extractBody(js, "alterouFiltros()");
     assert(/this\.state\.resultado = null/.test(limpar), "trocar filtro limpa resultado");
     assert(/onConfigChange[\s\S]*alterouFiltros/.test(js), "mudar caixa limpa resultado");
-    assert(/onDataChange[\s\S]*alterouFiltros/.test(js), "mudar data limpa resultado");
+    assert(/toggleDia\(data\)[\s\S]*alterouFiltros/.test(js), "marcar/desmarcar dia limpa resultado");
+    assert(/limparDias\(\)[\s\S]*alterouFiltros/.test(js), "limpar dias limpa resultado");
     console.log("✓ 6: estados da tela cobertos");
 }
 
@@ -211,15 +219,36 @@ function extractBody(src, signature) {
 {
     const podeConsultar = (state) =>
         new Function(extractBody(js, "get podeConsultar()")).call({ state });
-    assert.strictEqual(podeConsultar({ configId: false, data: "", carregando: false }), false);
-    assert.strictEqual(podeConsultar({ configId: 1, data: "", carregando: false }), false);
-    assert.strictEqual(podeConsultar({ configId: false, data: "2026-10-20", carregando: false }), false);
-    assert.strictEqual(podeConsultar({ configId: 1, data: "2026-10-20", carregando: true }), false);
-    assert.strictEqual(podeConsultar({ configId: 1, data: "2026-10-20", carregando: false }), true);
+    assert.strictEqual(podeConsultar({ configId: false, dias: [], carregando: false }), false);
+    assert.strictEqual(podeConsultar({ configId: 1, dias: [], carregando: false }), false);
+    assert.strictEqual(podeConsultar({ configId: false, dias: ["2026-10-20"], carregando: false }), false);
+    assert.strictEqual(podeConsultar({ configId: 1, dias: ["2026-10-20"], carregando: true }), false);
+    assert.strictEqual(podeConsultar({ configId: 1, dias: ["2026-10-20"], carregando: false }), true);
+    assert.strictEqual(
+        podeConsultar({ configId: 1, dias: ["2026-10-20", "2026-10-24"], carregando: false }),
+        true
+    );
 
-    const formatarData = new Function("data", extractBody(js, "formatarData(data)"));
-    assert.strictEqual(formatarData("2026-10-20"), "20/10/2026");
-    assert.strictEqual(formatarData(""), "");
+    const comp = {
+        formatarData: new Function("data", extractBody(js, "formatarData(data)")),
+        listar: new Function("itens", extractBody(js, "listar(itens)")),
+    };
+    assert.strictEqual(comp.formatarData("2026-10-20"), "20/10/2026");
+    assert.strictEqual(comp.formatarData(""), "");
+
+    const formatarDias = new Function(
+        "datas", extractBody(js, "formatarDias(datas)")
+    ).bind(comp);
+    assert.strictEqual(formatarDias([]), "");
+    assert.strictEqual(formatarDias(["2026-10-20"]), "20/10/2026");
+    assert.strictEqual(
+        formatarDias(["2026-10-24", "2026-10-15", "2026-10-20"]),
+        "15, 20 e 24/10/2026"
+    );
+    assert.strictEqual(
+        formatarDias(["2026-11-05", "2026-10-20"]),
+        "20/10/2026 e 05/11/2026"
+    );
 
     const mensagemErro = new Function(
         "error", "_t", extractBody(js, "mensagemErro(error)")
@@ -235,6 +264,61 @@ function extractBody(src, signature) {
         "Não foi possível consultar as vendas."
     );
     console.log("✓ 11: helpers puros com comportamento correto");
+}
+
+// ── 12: calendário próprio de multisseleção (dias avulsos) ────────────────
+{
+    // O <input type="date"> de um dia só saiu de cena.
+    assert(!/<input[^>]*type="date"/.test(xml), "sem input type=date (multisseleção)");
+
+    // Grid do mês com cada dia clicável (toggle) e dia marcado destacado.
+    assert(/t-foreach="linhasDoMes"/.test(xml), "grid do mês renderizado");
+    assert(/t-on-click="\(\) => this\.toggleDia\(celula\.data\)"/.test(xml), "cada dia é clicável");
+    assert(/celula\.marcado/.test(xml), "dia marcado destacado");
+    assert(/mudarMes\(-1\)/.test(xml) && /mudarMes\(1\)/.test(xml), "navegação de mês");
+
+    // Chips dos dias marcados removíveis + Limpar.
+    assert(/t-foreach="state\.dias"/.test(xml), "chips dos dias marcados");
+    assert(/formatarData\(dia\)/.test(xml), "chip mostra o dia");
+    assert(/toggleDia\(dia\)/.test(xml), "chip removível individualmente");
+    assert(/t-on-click="limparDias"/.test(xml), "botão Limpar");
+    assert(xml.includes(">Limpar<"), "rótulo Limpar");
+
+    // Limite de 31 dias na UI, com mensagem.
+    assert(/const LIMITE_DIAS = 31/.test(js), "limite de 31 dias no cliente");
+    assert(js.includes("Selecione no máximo 31 dias por consulta."), "mensagem do limite");
+    assert(/state\.aviso/.test(xml), "aviso do limite visível na tela");
+
+    // Cálculo puro do grid: alinhamento, marcação e linha final completa.
+    const celulasDoMes = new Function(
+        "ano", "mes", "diasMarcados", extractBody(js, "celulasDoMes(ano, mes, diasMarcados)")
+    );
+    const outubro = celulasDoMes(2026, 10, ["2026-10-20"]);
+    assert.strictEqual(outubro.length % 7, 0, "grid fecha em semanas completas");
+    // 01/10/2026 é quinta-feira → 4 células vazias antes do dia 1.
+    assert.deepStrictEqual(outubro.slice(0, 4), [null, null, null, null], "alinhamento do 1º dia");
+    assert.strictEqual(outubro[4].dia, 1);
+    assert.strictEqual(outubro[4].data, "2026-10-01");
+    assert.strictEqual(outubro[4].marcado, false);
+    const dia20 = outubro.find((celula) => celula && celula.data === "2026-10-20");
+    assert.strictEqual(dia20.marcado, true, "dia marcado no grid");
+    assert.strictEqual(celulasDoMes(2026, 10, []).filter(Boolean).length, 31);
+
+    const corpoPodeMarcarDia = extractBody(js, "podeMarcarDia(diasMarcados, data)");
+    const podeMarcarDia = (diasMarcados, data) =>
+        new Function("diasMarcados", "data", "LIMITE_DIAS", corpoPodeMarcarDia)(
+            diasMarcados,
+            data,
+            31
+        );
+    const trintaEUmDias = Array.from(
+        { length: 31 },
+        (_, indice) => `2026-10-${String(indice + 1).padStart(2, "0")}`
+    );
+    assert.strictEqual(podeMarcarDia(trintaEUmDias, "2026-11-01"), false, "32º dia impedido");
+    assert.strictEqual(podeMarcarDia(trintaEUmDias, "2026-10-01"), true, "dia já marcado pode desmarcar");
+    assert.strictEqual(podeMarcarDia(trintaEUmDias.slice(1), "2026-11-01"), true, "31º dia permitido");
+    console.log("✓ 12: calendário multisseleção com limite de 31 dias");
 }
 
 console.log("\nTodos os contratos da tela de consulta passaram.");
