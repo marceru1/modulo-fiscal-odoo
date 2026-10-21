@@ -1,15 +1,19 @@
+from datetime import date, timedelta
+
 from odoo.exceptions import AccessError, UserError
 from odoo.tests.common import TransactionCase
 
 TZ = "America/Manaus"
+DIA_PADRAO = "2026-10-20"
 
 
 class TestConsultaVendasCaixaDia(TransactionCase):
     """Contrato do método pos.order.get_vendas_caixa_dia (ticket 01).
 
     Fonte dos dados: pos.order direto (uma linha por cupom), não
-    report.pos.order. A janela do dia é interpretada no fuso do usuário
-    e convertida para UTC: [00:00 do dia, 00:00 do dia seguinte).
+    report.pos.order. Cada dia marcado é uma janela interpretada no fuso do
+    usuário e convertida para UTC: [00:00 do dia, 00:00 do dia seguinte),
+    e as janelas dos dias avulsos são unidas por OU (DEC-008).
     """
 
     @classmethod
@@ -41,12 +45,14 @@ class TestConsultaVendasCaixaDia(TransactionCase):
             "amount_return": 0.0,
         })
 
-    def _consultar(self, data="2026-10-20", config_id=None):
+    def _consultar(self, datas=None, config_id=None):
         config_id = self.caixa.id if config_id is None else config_id
+        if datas is None:
+            datas = [DIA_PADRAO]
         return (
             self.env["pos.order"]
             .with_context(tz=TZ)
-            .get_vendas_caixa_dia(config_id, data)
+            .get_vendas_caixa_dia(config_id, datas)
         )
 
     # ── Valor e granularidade ──────────────────────────────────────────────
@@ -100,7 +106,7 @@ class TestConsultaVendasCaixaDia(TransactionCase):
         depois = self._criar_pedido("2026-10-21 04:00:00")  # 21/10 00:00 local
         antes = self._criar_pedido("2026-10-20 03:59:59")  # 19/10 23:59:59 local
 
-        resultado = self._consultar("2026-10-20")
+        resultado = self._consultar(["2026-10-20"])
         ids = [venda["id"] for venda in resultado["vendas"]]
 
         self.assertEqual(ids, [dentro.id])
@@ -171,7 +177,7 @@ class TestConsultaVendasCaixaDia(TransactionCase):
     def test_dia_sem_vendas(self):
         self._criar_pedido("2026-10-21 12:00:00")
 
-        resultado = self._consultar("2026-10-20")
+        resultado = self._consultar(["2026-10-20"])
 
         self.assertEqual(resultado["vendas"], [])
         self.assertEqual(resultado["resumo"]["quantidade"], 0)
@@ -203,7 +209,7 @@ class TestConsultaVendasCaixaDia(TransactionCase):
         with self.assertRaises(AccessError):
             self.env["pos.order"].with_user(usuario).with_context(
                 tz=TZ
-            ).get_vendas_caixa_dia(self.caixa.id, "2026-10-20")
+            ).get_vendas_caixa_dia(self.caixa.id, ["2026-10-20"])
 
     # ── Entradas inválidas ─────────────────────────────────────────────────
     def test_caixa_invalido_gera_erro(self):
@@ -222,4 +228,97 @@ class TestConsultaVendasCaixaDia(TransactionCase):
 
     def test_data_invalida_gera_erro(self):
         with self.assertRaises(UserError):
-            self._consultar("20/10/2026")
+            self._consultar(["20/10/2026"])
+
+    # ── Dias avulsos (DEC-008) ─────────────────────────────────────────────
+    def test_uniao_de_dias_com_dia_vazio_no_meio(self):
+        """Dias avulsos são unidos por OU: um dia marcado sem vendas no meio
+        do conjunto não omite nem duplica os demais dias."""
+        dia_19 = self._criar_pedido("2026-10-19 12:00:00", valor=10.0)
+        dia_21 = self._criar_pedido("2026-10-21 12:00:00", valor=25.0)
+        dia_20 = self._criar_pedido("2026-10-20 12:00:00", valor=99.0)
+
+        resultado = self._consultar(["2026-10-19", "2026-10-21", "2026-10-20"])
+        ids = [venda["id"] for venda in resultado["vendas"]]
+
+        # 20/10 também foi marcado neste caso; o teste do "buraco" é o de baixo.
+        self.assertEqual(sorted(ids), sorted([dia_19.id, dia_20.id, dia_21.id]))
+
+        buraco = self._consultar(["2026-10-19", "2026-10-21"])
+        ids_buraco = [venda["id"] for venda in buraco["vendas"]]
+        self.assertEqual(sorted(ids_buraco), sorted([dia_19.id, dia_21.id]))
+        self.assertEqual(buraco["resumo"]["quantidade"], 2)
+        self.assertEqual(buraco["datas"], ["2026-10-19", "2026-10-21"])
+
+    def test_meia_noite_em_dia_especifico_do_conjunto(self):
+        """A janela é fechada por dia: 00:00 de um dia marcado entra nele e
+        não vaza para o dia anterior — mesmo quando o dia anterior também
+        está marcado e o dia do meio não está."""
+        vespera_do_19 = self._criar_pedido("2026-10-19 23:59:59")  # 19/10 19:59:59 local
+        meia_noite_20 = self._criar_pedido("2026-10-20 04:00:00")  # 20/10 00:00 local
+        dentro_do_19 = self._criar_pedido("2026-10-20 03:59:59")   # 19/10 23:59:59 local
+        meia_noite_21 = self._criar_pedido("2026-10-21 04:00:00")  # 21/10 00:00 local
+
+        resultado = self._consultar(["2026-10-19", "2026-10-21"])
+        ids = [venda["id"] for venda in resultado["vendas"]]
+
+        self.assertIn(vespera_do_19.id, ids)      # 19/10 19:59 local
+        self.assertIn(dentro_do_19.id, ids)       # 19/10 23:59:59 local
+        self.assertIn(meia_noite_21.id, ids)      # 21/10 00:00 local
+        self.assertNotIn(meia_noite_20.id, ids)   # 20/10 não foi marcado
+
+    def test_mais_de_31_dias_gera_erro_sem_resultado_parcial(self):
+        """32 dias marcados estouram a guarda: erro claro, sem devolver o
+        subconjunto que já teria sido encontrado."""
+        self._criar_pedido("2026-10-01 12:00:00")
+        dias = [
+            (date(2026, 10, 1) + timedelta(days=indice)).isoformat()
+            for indice in range(32)
+        ]
+
+        with self.assertRaises(UserError):
+            self._consultar(dias)
+
+    def test_31_dias_e_o_limite_aceito(self):
+        alvo = self._criar_pedido("2026-10-31 12:00:00")
+        dias = [
+            (date(2026, 10, 1) + timedelta(days=indice)).isoformat()
+            for indice in range(31)
+        ]
+
+        resultado = self._consultar(dias)
+
+        self.assertEqual([venda["id"] for venda in resultado["vendas"]], [alvo.id])
+        self.assertEqual(resultado["resumo"]["quantidade"], 1)
+
+    def test_dias_repetidos_nao_duplicam_vendas(self):
+        pedido = self._criar_pedido("2026-10-20 12:00:00")
+
+        resultado = self._consultar(["2026-10-20", "2026-10-20"])
+
+        self.assertEqual([venda["id"] for venda in resultado["vendas"]], [pedido.id])
+        self.assertEqual(resultado["resumo"]["quantidade"], 1)
+        self.assertEqual(resultado["datas"], ["2026-10-20"])
+
+    def test_lista_de_dias_vazia_gera_erro(self):
+        with self.assertRaises(UserError):
+            self._consultar([])
+
+    def test_resumo_por_moeda_do_conjunto_nao_soma_moedas_diferentes(self):
+        """O resumo agrupa por moeda — o total de uma moeda nunca é somado
+        ao de outra. Um pos.config tem uma moeda só (related), então o
+        contrato é exercitado direto no agregador."""
+        brl = self.env.ref("base.BRL")
+        usd = self.env.ref("base.USD")
+        vendas = [
+            {"currency_id": brl.id, "moeda": brl.name, "valor": 40.0},
+            {"currency_id": usd.id, "moeda": usd.name, "valor": 10.0},
+            {"currency_id": brl.id, "moeda": brl.name, "valor": -5.0},
+        ]
+
+        totais = self.env["pos.order"]._totais_por_moeda(vendas)
+        por_moeda = {total["currency_id"]: total["total"] for total in totais}
+
+        self.assertEqual(por_moeda[brl.id], 35.0)
+        self.assertEqual(por_moeda[usd.id], 10.0)
+        self.assertEqual(len(totais), 2)
