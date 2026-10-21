@@ -66,7 +66,7 @@ export class ConsultaVendasCaixaDia extends Component {
         this.action = useService("action");
         this.state = useState({
             caixas: [],
-            configId: selecaoAtual?.configId ?? false,
+            configIds: [...(selecaoAtual?.configIds ?? [])],
             dias: [...(selecaoAtual?.dias ?? [])],
             mesVisivel: mesInicial(selecaoAtual?.dias),
             carregando: false,
@@ -85,20 +85,19 @@ export class ConsultaVendasCaixaDia extends Component {
                 ["name"],
                 { order: "name" }
             );
-            // A seleção anterior pode apontar para caixa removido ou sem acesso.
-            const selecionado = this.state.caixas.some(
-                (caixa) => caixa.id === this.state.configId
+            // A seleção anterior pode apontar para caixas removidos ou sem acesso.
+            const disponiveis = this.state.caixas.map((caixa) => caixa.id);
+            this.state.configIds = this.state.configIds.filter((id) =>
+                disponiveis.includes(id)
             );
-            if (!selecionado) {
-                this.state.configId = false;
-            }
         } catch (error) {
             this.state.erro = this.mensagemErro(error);
         }
     }
 
     get podeConsultar() {
-        return Boolean(this.state.configId && this.state.dias.length) && !this.state.carregando;
+        return Boolean(this.state.configIds.length && this.state.dias.length)
+            && !this.state.carregando;
     }
 
     get rotuloMesVisivel() {
@@ -119,7 +118,7 @@ export class ConsultaVendasCaixaDia extends Component {
     }
 
     get mensagemInicial() {
-        if (!this.state.configId) {
+        if (!this.state.configIds.length) {
             return _t("Selecione um caixa e ao menos um dia para consultar as vendas");
         }
         if (!this.state.dias.length) {
@@ -128,8 +127,16 @@ export class ConsultaVendasCaixaDia extends Component {
         return _t("Clique em Consultar para carregar as vendas dos dias selecionados");
     }
 
-    onConfigChange(ev) {
-        this.state.configId = ev.target.value ? Number(ev.target.value) : false;
+    toggleCaixa(caixaId) {
+        if (this.state.carregando) {
+            return;
+        }
+        const indice = this.state.configIds.indexOf(caixaId);
+        if (indice >= 0) {
+            this.state.configIds.splice(indice, 1);
+        } else {
+            this.state.configIds.push(caixaId);
+        }
         this.alterouFiltros();
     }
 
@@ -143,7 +150,7 @@ export class ConsultaVendasCaixaDia extends Component {
     }
 
     toggleDia(data) {
-        if (!this.state.configId || this.state.carregando) {
+        if (!this.state.configIds.length || this.state.carregando) {
             return;
         }
         const indice = this.state.dias.indexOf(data);
@@ -173,7 +180,10 @@ export class ConsultaVendasCaixaDia extends Component {
         // Resultado antigo nunca fica visível como se fosse da nova seleção.
         this.state.resultado = null;
         this.state.erro = "";
-        selecaoAtual = { configId: this.state.configId, dias: [...this.state.dias] };
+        selecaoAtual = {
+            configIds: [...this.state.configIds],
+            dias: [...this.state.dias],
+        };
     }
 
     async consultar() {
@@ -187,9 +197,12 @@ export class ConsultaVendasCaixaDia extends Component {
             this.state.resultado = await this.orm.call(
                 "pos.order",
                 "get_vendas_caixa_dia",
-                [this.state.configId, this.state.dias]
+                [this.state.configIds, this.state.dias]
             );
-            selecaoAtual = { configId: this.state.configId, dias: [...this.state.dias] };
+            selecaoAtual = {
+                configIds: [...this.state.configIds],
+                dias: [...this.state.dias],
+            };
         } catch (error) {
             // Mantém a seleção para o usuário tentar de novo.
             this.state.erro = this.mensagemErro(error);
@@ -247,6 +260,11 @@ export class ConsultaVendasCaixaDia extends Component {
             return `${this.listar(partes.map((parte) => parte[2]))}/${mes}/${ano}`;
         }
         return this.listar(ordenadas.map((data) => this.formatarData(data)));
+    }
+
+    /** Caixas consultados no cabeçalho: "Caixa 2 + Biju". */
+    formatarCaixas(caixas) {
+        return (caixas || []).map((caixa) => caixa.nome).join(" + ");
     }
 
     rotuloCupons(quantidade) {

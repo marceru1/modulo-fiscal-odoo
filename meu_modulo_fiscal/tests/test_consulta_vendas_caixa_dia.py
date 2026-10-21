@@ -52,6 +52,18 @@ class TestConsultaVendasCaixaDia(TransactionCase):
             "amount": valor,
         })
 
+    def _novo_caixa(self, nome):
+        caixa = self.env["pos.config"].create({
+            "name": nome,
+            "company_id": self.company.id,
+        })
+        sessao = self.env["pos.session"].create({
+            "config_id": caixa.id,
+            "user_id": self.env.uid,
+        })
+        sessao.action_pos_session_open()
+        return caixa, sessao
+
     def _criar_pedido(self, date_order, valor=100.0, state="paid",
                       sessao=None, nome=None):
         sessao = sessao or self.sessao
@@ -66,14 +78,17 @@ class TestConsultaVendasCaixaDia(TransactionCase):
             "amount_return": 0.0,
         })
 
-    def _consultar(self, datas=None, config_id=None):
-        config_id = self.caixa.id if config_id is None else config_id
+    def _consultar(self, datas=None, config_ids=None):
+        if config_ids is None:
+            config_ids = [self.caixa.id]
+        if isinstance(config_ids, int):
+            config_ids = [config_ids]
         if datas is None:
             datas = [DIA_PADRAO]
         return (
             self.env["pos.order"]
             .with_context(tz=TZ)
-            .get_vendas_caixa_dia(config_id, datas)
+            .get_vendas_caixa_dia(config_ids, datas)
         )
 
     # ── Valor e granularidade ──────────────────────────────────────────────
@@ -230,12 +245,12 @@ class TestConsultaVendasCaixaDia(TransactionCase):
         with self.assertRaises(AccessError):
             self.env["pos.order"].with_user(usuario).with_context(
                 tz=TZ
-            ).get_vendas_caixa_dia(self.caixa.id, ["2026-10-20"])
+            ).get_vendas_caixa_dia([self.caixa.id], ["2026-10-20"])
 
     # ── Entradas inválidas ─────────────────────────────────────────────────
     def test_caixa_invalido_gera_erro(self):
         with self.assertRaises(UserError):
-            self._consultar(config_id=0)
+            self._consultar(config_ids=0)
 
     def test_caixa_inativo_nao_e_encontrado(self):
         caixa_inativo = self.env["pos.config"].create({
@@ -245,7 +260,7 @@ class TestConsultaVendasCaixaDia(TransactionCase):
         })
 
         with self.assertRaises(UserError):
-            self._consultar(config_id=caixa_inativo.id)
+            self._consultar(config_ids=[caixa_inativo.id])
 
     def test_data_invalida_gera_erro(self):
         with self.assertRaises(UserError):
@@ -343,6 +358,78 @@ class TestConsultaVendasCaixaDia(TransactionCase):
         self.assertEqual(por_moeda[brl.id], 35.0)
         self.assertEqual(por_moeda[usd.id], 10.0)
         self.assertEqual(len(totais), 2)
+
+    # ── Multi-caixa (DEC-010) ──────────────────────────────────────────────
+    def test_multiplos_caixas_uniao_com_nome_por_linha(self):
+        """Dois caixas marcados: cupons dos dois entram, cada linha com o
+        nome do caixa certo, e o retorno lista os caixas consultados."""
+        caixa_b, sessao_b = self._novo_caixa("Caixa Teste Consulta B")
+        pedido_a = self._criar_pedido("2026-10-20 09:00:00")
+        pedido_b = self._criar_pedido("2026-10-20 10:00:00", sessao=sessao_b)
+
+        resultado = self._consultar(config_ids=[self.caixa.id, caixa_b.id])
+        por_id = {venda["id"]: venda for venda in resultado["vendas"]}
+
+        self.assertEqual(sorted(por_id), sorted([pedido_a.id, pedido_b.id]))
+        self.assertEqual(por_id[pedido_a.id]["caixa"], self.caixa.name)
+        self.assertEqual(por_id[pedido_b.id]["caixa"], caixa_b.name)
+        self.assertEqual(
+            [caixa["nome"] for caixa in resultado["caixas"]],
+            sorted([self.caixa.name, caixa_b.name]),
+        )
+
+    def test_caixa_sem_vendas_entre_caixas_marcados(self):
+        """Caixa marcado sem vendas no dia não vira buraco: os outros caixas
+        continuam completos."""
+        caixa_b, _sessao_b = self._novo_caixa("Caixa Teste Consulta B")
+        caixa_c, sessao_c = self._novo_caixa("Caixa Teste Consulta C")
+        pedido_a = self._criar_pedido("2026-10-20 09:00:00")
+        pedido_c = self._criar_pedido("2026-10-20 11:00:00", sessao=sessao_c)
+
+        resultado = self._consultar(
+            config_ids=[self.caixa.id, caixa_b.id, caixa_c.id]
+        )
+
+        self.assertEqual(
+            sorted(venda["id"] for venda in resultado["vendas"]),
+            sorted([pedido_a.id, pedido_c.id]),
+        )
+        self.assertEqual(resultado["resumo"]["quantidade"], 2)
+        self.assertEqual(len(resultado["caixas"]), 3)
+
+    def test_resumo_atravessa_os_caixas(self):
+        """O resumo é do conjunto: soma os caixas marcados, por moeda."""
+        caixa_b, sessao_b = self._novo_caixa("Caixa Teste Consulta B")
+        self._criar_pedido("2026-10-20 09:00:00", valor=70.0)
+        self._criar_pedido("2026-10-20 10:00:00", valor=30.0, sessao=sessao_b)
+
+        resultado = self._consultar(config_ids=[self.caixa.id, caixa_b.id])
+        moeda = self.caixa.currency_id.id
+        totais = {
+            total["currency_id"]: total["total"]
+            for total in resultado["resumo"]["totais"]
+        }
+
+        self.assertEqual(resultado["resumo"]["quantidade"], 2)
+        self.assertEqual(totais[moeda], 100.0)
+        self.assertEqual(len(resultado["resumo"]["totais"]), 1)
+
+    def test_caixa_repetido_nao_duplica(self):
+        pedido = self._criar_pedido("2026-10-20 09:00:00")
+
+        resultado = self._consultar(
+            config_ids=[self.caixa.id, self.caixa.id, self.caixa.id]
+        )
+
+        self.assertEqual(
+            [venda["id"] for venda in resultado["vendas"]], [pedido.id]
+        )
+        self.assertEqual(len(resultado["caixas"]), 1)
+        self.assertEqual(resultado["resumo"]["quantidade"], 1)
+
+    def test_lista_de_caixas_vazia_gera_erro(self):
+        with self.assertRaises(UserError):
+            self._consultar(config_ids=[])
 
     # ── Formas de pagamento e colunas (DEC-009) ────────────────────────────
     def test_cupom_com_um_metodo_de_pagamento(self):

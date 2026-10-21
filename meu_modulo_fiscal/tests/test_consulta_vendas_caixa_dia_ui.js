@@ -135,8 +135,8 @@ function extractBody(src, signature) {
 // ── 5: chamada do método server-side ───────────────────────────────────────
 {
     assert(
-        /orm\.call\(\s*"pos\.order",\s*"get_vendas_caixa_dia",\s*\[this\.state\.configId,\s*this\.state\.dias\]/.test(js),
-        "deve chamar pos.order.get_vendas_caixa_dia com caixa e lista de dias"
+        /orm\.call\(\s*"pos\.order",\s*"get_vendas_caixa_dia",\s*\[this\.state\.configIds,\s*this\.state\.dias\]/.test(js),
+        "deve chamar pos.order.get_vendas_caixa_dia com lista de caixas e de dias"
     );
     console.log("✓ 5: chama o método server-side do ticket 01");
 }
@@ -150,13 +150,14 @@ function extractBody(src, signature) {
     );
     assert(!/onWillStart\([^)]*consultar/.test(js), "não consultar ao abrir");
 
-    // Caixa selecionado habilita o calendário.
-    assert(/t-att-disabled="!state\.configId \|\| state\.carregando"/.test(xml),
-        "calendário desabilitado sem caixa");
+    // Ao menos um caixa marcado habilita o calendário.
+    assert(/t-att-disabled="!state\.configIds\.length \|\| state\.carregando"/.test(xml),
+        "calendário desabilitado sem caixa marcado");
 
-    // Consultar habilita só com caixa + ao menos um dia e nunca durante loading.
+    // Consultar habilita só com 1+ caixa, 1+ dia e nunca durante loading.
     assert(/get podeConsultar\(\)/.test(js), "getter podeConsultar");
     const podeConsultarBody = extractBody(js, "get podeConsultar()");
+    assert(/configIds\.length/.test(podeConsultarBody), "Consultar exige ao menos um caixa");
     assert(/dias\.length/.test(podeConsultarBody), "Consultar exige ao menos um dia");
     assert(/!\s*this\.state\.carregando/.test(podeConsultarBody), "loading impede consulta");
 
@@ -171,7 +172,7 @@ function extractBody(src, signature) {
     // Trocar filtro limpa o resultado velho.
     const limpar = extractBody(js, "alterouFiltros()");
     assert(/this\.state\.resultado = null/.test(limpar), "trocar filtro limpa resultado");
-    assert(/onConfigChange[\s\S]*alterouFiltros/.test(js), "mudar caixa limpa resultado");
+    assert(/toggleCaixa\(caixaId\)[\s\S]*alterouFiltros/.test(js), "marcar/desmarcar caixa limpa resultado");
     assert(/toggleDia\(data\)[\s\S]*alterouFiltros/.test(js), "marcar/desmarcar dia limpa resultado");
     assert(/limparDias\(\)[\s\S]*alterouFiltros/.test(js), "limpar dias limpa resultado");
     console.log("✓ 6: estados da tela cobertos");
@@ -219,13 +220,13 @@ function extractBody(src, signature) {
 {
     const podeConsultar = (state) =>
         new Function(extractBody(js, "get podeConsultar()")).call({ state });
-    assert.strictEqual(podeConsultar({ configId: false, dias: [], carregando: false }), false);
-    assert.strictEqual(podeConsultar({ configId: 1, dias: [], carregando: false }), false);
-    assert.strictEqual(podeConsultar({ configId: false, dias: ["2026-10-20"], carregando: false }), false);
-    assert.strictEqual(podeConsultar({ configId: 1, dias: ["2026-10-20"], carregando: true }), false);
-    assert.strictEqual(podeConsultar({ configId: 1, dias: ["2026-10-20"], carregando: false }), true);
+    assert.strictEqual(podeConsultar({ configIds: [], dias: [], carregando: false }), false);
+    assert.strictEqual(podeConsultar({ configIds: [1], dias: [], carregando: false }), false);
+    assert.strictEqual(podeConsultar({ configIds: [], dias: ["2026-10-20"], carregando: false }), false);
+    assert.strictEqual(podeConsultar({ configIds: [1], dias: ["2026-10-20"], carregando: true }), false);
+    assert.strictEqual(podeConsultar({ configIds: [1], dias: ["2026-10-20"], carregando: false }), true);
     assert.strictEqual(
-        podeConsultar({ configId: 1, dias: ["2026-10-20", "2026-10-24"], carregando: false }),
+        podeConsultar({ configIds: [1, 2], dias: ["2026-10-20", "2026-10-24"], carregando: false }),
         true
     );
 
@@ -326,12 +327,14 @@ function extractBody(src, signature) {
     const cabecalhos = [...xml.matchAll(/<thead>[\s\S]*?<\/thead>/g)].map((m) => m[0]);
     const cabecalho = cabecalhos.find((bloco) => bloco.includes("Data e hora"));
     assert(cabecalho, "cabeçalho da tabela de resultados");
-    const titulos = [...cabecalho.matchAll(/<th(?:\s[^>]*)?>([\s\S]*?)<\/th>/g)]
+    // Atributos podem conter '>' (ex.: t-if="...length > 1"), então o
+    // casador de tags aceita valores entre quotes.
+    const titulos = [...cabecalho.matchAll(/<th(?:\s+(?:[^>"']|"[^"]*"|'[^']*')*)?>([\s\S]*?)<\/th>/g)]
         .map((casamento) => casamento[1].trim());
     assert.deepStrictEqual(
         titulos,
-        ["Data e hora", "Venda / cupom", "Operador", "Valor total", "Forma de pagamento"],
-        "colunas e ordem da DEC-009"
+        ["Data e hora", "Caixa", "Venda / cupom", "Operador", "Valor total", "Forma de pagamento"],
+        "colunas e ordem da DEC-009 + coluna condicional do Caixa (DEC-010)"
     );
     assert(!/venda\.cliente/.test(xml), "sem coluna Cliente");
     assert(!/venda\.situacao/.test(xml), "sem coluna Situação");
@@ -342,10 +345,44 @@ function extractBody(src, signature) {
     assert(linha, "linha de venda na tabela");
     assert.strictEqual(
         (linha[0].match(/<td/g) || []).length,
-        5,
-        "5 células por linha, casando com o cabeçalho"
+        6,
+        "6 células no template (a do Caixa é condicional)"
     );
-    console.log("✓ 13: colunas Data/hora, Cupom, Operador, Valor, Forma de pagamento");
+    console.log("✓ 13: colunas Data/hora, Caixa (condicional), Cupom, Operador, Valor, Pagamento");
+}
+
+// ── 14: multi-seleção de caixas (DEC-010) ────────────────────────────────
+{
+    // Checkboxes dos pos.config reais, lidos em runtime.
+    assert(/t-foreach="state\.caixas"/.test(xml), "lista de caixas renderizada");
+    assert(/type="checkbox"/.test(xml), "checkboxes no lugar do dropdown");
+    assert(/t-on-change="\(\) => this\.toggleCaixa\(caixa\.id\)"/.test(xml),
+        "marcar/desmarcar cada caixa");
+    assert(/state\.configIds\.includes\(caixa\.id\)/.test(xml), "checkbox reflete a seleção");
+    assert(!/<select/.test(xml), "dropdown de caixa único saiu de cena");
+    assert(/orm\.searchRead\(\s*"pos\.config"/.test(js), "caixas lidos do cadastro (sem hardcode)");
+
+    // Coluna Caixa só com 2+ caixas marcados; com 1 fica só no cabeçalho.
+    assert(/<th scope="col" t-if="state\.resultado\.caixas\.length > 1">Caixa<\/th>/.test(xml),
+        "cabeçalho da coluna Caixa condicional");
+    assert(/<td t-if="state\.resultado\.caixas\.length > 1"/.test(xml),
+        "célula Caixa condicional");
+    assert(/t-esc="venda\.caixa"/.test(xml), "nome do caixa por linha");
+
+    // Cabeçalho do resultado lista os caixas marcados.
+    assert(/formatarCaixas\(state\.resultado\.caixas\)/.test(xml),
+        "cabeçalho lista os caixas consultados");
+
+    const formatarCaixas = new Function(
+        "caixas", extractBody(js, "formatarCaixas(caixas)")
+    );
+    assert.strictEqual(formatarCaixas([]), "");
+    assert.strictEqual(formatarCaixas([{ nome: "Caixa 2" }]), "Caixa 2");
+    assert.strictEqual(
+        formatarCaixas([{ nome: "Caixa 2" }, { nome: "Biju" }]),
+        "Caixa 2 + Biju"
+    );
+    console.log("✓ 14: checkboxes de caixa, coluna condicional e cabeçalho");
 }
 
 console.log("\nTodos os contratos da tela de consulta passaram.");

@@ -20,36 +20,38 @@ class PosOrder(models.Model):
     MAX_DIAS_POR_CONSULTA = 31
 
     @api.model
-    def get_vendas_caixa_dia(self, config_id, datas):
-        """Vendas de um caixa (pos.config) em dias avulsos.
+    def get_vendas_caixa_dia(self, config_ids, datas):
+        """Vendas de um ou mais caixas (pos.config) em dias avulsos.
 
         Cada dia é interpretado no fuso do usuário logado e convertido para
         UTC como [00:00 do dia inclusive, 00:00 do dia seguinte exclusivo),
         com base em date_order — sem corte em 23:59:59. As janelas dos dias
-        marcados são unidas por OU (não é um intervalo contínuo).
+        marcados são unidas por OU (não é um intervalo contínuo) e os caixas
+        marcados por um `config_id IN (...)` (DEC-010).
 
         Usa o search do próprio modelo, sem sudo(): empresa e demais record
         rules do usuário são respeitadas.
 
         Args:
-            config_id (int): id do pos.config (caixa).
+            config_ids (list[int]): ids dos pos.config (caixas) marcados.
             datas (list[str]): dias no formato 'YYYY-MM-DD'. Máximo de 31 dias
                 distintos por consulta.
 
         Returns:
             dict: {
-                'caixa': {'id': int, 'nome': str},
+                'caixas': [{'id': int, 'nome': str}],  # ordenados por nome
                 'datas': [str],  # dias consultados, ordenados e sem repetição
                 'fuso': str,
                 'vendas': [{
                     'id', 'date_order' (UTC), 'cupom', 'pos_reference',
-                    'operador', 'valor', 'currency_id', 'moeda',
+                    'caixa' (nome), 'operador', 'valor', 'currency_id', 'moeda',
                     'formas_pagamento',
                 }],
                 'resumo': {
                     'quantidade': int,
                     'quantidade_devolucoes': int,
-                    # Total por moeda — nunca somar moedas diferentes.
+                    # Total do conjunto (atravessa os caixas), por moeda —
+                    # nunca somar moedas diferentes.
                     'totais': [{'currency_id', 'moeda', 'total'}],
                 },
             }
@@ -58,17 +60,7 @@ class PosOrder(models.Model):
             UserError: caixa inacessível/inexistente, dia inválido, nenhum dia
                 marcado ou mais de 31 dias.
         """
-        try:
-            config_id = int(config_id or 0)
-        except (TypeError, ValueError):
-            config_id = 0
-
-        config = self.env['pos.config'].search(
-            [('id', '=', config_id)], limit=1
-        ) if config_id else self.env['pos.config']
-        if not config:
-            raise UserError(_('Caixa não encontrado ou sem acesso.'))
-
+        configs = self._validar_caixas(config_ids)
         dias = self._validar_dias(datas)
 
         tz_name = (
@@ -92,7 +84,10 @@ class PosOrder(models.Model):
             ])
 
         pedidos = self.search(expression.AND([
-            [('config_id', '=', config.id), ('state', 'in', list(self.ESTADOS_VENDA))],
+            [
+                ('config_id', 'in', configs.ids),
+                ('state', 'in', list(self.ESTADOS_VENDA)),
+            ],
             expression.OR(janelas),
         ]), order='date_order desc, id desc')
 
@@ -109,6 +104,7 @@ class PosOrder(models.Model):
                 'date_order': fields.Datetime.to_string(pedido.date_order),
                 'cupom': pedido.name,
                 'pos_reference': pedido.pos_reference or '',
+                'caixa': pedido.config_id.name or '',
                 'operador': pedido.user_id.name or '',
                 'valor': pedido.amount_total,
                 'currency_id': moeda.id,
@@ -117,7 +113,9 @@ class PosOrder(models.Model):
             })
 
         return {
-            'caixa': {'id': config.id, 'nome': config.name},
+            'caixas': [
+                {'id': config.id, 'nome': config.name} for config in configs
+            ],
             'datas': [dia.isoformat() for dia in dias],
             'fuso': tz_name,
             'vendas': vendas,
@@ -127,6 +125,33 @@ class PosOrder(models.Model):
                 'totais': self._totais_por_moeda(vendas),
             },
         }
+
+    def _validar_caixas(self, config_ids):
+        """Normaliza os caixas marcados: sem repetição e todos acessíveis.
+
+        Um caixa removido ou fora das regras de acesso derruba a consulta
+        inteira (não devolve resultado parcial do conjunto).
+        """
+        if isinstance(config_ids, int):
+            config_ids = [config_ids]
+
+        ids = []
+        for config_id in config_ids or []:
+            try:
+                config_id = int(config_id)
+            except (TypeError, ValueError):
+                continue
+            if config_id and config_id not in ids:
+                ids.append(config_id)
+        if not ids:
+            raise UserError(_('Selecione ao menos um caixa para consultar as vendas.'))
+
+        configs = self.env['pos.config'].search(
+            [('id', 'in', ids)], order='name, id'
+        )
+        if len(configs) != len(ids):
+            raise UserError(_('Caixa não encontrado ou sem acesso.'))
+        return configs
 
     def _validar_dias(self, datas):
         """Normaliza a lista de dias: sem repetição, ordenada, até 31 dias."""
