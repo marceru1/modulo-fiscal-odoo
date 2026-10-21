@@ -13,18 +13,23 @@
 
                 <div class="row g-3 mb-3">
                     <div class="col-12 col-md-4">
-                        <label for="consulta_vendas_caixa" class="form-label">Caixa</label>
-                        <select id="consulta_vendas_caixa"
-                                class="form-select"
-                                t-att-disabled="state.carregando"
-                                t-on-change="onConfigChange">
-                            <option value="">Selecione um caixa</option>
-                            <t t-foreach="state.caixas" t-as="caixa" t-key="caixa.id">
-                                <option t-att-value="caixa.id"
-                                        t-att-selected="caixa.id === state.configId"
-                                        t-esc="caixa.name"/>
-                            </t>
-                        </select>
+                        <label class="form-label">Caixas</label>
+                        <div class="border rounded p-2" style="max-height: 12rem; overflow-y: auto;">
+                            <div t-foreach="state.caixas" t-as="caixa" t-key="caixa.id" class="form-check">
+                                <input class="form-check-input"
+                                       type="checkbox"
+                                       t-att-id="'consulta_caixa_' + caixa.id"
+                                       t-att-checked="state.configIds.includes(caixa.id)"
+                                       t-att-disabled="state.carregando"
+                                       t-on-change="() => this.toggleCaixa(caixa.id)"/>
+                                <label class="form-check-label"
+                                       t-att-for="'consulta_caixa_' + caixa.id"
+                                       t-esc="caixa.name"/>
+                            </div>
+                            <div t-if="!state.caixas.length" class="text-muted small">
+                                Nenhum caixa disponível
+                            </div>
+                        </div>
                         <button type="button"
                                 class="btn btn-primary mt-3"
                                 t-att-disabled="!podeConsultar"
@@ -44,7 +49,7 @@
                                 <div class="d-flex justify-content-between align-items-center mb-2">
                                     <button type="button"
                                             class="btn btn-sm btn-light"
-                                            t-att-disabled="!state.configId || state.carregando"
+                                            t-att-disabled="!state.configIds.length || state.carregando"
                                             t-on-click="() => this.mudarMes(-1)"
                                             aria-label="Mês anterior">
                                         <i class="fa fa-chevron-left"/>
@@ -52,7 +57,7 @@
                                     <strong t-esc="rotuloMesVisivel"/>
                                     <button type="button"
                                             class="btn btn-sm btn-light"
-                                            t-att-disabled="!state.configId || state.carregando"
+                                            t-att-disabled="!state.configIds.length || state.carregando"
                                             t-on-click="() => this.mudarMes(1)"
                                             aria-label="Próximo mês">
                                         <i class="fa fa-chevron-right"/>
@@ -76,7 +81,7 @@
                                                 <t t-if="celula">
                                                     <button type="button"
                                                             t-attf-class="btn btn-sm w-100 py-1 #{celula.marcado ? 'btn-primary' : 'btn-light border'}"
-                                                            t-att-disabled="!state.configId || state.carregando"
+                                                            t-att-disabled="!state.configIds.length || state.carregando"
                                                             t-on-click="() => this.toggleDia(celula.data)"
                                                             t-esc="celula.dia"/>
                                                 </t>
@@ -127,7 +132,7 @@
 
                 <t t-if="state.resultado">
                     <h4 class="mt-2">
-                        <t t-esc="state.resultado.caixa.nome"/> —
+                        <t t-esc="formatarCaixas(state.resultado.caixas)"/> —
                         <t t-esc="formatarDias(state.resultado.datas)"/>
                     </h4>
 
@@ -140,6 +145,7 @@
                             <thead>
                                 <tr>
                                     <th scope="col">Data e hora</th>
+                                    <th scope="col" t-if="state.resultado.caixas.length > 1">Caixa</th>
                                     <th scope="col">Venda / cupom</th>
                                     <th scope="col">Operador</th>
                                     <th scope="col" class="text-end">Valor total</th>
@@ -150,6 +156,8 @@
                                 <tr t-foreach="state.resultado.vendas" t-as="venda" t-key="venda.id">
                                     <td class="text-nowrap"
                                         t-esc="formatarDataHora(venda.date_order)"/>
+                                    <td t-if="state.resultado.caixas.length > 1"
+                                        t-esc="venda.caixa"/>
                                     <td>
                                         <a href="#"
                                            t-on-click.prevent="() => this.abrirVenda(venda)"
