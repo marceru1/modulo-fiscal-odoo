@@ -1,6 +1,7 @@
 from odoo.tests import TransactionCase
 from odoo import fields
 from datetime import datetime
+import pytz
 
 
 class TestRecebimento(TransactionCase):
@@ -297,3 +298,30 @@ class TestRecebimento(TransactionCase):
         self.assertAlmostEqual(dinheiro['calculado'], 200.0, places=2)
         pix = next(s for s in saldo if s['nome'] == 'PIX')
         self.assertAlmostEqual(pix['calculado'], 100.0, places=2)
+
+    # ── Caso 18: horários dos recibos no fuso de Manaus ────────────────────
+    def test_fmt_manaus_converte_utc(self):
+        """Datetime UTC naive (como o Odoo armazena) sai no horário de
+        Manaus (UTC-4, sem horário de verão)."""
+        self.assertEqual(
+            self.pos_session._fmt_manaus(datetime(2026, 1, 10, 15, 30, 0)),
+            '10/01/2026 11:30:00',
+        )
+        self.assertEqual(self.pos_session._fmt_manaus(False), '')
+
+    def test_get_recebimentos_data_no_fuso_do_caixa(self):
+        """A linha de recebimento usa create_date (account.payment.date é
+        Date, sem hora) convertido para o fuso do caixa."""
+        self.pos_session.create_recebimento(self.invoice.id, 30.0)
+        payment = self.env['account.payment'].search(
+            [('memo', 'ilike', 'Recebimento PDV')], limit=1
+        )
+        esperado = (
+            pytz.UTC.localize(payment.create_date)
+            .astimezone(pytz.timezone('America/Manaus'))
+            .strftime('%d/%m/%Y %H:%M')
+        )
+
+        recebimentos, _total, _por_metodo = self.pos_session._get_recebimentos()
+
+        self.assertEqual(recebimentos[0]['data'], esperado)

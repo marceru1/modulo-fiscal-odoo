@@ -1,7 +1,7 @@
 import json
 import requests
+import pytz
 from odoo import models, api, fields
-from datetime import datetime
 import logging
 import os
 
@@ -495,6 +495,31 @@ class PosConfig(models.Model):
 class PosSession(models.Model):
     _inherit = 'pos.session'
 
+    # Fuso do caixa: os recibos (fechamento e comprovante de recebimento)
+    # sempre saem no horario de Manaus, independente do tz do perfil do
+    # operador e do fuso do servidor (Docker roda em UTC).
+    FUSO_CAIXA = 'America/Manaus'
+
+    def _fmt_manaus(self, dt, formato='%d/%m/%Y %H:%M:%S'):
+        """Formata um Datetime UTC no fuso fixo do caixa (America/Manaus).
+
+        O Odoo armazena Datetime em UTC naive; ``strftime`` direto imprime
+        UTC (4h adiantado em Manaus). Aceita datetime naive (tratado como
+        UTC), aware (convertido) ou vazio (devolve '').
+
+        Args:
+            dt (datetime|False): valor a formatar.
+            formato (str): formato ``strftime``.
+
+        Returns:
+            str: data/hora no fuso do caixa, ou '' quando ``dt`` e vazio.
+        """
+        if not dt:
+            return ''
+        if dt.tzinfo is None:
+            dt = pytz.UTC.localize(dt)
+        return dt.astimezone(pytz.timezone(self.FUSO_CAIXA)).strftime(formato)
+
     # ==========================================================
     # HELPER DE FUNCIONÁRIO (I10)
     # Espelha o helper de PosOrder para que create_recebimento possa
@@ -612,8 +637,8 @@ class PosSession(models.Model):
         # === USUÁRIO E DATAS ===
         identificacao = {
             'usuario': self.user_id.name or '',
-            'data_abertura': self.start_at.strftime('%d/%m/%Y %H:%M:%S') if self.start_at else '',
-            'data_fechamento': self.stop_at.strftime('%d/%m/%Y %H:%M:%S') if self.stop_at else datetime.now().strftime('%d/%m/%Y %H:%M:%S'),
+            'data_abertura': self._fmt_manaus(self.start_at),
+            'data_fechamento': self._fmt_manaus(self.stop_at or fields.Datetime.now()),
             'fundo_caixa': self.cash_register_balance_start or 0.0,
         }
 
@@ -723,7 +748,7 @@ class PosSession(models.Model):
             partner = order.partner_id
             vendas_prazo.append({
                 'cliente': partner.name if partner and partner.name != 'Public' else 'CONSUMIDOR',
-                'data': order.date_order.strftime('%d/%m/%Y %H:%M') if order.date_order else '',
+                'data': self._fmt_manaus(order.date_order, '%d/%m/%Y %H:%M') if order.date_order else '',
                 'valor': payment.amount,
             })
         total_vendas_prazo = sum(v['valor'] for v in vendas_prazo)
@@ -841,7 +866,9 @@ class PosSession(models.Model):
             forma_pagamento = payment.x_payment_method_id.name or '—'
             recebimentos.append({
                 'cliente': payment.partner_id.name or '',
-                'data': payment.date.strftime('%d/%m/%Y %H:%M') if payment.date else '',
+                # account.payment.date é Date (sem hora): usamos create_date
+                # para sair a hora real do recebimento, no fuso do caixa.
+                'data': self._fmt_manaus(payment.create_date, '%d/%m/%Y %H:%M'),
                 'valor': payment.amount,
                 'memo': payment.memo or '',
                 'forma_pagamento': forma_pagamento,
@@ -1097,7 +1124,7 @@ class PosSession(models.Model):
                 'fatura': invoice.name,
                 'valor_pago': amount,
                 'forma_pagamento': payment_method_name,
-                'data_hora': fields.Datetime.now().strftime('%d/%m/%Y %H:%M:%S'),
+                'data_hora': self._fmt_manaus(fields.Datetime.now()),
                 'numero_pdv': self.config_id.id,
                 'operador': self.user_id.name,
             },
