@@ -322,3 +322,19 @@ class TestConsultaVendasCaixaDia(TransactionCase):
         self.assertEqual(por_moeda[brl.id], 35.0)
         self.assertEqual(por_moeda[usd.id], 10.0)
         self.assertEqual(len(totais), 2)
+
+    def test_resumo_arredonda_residuo_float_por_moeda(self):
+        """Somar centavos não devolve resíduo de float: o total de cada moeda
+        sai arredondado pela precisão dela (decimal_places do res.currency)."""
+        # A consulta acumula em date_order desc: 10:00 (0.2) antes de 09:00 (0.1).
+        self._criar_pedido("2026-10-20 09:00:00", valor=0.1)
+        self._criar_pedido("2026-10-20 10:00:00", valor=0.2)
+        # O resíduo existe no acumulador float antes de arredondar.
+        self.assertNotEqual(0.2 + 0.1, 0.3)
+
+        resultado = self._consultar()
+        totais = resultado["resumo"]["totais"]
+
+        self.assertEqual(len(totais), 1)
+        self.assertEqual(totais[0]["total"], 0.3)
+        self.assertEqual(resultado["resumo"]["quantidade"], 2)
