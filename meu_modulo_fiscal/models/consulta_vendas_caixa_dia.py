@@ -20,7 +20,7 @@ class PosOrder(models.Model):
     MAX_DIAS_POR_CONSULTA = 31
 
     @api.model
-    def get_vendas_caixa_dia(self, config_ids, datas):
+    def get_vendas_caixa_dia(self, config_ids, datas, metodos_ids=None):
         """Vendas de um ou mais caixas (pos.config) em dias avulsos.
 
         Cada dia é interpretado no fuso do usuário logado e convertido para
@@ -29,6 +29,11 @@ class PosOrder(models.Model):
         marcados são unidas por OU (não é um intervalo contínuo) e os caixas
         marcados por um `config_id IN (...)` (DEC-010).
 
+        O filtro por forma de pagamento (DEC-011) é opcional: vazio não
+        filtra; com métodos marcados entram só os cupons que CONTÊM pagamento
+        de qualquer um deles. Filtrar não recalcula nada — amount_total
+        continua sendo o valor final do cupom.
+
         Usa o search do próprio modelo, sem sudo(): empresa e demais record
         rules do usuário são respeitadas.
 
@@ -36,10 +41,13 @@ class PosOrder(models.Model):
             config_ids (list[int]): ids dos pos.config (caixas) marcados.
             datas (list[str]): dias no formato 'YYYY-MM-DD'. Máximo de 31 dias
                 distintos por consulta.
+            metodos_ids (list[int]): ids de pos.payment.method a filtrar;
+                vazio/None = sem filtro.
 
         Returns:
             dict: {
                 'caixas': [{'id': int, 'nome': str}],  # ordenados por nome
+                'formas': [{'id': int, 'nome': str}],  # filtro aplicado
                 'datas': [str],  # dias consultados, ordenados e sem repetição
                 'fuso': str,
                 'vendas': [{
@@ -57,10 +65,11 @@ class PosOrder(models.Model):
             }
 
         Raises:
-            UserError: caixa inacessível/inexistente, dia inválido, nenhum dia
-                marcado ou mais de 31 dias.
+            UserError: caixa ou método inacessível/inexistente, dia inválido,
+                nenhum dia marcado ou mais de 31 dias.
         """
         configs = self._validar_caixas(config_ids)
+        metodos = self._validar_metodos(metodos_ids)
         dias = self._validar_dias(datas)
 
         tz_name = (
@@ -83,11 +92,20 @@ class PosOrder(models.Model):
                 ('date_order', '<', fim.astimezone(pytz.UTC).replace(tzinfo=None)),
             ])
 
+        criterios = [
+            ('config_id', 'in', configs.ids),
+            ('state', 'in', list(self.ESTADOS_VENDA)),
+        ]
+        if metodos:
+            # Nested domain: fica o cupom que CONTÉM pagamento de qualquer um
+            # dos métodos marcados (um cupom dividido entra uma vez só, porque
+            # o search devolve pedidos, não pagamentos).
+            criterios.append(
+                ('payment_ids.payment_method_id', 'in', metodos.ids)
+            )
+
         pedidos = self.search(expression.AND([
-            [
-                ('config_id', 'in', configs.ids),
-                ('state', 'in', list(self.ESTADOS_VENDA)),
-            ],
+            criterios,
             expression.OR(janelas),
         ]), order='date_order desc, id desc')
 
@@ -115,6 +133,9 @@ class PosOrder(models.Model):
         return {
             'caixas': [
                 {'id': config.id, 'nome': config.name} for config in configs
+            ],
+            'formas': [
+                {'id': metodo.id, 'nome': metodo.name} for metodo in metodos
             ],
             'datas': [dia.isoformat() for dia in dias],
             'fuso': tz_name,
@@ -152,6 +173,36 @@ class PosOrder(models.Model):
         if len(configs) != len(ids):
             raise UserError(_('Caixa não encontrado ou sem acesso.'))
         return configs
+
+    def _validar_metodos(self, metodos_ids):
+        """Normaliza o filtro de formas de pagamento (DEC-011).
+
+        Vazio/None = sem filtro (devolve recordset vazio). Com ids, valida
+        todos: um método removido/arquivado derruba a consulta em vez de
+        silenciosamente deixar de filtrar.
+        """
+        if isinstance(metodos_ids, int):
+            metodos_ids = [metodos_ids]
+
+        ids = []
+        for metodo_id in metodos_ids or []:
+            try:
+                metodo_id = int(metodo_id)
+            except (TypeError, ValueError):
+                continue
+            if metodo_id and metodo_id not in ids:
+                ids.append(metodo_id)
+        if not ids:
+            return self.env['pos.payment.method']
+
+        metodos = self.env['pos.payment.method'].search(
+            [('id', 'in', ids)], order='name, id'
+        )
+        if len(metodos) != len(ids):
+            raise UserError(_(
+                'Forma de pagamento não encontrada ou sem acesso.'
+            ))
+        return metodos
 
     def _validar_dias(self, datas):
         """Normaliza a lista de dias: sem repetição, ordenada, até 31 dias."""

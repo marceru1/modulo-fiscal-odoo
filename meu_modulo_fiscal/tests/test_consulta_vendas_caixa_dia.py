@@ -31,12 +31,17 @@ class TestConsultaVendasCaixaDia(TransactionCase):
             "name": "Cartão",
             "company_id": cls.company.id,
         })
+        cls.metodo_pix = cls.env["pos.payment.method"].create({
+            "name": "PIX",
+            "company_id": cls.company.id,
+        })
         cls.caixa = cls.env["pos.config"].create({
             "name": "Caixa Teste Consulta",
             "company_id": cls.company.id,
             "payment_method_ids": [
                 (4, cls.metodo_dinheiro.id),
                 (4, cls.metodo_cartao.id),
+                (4, cls.metodo_pix.id),
             ],
         })
         cls.sessao = cls.env["pos.session"].create({
@@ -78,7 +83,7 @@ class TestConsultaVendasCaixaDia(TransactionCase):
             "amount_return": 0.0,
         })
 
-    def _consultar(self, datas=None, config_ids=None):
+    def _consultar(self, datas=None, config_ids=None, metodos_ids=None):
         if config_ids is None:
             config_ids = [self.caixa.id]
         if isinstance(config_ids, int):
@@ -88,7 +93,7 @@ class TestConsultaVendasCaixaDia(TransactionCase):
         return (
             self.env["pos.order"]
             .with_context(tz=TZ)
-            .get_vendas_caixa_dia(config_ids, datas)
+            .get_vendas_caixa_dia(config_ids, datas, metodos_ids)
         )
 
     # ── Valor e granularidade ──────────────────────────────────────────────
@@ -430,6 +435,89 @@ class TestConsultaVendasCaixaDia(TransactionCase):
     def test_lista_de_caixas_vazia_gera_erro(self):
         with self.assertRaises(UserError):
             self._consultar(config_ids=[])
+
+    # ── Filtro por forma de pagamento (DEC-011) ────────────────────────────
+    def test_filtro_de_um_metodo(self):
+        """Só entram cupons que contêm pagamento do método filtrado."""
+        com_dinheiro = self._criar_pedido("2026-10-20 09:00:00", valor=50.0)
+        self._pagar(com_dinheiro, self.metodo_dinheiro, 50.0)
+        com_cartao = self._criar_pedido("2026-10-20 10:00:00", valor=70.0)
+        self._pagar(com_cartao, self.metodo_cartao, 70.0)
+
+        resultado = self._consultar(metodos_ids=[self.metodo_dinheiro.id])
+
+        self.assertEqual(
+            [venda["id"] for venda in resultado["vendas"]], [com_dinheiro.id]
+        )
+        self.assertEqual(
+            [forma["nome"] for forma in resultado["formas"]], ["Dinheiro"]
+        )
+        self.assertEqual(resultado["resumo"]["quantidade"], 1)
+
+    def test_filtro_multi_metodos_e_ou_entre_eles(self):
+        """Multi-marcação = qualquer um dos métodos (OU), sem duplicar."""
+        com_dinheiro = self._criar_pedido("2026-10-20 09:00:00")
+        self._pagar(com_dinheiro, self.metodo_dinheiro, 100.0)
+        com_cartao = self._criar_pedido("2026-10-20 10:00:00")
+        self._pagar(com_cartao, self.metodo_cartao, 100.0)
+        com_pix = self._criar_pedido("2026-10-20 11:00:00")
+        self._pagar(com_pix, self.metodo_pix, 100.0)
+
+        resultado = self._consultar(
+            metodos_ids=[self.metodo_dinheiro.id, self.metodo_cartao.id]
+        )
+
+        self.assertEqual(
+            sorted(venda["id"] for venda in resultado["vendas"]),
+            sorted([com_dinheiro.id, com_cartao.id]),
+        )
+        self.assertNotIn(com_pix.id, [v["id"] for v in resultado["vendas"]])
+        self.assertEqual(
+            [forma["nome"] for forma in resultado["formas"]],
+            ["Cartão", "Dinheiro"],
+        )
+
+    def test_filtro_metodo_sem_vendas_retorna_vazio(self):
+        pedido = self._criar_pedido("2026-10-20 09:00:00")
+        self._pagar(pedido, self.metodo_dinheiro, 100.0)
+
+        resultado = self._consultar(metodos_ids=[self.metodo_pix.id])
+
+        self.assertEqual(resultado["vendas"], [])
+        self.assertEqual(resultado["resumo"]["quantidade"], 0)
+        self.assertEqual(resultado["resumo"]["totais"], [])
+
+    def test_sem_filtro_de_metodo_retorna_tudo(self):
+        pedido = self._criar_pedido("2026-10-20 09:00:00")
+        self._pagar(pedido, self.metodo_dinheiro, 100.0)
+
+        for metodos in (None, []):
+            with self.subTest(metodos=metodos):
+                resultado = self._consultar(metodos_ids=metodos)
+                self.assertEqual(
+                    [venda["id"] for venda in resultado["vendas"]], [pedido.id]
+                )
+                self.assertEqual(resultado["formas"], [])
+
+    def test_cupom_dividido_que_contem_um_metodo_entra_uma_vez(self):
+        """Cupom com Dinheiro + Cartão entra uma vez no filtro de Dinheiro,
+        com o amount_total final intacto."""
+        dividido = self._criar_pedido("2026-10-20 09:00:00", valor=100.0)
+        self._pagar(dividido, self.metodo_dinheiro, 40.0)
+        self._pagar(dividido, self.metodo_cartao, 60.0)
+
+        resultado = self._consultar(metodos_ids=[self.metodo_dinheiro.id])
+
+        self.assertEqual(len(resultado["vendas"]), 1)
+        self.assertEqual(resultado["vendas"][0]["id"], dividido.id)
+        self.assertEqual(resultado["vendas"][0]["valor"], 100.0)
+        self.assertEqual(
+            resultado["vendas"][0]["formas_pagamento"], "Dinheiro + Cartão"
+        )
+
+    def test_metodo_inexistente_gera_erro(self):
+        with self.assertRaises(UserError):
+            self._consultar(metodos_ids=[999999])
 
     # ── Formas de pagamento e colunas (DEC-009) ────────────────────────────
     def test_cupom_com_um_metodo_de_pagamento(self):

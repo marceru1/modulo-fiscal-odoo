@@ -135,8 +135,8 @@ function extractBody(src, signature) {
 // ── 5: chamada do método server-side ───────────────────────────────────────
 {
     assert(
-        /orm\.call\(\s*"pos\.order",\s*"get_vendas_caixa_dia",\s*\[this\.state\.configIds,\s*this\.state\.dias\]/.test(js),
-        "deve chamar pos.order.get_vendas_caixa_dia com lista de caixas e de dias"
+        /orm\.call\(\s*"pos\.order",\s*"get_vendas_caixa_dia",\s*\[this\.state\.configIds,\s*this\.state\.dias,\s*this\.state\.metodosIds\]/.test(js),
+        "deve chamar pos.order.get_vendas_caixa_dia com caixas, dias e formas de pagamento"
     );
     console.log("✓ 5: chama o método server-side do ticket 01");
 }
@@ -145,8 +145,8 @@ function extractBody(src, signature) {
 {
     // Abertura: orientação e nenhuma consulta automática.
     assert(
-        (js + xml).includes("Selecione um caixa e ao menos um dia para consultar as vendas"),
-        "mensagem inicial"
+        (js + xml).includes("Marque um ou mais caixas e ao menos um dia para consultar as vendas"),
+        "mensagem inicial (caixas no plural)"
     );
     assert(!/onWillStart\([^)]*consultar/.test(js), "não consultar ao abrir");
 
@@ -370,19 +370,50 @@ function extractBody(src, signature) {
     assert(/t-esc="venda\.caixa"/.test(xml), "nome do caixa por linha");
 
     // Cabeçalho do resultado lista os caixas marcados.
-    assert(/formatarCaixas\(state\.resultado\.caixas\)/.test(xml),
+    assert(/formatarNomes\(state\.resultado\.caixas\)/.test(xml),
         "cabeçalho lista os caixas consultados");
 
-    const formatarCaixas = new Function(
-        "caixas", extractBody(js, "formatarCaixas(caixas)")
+    const formatarNomes = new Function(
+        "itens", extractBody(js, "formatarNomes(itens)")
     );
-    assert.strictEqual(formatarCaixas([]), "");
-    assert.strictEqual(formatarCaixas([{ nome: "Caixa 2" }]), "Caixa 2");
+    assert.strictEqual(formatarNomes([]), "");
+    assert.strictEqual(formatarNomes([{ nome: "Caixa 2" }]), "Caixa 2");
     assert.strictEqual(
-        formatarCaixas([{ nome: "Caixa 2" }, { nome: "Biju" }]),
+        formatarNomes([{ nome: "Caixa 2" }, { nome: "Biju" }]),
         "Caixa 2 + Biju"
     );
     console.log("✓ 14: checkboxes de caixa, coluna condicional e cabeçalho");
+}
+
+// ── 15: filtro opcional por forma de pagamento (DEC-011) ─────────────────
+{
+    // Checkboxes dos pos.payment.method reais, lidos em runtime e por nome.
+    assert(/orm\.searchRead\(\s*"pos\.payment\.method"/.test(js),
+        "formas de pagamento lidas do cadastro em runtime");
+    assert(/t-foreach="state\.metodos"/.test(xml), "lista de formas renderizada");
+    assert(/t-on-change="\(\) => this\.toggleMetodo\(metodo\.id\)"/.test(xml),
+        "marcar/desmarcar forma de pagamento");
+    assert(/state\.metodosIds\.includes\(metodo\.id\)/.test(xml), "checkbox reflete a seleção");
+    assert(/opcional/i.test(xml), "filtro identificado como opcional");
+
+    // Opcional: não entra no podeConsultar (vazio = sem filtro).
+    const podeConsultarBody = extractBody(js, "get podeConsultar()");
+    assert(!/metodosIds/.test(podeConsultarBody), "formas não são obrigatórias para consultar");
+
+    // Chamada envia o filtro e o resultado expõe o filtro aplicado.
+    assert(/state\.metodosIds\]/.test(js), "filtro enviado ao servidor");
+    assert(/state\.resultado\.formas\.length/.test(xml), "cabeçalho mostra o filtro quando ativo");
+    assert(/Formas:/.test(xml), "rótulo Formas: no cabeçalho");
+    assert(/formatarNomes\(state\.resultado\.formas\)/.test(xml), "nomes das formas aplicadas");
+
+    // Marcar/desmarcar forma zera resultado antigo.
+    assert(/toggleMetodo\(metodoId\)[\s\S]*alterouFiltros/.test(js),
+        "mudar o filtro de formas limpa o resultado");
+
+    // Filtro vazio não aparece no cabeçalho (t-if pelo length).
+    assert(/t-if="state\.resultado\.formas\.length"/.test(xml),
+        "sem filtro, cabeçalho não mostra Formas");
+    console.log("✓ 15: filtro opcional por forma de pagamento");
 }
 
 console.log("\nTodos os contratos da tela de consulta passaram.");
