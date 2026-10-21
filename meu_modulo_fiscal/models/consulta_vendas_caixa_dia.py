@@ -4,6 +4,7 @@ from datetime import datetime, time, timedelta
 from odoo import _, api, fields, models
 from odoo.exceptions import UserError
 from odoo.osv import expression
+from odoo.tools import float_round
 
 
 class PosOrder(models.Model):
@@ -153,7 +154,12 @@ class PosOrder(models.Model):
         return sorted(dias)
 
     def _totais_por_moeda(self, vendas):
-        """Soma os valores por moeda — moedas diferentes nunca se misturam."""
+        """Soma os valores por moeda — moedas diferentes nunca se misturam.
+
+        O acumulador é float, então o total de cada moeda é arredondado com a
+        precisão dessa moeda (decimal_places do res.currency) antes de sair do
+        servidor: somar centavos não devolve resíduo de ponto flutuante.
+        """
         totais = {}
         for venda in vendas:
             acumulado = totais.setdefault(venda['currency_id'], {
@@ -162,4 +168,12 @@ class PosOrder(models.Model):
                 'total': 0.0,
             })
             acumulado['total'] += venda['valor']
+
+        moedas = self.env['res.currency'].browse(list(totais))
+        for moeda in moedas:
+            total = totais.get(moeda.id)
+            if total:
+                total['total'] = float_round(
+                    total['total'], precision_digits=moeda.decimal_places
+                )
         return list(totais.values())
