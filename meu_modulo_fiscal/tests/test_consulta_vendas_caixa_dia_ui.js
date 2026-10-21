@@ -321,4 +321,31 @@ function extractBody(src, signature) {
     console.log("✓ 12: calendário multisseleção com limite de 31 dias");
 }
 
+// ── 13: colunas da tabela (DEC-009) ───────────────────────────────────────
+{
+    const cabecalhos = [...xml.matchAll(/<thead>[\s\S]*?<\/thead>/g)].map((m) => m[0]);
+    const cabecalho = cabecalhos.find((bloco) => bloco.includes("Data e hora"));
+    assert(cabecalho, "cabeçalho da tabela de resultados");
+    const titulos = [...cabecalho.matchAll(/<th(?:\s[^>]*)?>([\s\S]*?)<\/th>/g)]
+        .map((casamento) => casamento[1].trim());
+    assert.deepStrictEqual(
+        titulos,
+        ["Data e hora", "Venda / cupom", "Operador", "Valor total", "Forma de pagamento"],
+        "colunas e ordem da DEC-009"
+    );
+    assert(!/venda\.cliente/.test(xml), "sem coluna Cliente");
+    assert(!/venda\.situacao/.test(xml), "sem coluna Situação");
+    assert(xml.includes("Forma de pagamento"), "cabeçalho da forma de pagamento");
+    assert(/<td t-esc="venda\.formas_pagamento"\/>/.test(xml), "célula da forma de pagamento");
+
+    const linha = xml.match(/<tr t-foreach="state\.resultado\.vendas"[\s\S]*?<\/tr>/);
+    assert(linha, "linha de venda na tabela");
+    assert.strictEqual(
+        (linha[0].match(/<td/g) || []).length,
+        5,
+        "5 células por linha, casando com o cabeçalho"
+    );
+    console.log("✓ 13: colunas Data/hora, Cupom, Operador, Valor, Forma de pagamento");
+}
+
 console.log("\nTodos os contratos da tela de consulta passaram.");

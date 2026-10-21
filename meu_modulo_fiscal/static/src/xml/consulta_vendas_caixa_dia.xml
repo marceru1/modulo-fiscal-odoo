@@ -142,9 +142,8 @@
                                     <th scope="col">Data e hora</th>
                                     <th scope="col">Venda / cupom</th>
                                     <th scope="col">Operador</th>
-                                    <th scope="col">Cliente</th>
                                     <th scope="col" class="text-end">Valor total</th>
-                                    <th scope="col">Situação</th>
+                                    <th scope="col">Forma de pagamento</th>
                                 </tr>
                             </thead>
                             <tbody>
@@ -157,10 +156,9 @@
                                            t-esc="venda.cupom"/>
                                     </td>
                                     <td t-esc="venda.operador"/>
-                                    <td t-esc="venda.cliente || 'Consumidor não identificado'"/>
                                     <td class="text-end text-nowrap"
                                         t-esc="formatarValor(venda.valor, venda.currency_id)"/>
-                                    <td t-esc="venda.situacao"/>
+                                    <td t-esc="venda.formas_pagamento"/>
                                 </tr>
                             </tbody>
                         </table>

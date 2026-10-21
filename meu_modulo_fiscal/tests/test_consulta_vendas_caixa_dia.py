@@ -21,15 +21,36 @@ class TestConsultaVendasCaixaDia(TransactionCase):
         super().setUpClass()
         cls.company = cls.env.company
 
+        # Métodos precisam entrar na config ANTES de abrir a sessão (o core
+        # não deixa alterar payment methods com sessão aberta).
+        cls.metodo_dinheiro = cls.env["pos.payment.method"].create({
+            "name": "Dinheiro",
+            "company_id": cls.company.id,
+        })
+        cls.metodo_cartao = cls.env["pos.payment.method"].create({
+            "name": "Cartão",
+            "company_id": cls.company.id,
+        })
         cls.caixa = cls.env["pos.config"].create({
             "name": "Caixa Teste Consulta",
             "company_id": cls.company.id,
+            "payment_method_ids": [
+                (4, cls.metodo_dinheiro.id),
+                (4, cls.metodo_cartao.id),
+            ],
         })
         cls.sessao = cls.env["pos.session"].create({
             "config_id": cls.caixa.id,
             "user_id": cls.env.uid,
         })
         cls.sessao.action_pos_session_open()
+
+    def _pagar(self, pedido, metodo, valor):
+        return self.env["pos.payment"].create({
+            "pos_order_id": pedido.id,
+            "payment_method_id": metodo.id,
+            "amount": valor,
+        })
 
     def _criar_pedido(self, date_order, valor=100.0, state="paid",
                       sessao=None, nome=None):
@@ -322,6 +343,48 @@ class TestConsultaVendasCaixaDia(TransactionCase):
         self.assertEqual(por_moeda[brl.id], 35.0)
         self.assertEqual(por_moeda[usd.id], 10.0)
         self.assertEqual(len(totais), 2)
+
+    # ── Formas de pagamento e colunas (DEC-009) ────────────────────────────
+    def test_cupom_com_um_metodo_de_pagamento(self):
+        """Pagamento único mostra o nome do método do cupom."""
+        pedido = self._criar_pedido("2026-10-20 09:00:00")
+        self._pagar(pedido, self.metodo_dinheiro, 100.0)
+
+        resultado = self._consultar()
+
+        self.assertEqual(resultado["vendas"][0]["formas_pagamento"], "Dinheiro")
+
+    def test_cupom_dividido_une_metodos_distintos(self):
+        """Pagamento dividido une os métodos DISTINTOS, na ordem dos
+        pagamentos, sem repetir método usado duas vezes."""
+        pedido = self._criar_pedido("2026-10-20 10:00:00")
+        self._pagar(pedido, self.metodo_dinheiro, 40.0)
+        self._pagar(pedido, self.metodo_cartao, 60.0)
+        self._pagar(pedido, self.metodo_dinheiro, 5.0)
+
+        resultado = self._consultar()
+
+        self.assertEqual(
+            resultado["vendas"][0]["formas_pagamento"], "Dinheiro + Cartão"
+        )
+
+    def test_cupom_sem_pagamento_tem_forma_vazia(self):
+        self._criar_pedido("2026-10-20 11:00:00")
+
+        resultado = self._consultar()
+
+        self.assertEqual(resultado["vendas"][0]["formas_pagamento"], "")
+
+    def test_retorno_sem_cliente_e_sem_situacao(self):
+        """DEC-009: partner_id e state saem do retorno (e o rótulo junto)."""
+        pedido = self._criar_pedido("2026-10-20 12:00:00")
+        self._pagar(pedido, self.metodo_dinheiro, 100.0)
+
+        venda = self._consultar()["vendas"][0]
+
+        for campo in ("cliente", "partner_id", "state", "situacao"):
+            self.assertNotIn(campo, venda)
+        self.assertEqual(venda["formas_pagamento"], "Dinheiro")
 
     def test_resumo_arredonda_residuo_float_por_moeda(self):
         """Somar centavos não devolve resíduo de float: o total de cada moeda
