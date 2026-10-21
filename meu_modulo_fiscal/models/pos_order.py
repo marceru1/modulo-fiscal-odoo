@@ -1004,8 +1004,8 @@ class PosSession(models.Model):
         Returns:
             dict with success/message. Em caso de sucesso, inclui a chave
             ``comprovante`` (DEC-004) com os dados para impressao termica:
-            fatura, valor_pago, forma_pagamento, data_hora, numero_pdv e
-            operador.
+            fatura, cliente, valor_pago, forma_pagamento, data_hora,
+            numero_pdv e operador.
         """
         invoice = self.env['account.move'].browse(invoice_id)
         if not invoice.exists():
@@ -1122,6 +1122,7 @@ class PosSession(models.Model):
             ),
             'comprovante': {
                 'fatura': invoice.name,
+                'cliente': partner.name or '',
                 'valor_pago': amount,
                 'forma_pagamento': payment_method_name,
                 'data_hora': self._fmt_manaus(fields.Datetime.now()),

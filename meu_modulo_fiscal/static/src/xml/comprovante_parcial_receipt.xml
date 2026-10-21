@@ -7,8 +7,8 @@
 
         data = {
             empresa: { nome, cnpj, endereco_linha1, endereco_linha2 },
-            comprovante: { fatura, valor_pago, forma_pagamento, data_hora,
-                           numero_pdv, operador },
+            comprovante: { fatura, cliente, valor_pago, forma_pagamento,
+                           data_hora, numero_pdv, operador },
         }
         NÃO exibe saldo restante (fora do escopo da feature).
     -->
@@ -45,6 +45,10 @@
                     <span class="total-valor"><t t-esc="data.comprovante.fatura"/></span>
                 </div>
                 <div class="fechamento-linha">
+                    <span>CLIENTE</span>
+                    <span class="total-valor"><t t-esc="data.comprovante.cliente || '—'"/></span>
+                </div>
+                <div class="fechamento-linha">
                     <span>DATA/HORA</span>
                     <span class="total-valor"><t t-esc="data.comprovante.data_hora"/></span>
                 </div>
@@ -74,6 +78,14 @@
             </div>
 
             <div class="danfe-separador"></div>
+
+            <!-- Assinatura do cliente: comprovante de pagamento de fatura
+                 exige ciencia do pagador. -->
+            <div class="assinatura-area">
+                <div class="assinatura-linha">
+                    ASSINATURA DO CLIENTE
+                </div>
+            </div>
 
         </div>
     </t>
