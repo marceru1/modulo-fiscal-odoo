@@ -79,6 +79,8 @@ class TestRecebimento(TransactionCase):
         comp = response['comprovante']
         self.assertEqual(comp['valor_pago'], amount)
         self.assertEqual(comp['fatura'], self.invoice.name)
+        # Nome do cliente que paga a fatura (impresso no comprovante)
+        self.assertEqual(comp['cliente'], self.partner.name)
         self.assertIsInstance(comp['data_hora'], str)
         # Ticket 04: tipos explícitos + valores vinculados ao contexto da sessão
         self.assertIsInstance(comp['numero_pdv'], int)
