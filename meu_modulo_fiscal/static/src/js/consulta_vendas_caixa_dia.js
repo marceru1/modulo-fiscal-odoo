@@ -66,7 +66,9 @@ export class ConsultaVendasCaixaDia extends Component {
         this.action = useService("action");
         this.state = useState({
             caixas: [],
+            metodos: [],
             configIds: [...(selecaoAtual?.configIds ?? [])],
+            metodosIds: [...(selecaoAtual?.metodosIds ?? [])],
             dias: [...(selecaoAtual?.dias ?? [])],
             mesVisivel: mesInicial(selecaoAtual?.dias),
             carregando: false,
@@ -74,7 +76,29 @@ export class ConsultaVendasCaixaDia extends Component {
             aviso: "",
             resultado: null,
         });
-        onWillStart(() => this.carregarCaixas());
+        onWillStart(() => this.carregarOpcoes());
+    }
+
+    async carregarOpcoes() {
+        await Promise.all([this.carregarCaixas(), this.carregarMetodos()]);
+    }
+
+    async carregarMetodos() {
+        try {
+            this.state.metodos = await this.orm.searchRead(
+                "pos.payment.method",
+                [],
+                ["name"],
+                { order: "name" }
+            );
+            // O filtro é opcional: só descarta métodos que sumiram do cadastro.
+            const disponiveis = this.state.metodos.map((metodo) => metodo.id);
+            this.state.metodosIds = this.state.metodosIds.filter((id) =>
+                disponiveis.includes(id)
+            );
+        } catch (error) {
+            this.state.erro = this.mensagemErro(error);
+        }
     }
 
     async carregarCaixas() {
@@ -119,12 +143,25 @@ export class ConsultaVendasCaixaDia extends Component {
 
     get mensagemInicial() {
         if (!this.state.configIds.length) {
-            return _t("Selecione um caixa e ao menos um dia para consultar as vendas");
+            return _t("Marque um ou mais caixas e ao menos um dia para consultar as vendas");
         }
         if (!this.state.dias.length) {
             return _t("Selecione ao menos um dia para consultar as vendas");
         }
         return _t("Clique em Consultar para carregar as vendas dos dias selecionados");
+    }
+
+    toggleMetodo(metodoId) {
+        if (this.state.carregando) {
+            return;
+        }
+        const indice = this.state.metodosIds.indexOf(metodoId);
+        if (indice >= 0) {
+            this.state.metodosIds.splice(indice, 1);
+        } else {
+            this.state.metodosIds.push(metodoId);
+        }
+        this.alterouFiltros();
     }
 
     toggleCaixa(caixaId) {
@@ -182,6 +219,7 @@ export class ConsultaVendasCaixaDia extends Component {
         this.state.erro = "";
         selecaoAtual = {
             configIds: [...this.state.configIds],
+            metodosIds: [...this.state.metodosIds],
             dias: [...this.state.dias],
         };
     }
@@ -197,10 +235,11 @@ export class ConsultaVendasCaixaDia extends Component {
             this.state.resultado = await this.orm.call(
                 "pos.order",
                 "get_vendas_caixa_dia",
-                [this.state.configIds, this.state.dias]
+                [this.state.configIds, this.state.dias, this.state.metodosIds]
             );
             selecaoAtual = {
                 configIds: [...this.state.configIds],
+                metodosIds: [...this.state.metodosIds],
                 dias: [...this.state.dias],
             };
         } catch (error) {
@@ -262,9 +301,9 @@ export class ConsultaVendasCaixaDia extends Component {
         return this.listar(ordenadas.map((data) => this.formatarData(data)));
     }
 
-    /** Caixas consultados no cabeçalho: "Caixa 2 + Biju". */
-    formatarCaixas(caixas) {
-        return (caixas || []).map((caixa) => caixa.nome).join(" + ");
+    /** Nomes de caixas/formas no cabeçalho: "Caixa 2 + Biju". */
+    formatarNomes(itens) {
+        return (itens || []).map((item) => item.nome).join(" + ");
     }
 
     rotuloCupons(quantidade) {

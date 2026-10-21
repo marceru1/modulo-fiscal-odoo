@@ -42,6 +42,29 @@
                         </button>
                     </div>
 
+                    <div class="col-12 col-md-3">
+                        <label class="form-label">
+                            Formas de pagamento
+                            <span class="text-muted small">(opcional)</span>
+                        </label>
+                        <div class="border rounded p-2" style="max-height: 12rem; overflow-y: auto;">
+                            <div t-foreach="state.metodos" t-as="metodo" t-key="metodo.id" class="form-check">
+                                <input class="form-check-input"
+                                       type="checkbox"
+                                       t-att-id="'consulta_metodo_' + metodo.id"
+                                       t-att-checked="state.metodosIds.includes(metodo.id)"
+                                       t-att-disabled="state.carregando"
+                                       t-on-change="() => this.toggleMetodo(metodo.id)"/>
+                                <label class="form-check-label"
+                                       t-att-for="'consulta_metodo_' + metodo.id"
+                                       t-esc="metodo.name"/>
+                            </div>
+                            <div t-if="!state.metodos.length" class="text-muted small">
+                                Nenhuma forma de pagamento disponível
+                            </div>
+                        </div>
+                    </div>
+
                     <div class="col-12 col-md-5">
                         <label class="form-label">Dias</label>
                         <div class="card">
@@ -132,8 +155,14 @@
 
                 <t t-if="state.resultado">
                     <h4 class="mt-2">
-                        <t t-esc="formatarCaixas(state.resultado.caixas)"/> —
+                        <t t-esc="formatarNomes(state.resultado.caixas)"/> —
                         <t t-esc="formatarDias(state.resultado.datas)"/>
+                        <t t-if="state.resultado.formas.length">
+                            <span class="fs-6 text-muted ms-2">
+                                · Formas:
+                                <t t-esc="formatarNomes(state.resultado.formas)"/>
+                            </span>
+                        </t>
                     </h4>
 
                     <div t-if="!state.resultado.vendas.length" class="alert alert-warning">
