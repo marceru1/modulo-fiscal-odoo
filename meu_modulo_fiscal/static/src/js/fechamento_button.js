@@ -24,6 +24,41 @@ patch(ClosePosPopup.prototype, {
         this.state.valor_confirmado = true;
     },
 
+    // Fechar caixa sai do POS: o fluxo nativo do core termina em
+    // location.reload(). Recarregar /pos/ui sem sessão aberta faz o controller
+    // pos_web criar OUTRA pos.session (opening_control) na hora — e no dia
+    // seguinte o operador abre o caixa com a sessão de ontem. Quando o backend
+    // confirma o fechamento, trocamos a URL para a home do Odoo antes do
+    // reload do core: o próprio reload do core cai em /odoo, sem reabrir o POS.
+    async closeSession() {
+        const dataService = this.pos.data;
+        const originalCall = dataService.call;
+        let fechou = false;
+        dataService.call = async (...args) => {
+            const response = await originalCall.apply(dataService, args);
+            if (
+                args[0] === "pos.session" &&
+                args[1] === "close_session_from_ui" &&
+                response &&
+                response.successful
+            ) {
+                fechou = true;
+                window.history.replaceState(null, "", "/odoo");
+            }
+            return response;
+        };
+        try {
+            return await super.closeSession(...arguments);
+        } finally {
+            dataService.call = originalCall;
+            if (fechou) {
+                // Se o core não chegou a recarregar (ou o reload foi
+                // cancelado), navega direto para a home.
+                window.location.href = "/odoo";
+            }
+        }
+    },
+
     async showFechamento() {
         console.log("[FECHAMENTO] Coletando dados do fechamento...");
 
