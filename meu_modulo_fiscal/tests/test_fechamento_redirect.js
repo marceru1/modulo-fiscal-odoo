@@ -12,6 +12,11 @@
  * O teste extrai o método closeSession() do patch e o executa com `this` e
  * `window` mockados (mesmo padrão de test_fechamento_lock.js).
  *
+ * Escopo: contrato do PATCH, não integração com o core. O mock de
+ * super.closeSession() simula a chamada de fechamento e o reload, mas não
+ * prova que o location.reload() real respeita o replaceState — isso é
+ * comportamento padrão do browser e fica coberto pelo teste manual no PDV.
+ *
  * Rodar: node meu_modulo_fiscal/tests/test_fechamento_redirect.js
  */
 const fs = require("fs");
@@ -21,12 +26,27 @@ const assert = require("assert");
 const MODULE_ROOT = path.join(__dirname, "..");
 const JS_PATH = path.join(MODULE_ROOT, "static", "src", "js", "fechamento_button.js");
 
-// ⚠️ FRÁGIL A FORMATAÇÃO: casa o primeiro `\n\s*\},` após a abertura do método.
+// Extrai o corpo de um método contando chaves equilibradas (não regex
+// non-greedy): um bloco aninhado terminando em `},` não corta a captura.
+// Limitação: não ignora chaves dentro de strings/comentários — o corpo de
+// closeSession() não tem nenhuma.
 function extractMethodBody(source, methodName) {
-    const re = new RegExp(`${methodName}\\(\\)\\s*\\{([\\s\\S]*?)\\n\\s*\\},`);
-    const m = source.match(re);
-    assert(m, `Não encontrou ${methodName}() em fechamento_button.js`);
-    return m[1];
+    const start = source.indexOf(`${methodName}()`);
+    assert(start !== -1, `Não encontrou ${methodName}() em fechamento_button.js`);
+    const braceStart = source.indexOf("{", start);
+    assert(braceStart !== -1, `${methodName}(): abertura de bloco não encontrada`);
+    let depth = 0;
+    for (let i = braceStart; i < source.length; i++) {
+        if (source[i] === "{") {
+            depth++;
+        } else if (source[i] === "}") {
+            depth--;
+            if (depth === 0) {
+                return source.slice(braceStart + 1, i);
+            }
+        }
+    }
+    assert.fail(`${methodName}(): bloco sem fechamento`);
 }
 
 const source = fs.readFileSync(JS_PATH, "utf8");
@@ -111,7 +131,7 @@ async function run({ successful }) {
 }
 
 (async () => {
-    // ── Caso 1: backend fechou → vai para /odoo (replaceState antes do reload)
+    // ── Caso 1: backend fechou → troca a URL para /odoo antes do reload ────
     {
         const { state, ctx, originalCall } = await run({ successful: true });
 
@@ -121,10 +141,16 @@ async function run({ successful }) {
             [null, "", "/odoo"],
             "URL trocada para /odoo antes do reload do core"
         );
-        assert.strictEqual(state.href, "/odoo", "segurança: navega para /odoo");
+        // O patch não navega por conta própria: quem recarrega é o core
+        // (location.reload()), que usa a URL já trocada.
+        assert.strictEqual(
+            state.href,
+            "/pos/ui?config_id=1",
+            "sem navegação concorrente com o reload do core"
+        );
         assert.strictEqual(ctx.pos.data.call, originalCall, "data.call restaurado");
         assert.strictEqual(ctx.reloadChamado, true, "fluxo de sucesso do core executou");
-        console.log("✓ Caso 1: fechamento OK → /odoo");
+        console.log("✓ Caso 1: fechamento OK → URL /odoo (reload do core)");
     }
 
     // ── Caso 2: backend não fechou (handleClosingError) → fica no POS ──────
