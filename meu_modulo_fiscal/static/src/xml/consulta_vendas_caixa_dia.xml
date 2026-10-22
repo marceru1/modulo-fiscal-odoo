@@ -2,19 +2,28 @@
 <templates xml:space="preserve">
 
     <t t-name="meu_modulo_fiscal.ConsultaVendasCaixaDia">
-        <div class="o_action">
-            <div class="o_content p-3">
-                <div class="mb-3">
-                    <h2 class="mb-1">Vendas por caixa e dia</h2>
-                    <p class="text-muted mb-0">
-                        Selecione o caixa e marque um ou mais dias para consultar as vendas.
+        <div class="o_action o_consulta_vendas_caixa_dia">
+            <div class="o_content o_consulta_container">
+                <header class="o_consulta_cabecalho">
+                    <h2 class="o_consulta_titulo">Vendas por caixa e dia</h2>
+                    <p class="o_consulta_descricao">
+                        Consulte cupons de um ou mais caixas nos dias selecionados.
                     </p>
-                </div>
+                </header>
 
-                <div class="row g-3 mb-3">
-                    <div class="col-12 col-md-4">
-                        <label class="form-label">Caixas</label>
-                        <div class="border rounded p-2" style="max-height: 12rem; overflow-y: auto;">
+                <div class="o_consulta_filtros">
+                    <section class="o_consulta_grupo o_consulta_grupo_caixas"
+                             aria-labelledby="o_consulta_caixas_titulo">
+                        <h3 class="o_consulta_grupo_titulo" id="o_consulta_caixas_titulo">
+                            Caixas <span class="o_consulta_marcador">obrigatório</span>
+                        </h3>
+                        <p class="o_consulta_ajuda" id="o_consulta_caixas_ajuda">
+                            Marque um ou mais caixas.
+                        </p>
+                        <div class="o_consulta_lista"
+                             role="group"
+                             aria-labelledby="o_consulta_caixas_titulo"
+                             aria-describedby="o_consulta_caixas_ajuda">
                             <div t-foreach="state.caixas" t-as="caixa" t-key="caixa.id" class="form-check">
                                 <input class="form-check-input"
                                        type="checkbox"
@@ -30,24 +39,96 @@
                                 Nenhum caixa disponível
                             </div>
                         </div>
-                        <button type="button"
-                                class="btn btn-primary mt-3"
-                                t-att-disabled="!podeConsultar"
-                                t-on-click="consultar">
-                            <t t-if="state.carregando">
-                                <i class="fa fa-spinner fa-spin me-1" role="img" aria-label="Carregando"/>
-                                Consultando...
-                            </t>
-                            <t t-else="">Consultar</t>
-                        </button>
-                    </div>
+                    </section>
 
-                    <div class="col-12 col-md-3">
-                        <label class="form-label">
-                            Formas de pagamento
-                            <span class="text-muted small">(opcional)</span>
-                        </label>
-                        <div class="border rounded p-2" style="max-height: 12rem; overflow-y: auto;">
+                    <section class="o_consulta_grupo o_consulta_grupo_dias"
+                             aria-labelledby="o_consulta_dias_titulo">
+                        <h3 class="o_consulta_grupo_titulo" id="o_consulta_dias_titulo">
+                            Dias <span class="o_consulta_marcador">obrigatório</span>
+                        </h3>
+                        <div class="o_consulta_calendario_wrap">
+                            <div class="d-flex justify-content-between align-items-center mb-2">
+                                <button type="button"
+                                        class="btn btn-sm btn-light"
+                                        t-att-disabled="!state.configIds.length || state.carregando"
+                                        t-on-click="() => this.mudarMes(-1)"
+                                        aria-label="Mês anterior">
+                                    <i class="fa fa-chevron-left"/>
+                                </button>
+                                <strong t-esc="rotuloMesVisivel"/>
+                                <button type="button"
+                                        class="btn btn-sm btn-light"
+                                        t-att-disabled="!state.configIds.length || state.carregando"
+                                        t-on-click="() => this.mudarMes(1)"
+                                        aria-label="Próximo mês">
+                                    <i class="fa fa-chevron-right"/>
+                                </button>
+                            </div>
+                            <table class="table table-sm table-borderless text-center mb-0 o_consulta_calendario">
+                                <thead>
+                                    <tr class="text-muted small">
+                                        <th scope="col">D</th>
+                                        <th scope="col">S</th>
+                                        <th scope="col">T</th>
+                                        <th scope="col">Q</th>
+                                        <th scope="col">Q</th>
+                                        <th scope="col">S</th>
+                                        <th scope="col">S</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    <tr t-foreach="linhasDoMes" t-as="semana" t-key="semana_index">
+                                        <td t-foreach="semana" t-as="celula" t-key="celula_index" class="p-0 py-1 px-1">
+                                            <t t-if="celula">
+                                                <button type="button"
+                                                        t-attf-class="btn btn-sm w-100 py-1 #{celula.marcado ? 'btn-primary' : 'btn-light border'}"
+                                                        t-att-disabled="!state.configIds.length || state.carregando"
+                                                        t-on-click="() => this.toggleDia(celula.data)"
+                                                        t-esc="celula.dia"/>
+                                            </t>
+                                        </td>
+                                    </tr>
+                                </tbody>
+                            </table>
+
+                            <div t-if="state.dias.length" class="d-flex flex-wrap align-items-center gap-1 mt-2">
+                                <span t-foreach="state.dias"
+                                      t-as="dia"
+                                      t-key="dia"
+                                      class="badge rounded-pill bg-secondary d-inline-flex align-items-center">
+                                    <t t-esc="formatarData(dia)"/>
+                                    <button type="button"
+                                            class="btn btn-sm p-0 ms-1 text-white"
+                                            t-att-disabled="state.carregando"
+                                            t-on-click.stop="() => this.toggleDia(dia)"
+                                            aria-label="Remover dia">
+                                        <i class="fa fa-times"/>
+                                    </button>
+                                </span>
+                                <button type="button"
+                                        class="btn btn-sm btn-link"
+                                        t-att-disabled="state.carregando"
+                                        t-on-click="limparDias">Limpar</button>
+                            </div>
+
+                            <div t-if="state.aviso" class="alert alert-warning py-1 px-2 mb-0 mt-2 small" role="alert">
+                                <t t-esc="state.aviso"/>
+                            </div>
+                        </div>
+                    </section>
+
+                    <section class="o_consulta_grupo o_consulta_grupo_pagamento"
+                             aria-labelledby="o_consulta_pagamento_titulo">
+                        <h3 class="o_consulta_grupo_titulo" id="o_consulta_pagamento_titulo">
+                            Formas de pagamento <span class="o_consulta_marcador">opcional</span>
+                        </h3>
+                        <p class="o_consulta_ajuda" id="o_consulta_pagamento_ajuda">
+                            Sem filtro: qualquer forma de pagamento.
+                        </p>
+                        <div class="o_consulta_lista"
+                             role="group"
+                             aria-labelledby="o_consulta_pagamento_titulo"
+                             aria-describedby="o_consulta_pagamento_ajuda">
                             <div t-foreach="state.metodos" t-as="metodo" t-key="metodo.id" class="form-check">
                                 <input class="form-check-input"
                                        type="checkbox"
@@ -63,82 +144,24 @@
                                 Nenhuma forma de pagamento disponível
                             </div>
                         </div>
+                    </section>
+                </div>
+
+                <div class="o_consulta_acao">
+                    <div class="o_consulta_acao_texto">
+                        <p class="o_consulta_resumo_selecao" t-esc="resumoSelecao"/>
+                        <p t-if="motivoBloqueio" class="o_consulta_motivo" t-esc="motivoBloqueio"/>
                     </div>
-
-                    <div class="col-12 col-md-5">
-                        <label class="form-label">Dias</label>
-                        <div class="card">
-                            <div class="card-body p-2">
-                                <div class="d-flex justify-content-between align-items-center mb-2">
-                                    <button type="button"
-                                            class="btn btn-sm btn-light"
-                                            t-att-disabled="!state.configIds.length || state.carregando"
-                                            t-on-click="() => this.mudarMes(-1)"
-                                            aria-label="Mês anterior">
-                                        <i class="fa fa-chevron-left"/>
-                                    </button>
-                                    <strong t-esc="rotuloMesVisivel"/>
-                                    <button type="button"
-                                            class="btn btn-sm btn-light"
-                                            t-att-disabled="!state.configIds.length || state.carregando"
-                                            t-on-click="() => this.mudarMes(1)"
-                                            aria-label="Próximo mês">
-                                        <i class="fa fa-chevron-right"/>
-                                    </button>
-                                </div>
-                                <table class="table table-sm table-borderless text-center mb-0">
-                                    <thead>
-                                        <tr class="text-muted small">
-                                            <th scope="col">D</th>
-                                            <th scope="col">S</th>
-                                            <th scope="col">T</th>
-                                            <th scope="col">Q</th>
-                                            <th scope="col">Q</th>
-                                            <th scope="col">S</th>
-                                            <th scope="col">S</th>
-                                        </tr>
-                                    </thead>
-                                    <tbody>
-                                        <tr t-foreach="linhasDoMes" t-as="semana" t-key="semana_index">
-                                            <td t-foreach="semana" t-as="celula" t-key="celula_index" class="p-0 py-1 px-1">
-                                                <t t-if="celula">
-                                                    <button type="button"
-                                                            t-attf-class="btn btn-sm w-100 py-1 #{celula.marcado ? 'btn-primary' : 'btn-light border'}"
-                                                            t-att-disabled="!state.configIds.length || state.carregando"
-                                                            t-on-click="() => this.toggleDia(celula.data)"
-                                                            t-esc="celula.dia"/>
-                                                </t>
-                                            </td>
-                                        </tr>
-                                    </tbody>
-                                </table>
-
-                                <div t-if="state.dias.length" class="d-flex flex-wrap align-items-center gap-1 mt-2">
-                                    <span t-foreach="state.dias"
-                                          t-as="dia"
-                                          t-key="dia"
-                                          class="badge rounded-pill bg-secondary d-inline-flex align-items-center">
-                                        <t t-esc="formatarData(dia)"/>
-                                        <button type="button"
-                                                class="btn btn-sm p-0 ms-1 text-white"
-                                                t-att-disabled="state.carregando"
-                                                t-on-click.stop="() => this.toggleDia(dia)"
-                                                aria-label="Remover dia">
-                                            <i class="fa fa-times"/>
-                                        </button>
-                                    </span>
-                                    <button type="button"
-                                            class="btn btn-sm btn-link"
-                                            t-att-disabled="state.carregando"
-                                            t-on-click="limparDias">Limpar</button>
-                                </div>
-
-                                <div t-if="state.aviso" class="alert alert-warning py-1 px-2 mb-0 mt-2 small" role="alert">
-                                    <t t-esc="state.aviso"/>
-                                </div>
-                            </div>
-                        </div>
-                    </div>
+                    <button type="button"
+                            class="btn btn-primary o_consulta_botao"
+                            t-att-disabled="!podeConsultar"
+                            t-on-click="consultar">
+                        <t t-if="state.carregando">
+                            <i class="fa fa-spinner fa-spin me-1" role="img" aria-label="Carregando"/>
+                            Consultando...
+                        </t>
+                        <t t-else="">Consultar</t>
+                    </button>
                 </div>
 
                 <div t-if="state.erro" class="alert alert-danger" role="alert">

@@ -57,6 +57,11 @@ export function podeMarcarDia(diasMarcados, data) {
     return diasMarcados.includes(data) || diasMarcados.length < LIMITE_DIAS;
 }
 
+/** Singular/plural de um rótulo ("1 dia" / "2 dias"). */
+export function plural(quantidade, singular, pluralTexto) {
+    return quantidade === 1 ? singular : pluralTexto;
+}
+
 export class ConsultaVendasCaixaDia extends Component {
     static template = "meu_modulo_fiscal.ConsultaVendasCaixaDia";
     static props = ["*"];
@@ -149,6 +154,51 @@ export class ConsultaVendasCaixaDia extends Component {
             return _t("Selecione ao menos um dia para consultar as vendas");
         }
         return _t("Clique em Consultar para carregar as vendas dos dias selecionados");
+    }
+
+    /** Motivo visível ao lado de Consultar — nunca depender só de tooltip. */
+    get motivoBloqueio() {
+        if (this.state.carregando) {
+            return "";
+        }
+        if (!this.state.configIds.length) {
+            return _t("Selecione ao menos um caixa.");
+        }
+        if (!this.state.dias.length) {
+            return _t("Selecione ao menos um dia.");
+        }
+        return "";
+    }
+
+    /** Resumo compacto da seleção: "2 caixas · 5 dias · Sem filtro de pagamento". */
+    get resumoSelecao() {
+        const caixas = plural(
+            this.state.configIds.length, _t("caixa"), _t("caixas")
+        );
+        const dias = plural(this.state.dias.length, _t("dia"), _t("dias"));
+        return [
+            `${this.state.configIds.length} ${caixas}`,
+            `${this.state.dias.length} ${dias}`,
+            this.resumoPagamento(),
+        ].join(" · ");
+    }
+
+    /** Estado do filtro opcional no resumo: sem filtro, nomes ou contagem. */
+    resumoPagamento() {
+        const ids = this.state.metodosIds;
+        if (!ids.length) {
+            return _t("Sem filtro de pagamento");
+        }
+        const nomes = this.state.metodos
+            .filter((metodo) => ids.includes(metodo.id))
+            .map((metodo) => metodo.name);
+        if (!nomes.length) {
+            return _t("%s formas selecionadas", ids.length);
+        }
+        if (nomes.length <= 2) {
+            return _t("Pagamento: %s", this.listar(nomes));
+        }
+        return _t("%s formas selecionadas", nomes.length);
     }
 
     toggleMetodo(metodoId) {
