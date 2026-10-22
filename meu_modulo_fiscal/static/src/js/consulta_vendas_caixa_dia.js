@@ -175,6 +175,7 @@ export class ConsultaVendasCaixaDia extends Component {
             carregando: false,
             erro: "",
             aviso: "",
+            filtrosAlterados: false,
             resultado: null,
         });
         // Depois de mover o foco pelo teclado ou remover um chip, o Owl já
@@ -415,12 +416,13 @@ export class ConsultaVendasCaixaDia extends Component {
 
     get mensagemInicial() {
         if (!this.state.configIds.length) {
-            return _t("Marque um ou mais caixas e ao menos um dia para consultar as vendas");
+            return _t("Selecione ao menos um caixa e um dia para consultar.");
         }
         if (!this.state.dias.length) {
-            return _t("Selecione ao menos um dia para consultar as vendas");
+            return _t("Selecione ao menos um dia para consultar.");
         }
-        return _t("Clique em Consultar para carregar as vendas dos dias selecionados");
+        // Seleção pronta: o resumo da faixa de ação já explica o próximo passo.
+        return "";
     }
 
     /** Motivo visível ao lado de Consultar — nunca depender só de tooltip. */
@@ -567,8 +569,11 @@ export class ConsultaVendasCaixaDia extends Component {
 
     alterouFiltros() {
         // Resultado antigo nunca fica visível como se fosse da nova seleção.
+        const tinhaResultado = Boolean(this.state.resultado);
         this.state.resultado = null;
         this.state.erro = "";
+        // O aviso persiste até a próxima consulta, mesmo com novas mudanças.
+        this.state.filtrosAlterados = tinhaResultado || this.state.filtrosAlterados;
         selecaoAtual = {
             configIds: [...this.state.configIds],
             metodosIds: [...this.state.metodosIds],
@@ -583,6 +588,7 @@ export class ConsultaVendasCaixaDia extends Component {
         this.state.carregando = true;
         this.state.erro = "";
         this.state.resultado = null;
+        this.state.filtrosAlterados = false;
         try {
             this.state.resultado = await this.orm.call(
                 "pos.order",

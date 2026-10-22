@@ -240,21 +240,36 @@
                     </button>
                 </div>
 
-                <div t-if="state.erro" class="alert alert-danger" role="alert">
-                    <t t-esc="state.erro"/>
-                    <div class="small mt-1">
-                        A seleção foi mantida. Tente consultar novamente.
+                <div class="o_consulta_saida"
+                     t-att-aria-busy="state.carregando ? 'true' : null">
+                    <div t-if="state.carregando" class="o_consulta_carregando" role="status" aria-live="polite">
+                        <i class="fa fa-spinner fa-spin me-1" aria-hidden="true"/>
+                        Consultando…
                     </div>
-                </div>
 
-                <div t-if="!state.resultado and !state.erro and !state.carregando"
-                     class="alert alert-info">
-                    <t t-esc="mensagemInicial"/>
-                </div>
+                    <div t-elif="state.erro" class="alert alert-danger" role="alert">
+                        <p class="o_consulta_erro_titulo">
+                            Não foi possível consultar as vendas. Sua seleção foi mantida.
+                        </p>
+                        <p class="o_consulta_erro_detalhe"><t t-esc="state.erro"/></p>
+                        <button type="button"
+                                class="btn btn-sm btn-secondary"
+                                t-on-click="consultar">
+                            Consultar novamente
+                        </button>
+                    </div>
 
-                <section t-if="state.resultado"
-                         class="o_consulta_resultados"
-                         aria-labelledby="o_consulta_resultados_titulo">
+                    <div t-elif="state.filtrosAlterados" class="alert alert-info" role="status">
+                        Filtros alterados. Clique em Consultar para atualizar os resultados.
+                    </div>
+
+                    <div t-elif="mensagemInicial" class="alert alert-info">
+                        <t t-esc="mensagemInicial"/>
+                    </div>
+
+                    <section t-if="state.resultado"
+                             class="o_consulta_resultados"
+                             aria-labelledby="o_consulta_resultados_titulo">
                     <h3 class="o_consulta_resultados_titulo" id="o_consulta_resultados_titulo">
                         Resultados
                     </h3>
@@ -326,6 +341,7 @@
                         </table>
                     </div>
                 </section>
+                </div>
             </div>
         </div>
     </t>
