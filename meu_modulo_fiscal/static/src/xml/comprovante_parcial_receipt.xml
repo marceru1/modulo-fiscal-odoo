@@ -77,8 +77,6 @@
                 <span class="total-valor"><t t-esc="formatCurrency(data.comprovante.valor_pago)"/></span>
             </div>
 
-            <div class="danfe-separador"></div>
-
             <!-- Assinatura do cliente: comprovante de pagamento de fatura
                  exige ciencia do pagador. -->
             <div class="assinatura-area">
