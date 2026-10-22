@@ -416,4 +416,119 @@ function extractBody(src, signature) {
     console.log("✓ 15: filtro opcional por forma de pagamento");
 }
 
+// ── 16: estrutura da tela e faixa de ação ──────────────────────────────────
+{
+    const scssPath = path.join(
+        MODULE_ROOT, "static", "src", "css", "consulta_vendas_caixa_dia.scss"
+    );
+    assert(fs.existsSync(scssPath), "SCSS da consulta existe");
+    const scss = read(scssPath);
+
+    // Ordem de leitura: caixas -> dias -> pagamento -> faixa de ação.
+    const posCaixas = xml.indexOf("o_consulta_grupo_caixas");
+    const posDias = xml.indexOf("o_consulta_grupo_dias");
+    const posPagamento = xml.indexOf("o_consulta_grupo_pagamento");
+    const posAcao = xml.indexOf("o_consulta_acao");
+    assert(posCaixas >= 0 && posDias >= 0 && posPagamento >= 0, "três grupos presentes");
+    assert(posCaixas < posDias && posDias < posPagamento, "ordem caixas -> dias -> pagamento");
+    assert(posAcao > posPagamento, "faixa de ação vem depois de todos os filtros");
+    assert(
+        /<div class="o_consulta_acao">[\s\S]*?Consultar[\s\S]*?<\/div>/.test(xml),
+        "Consultar fica na faixa de ação"
+    );
+
+    // O calendário não é mais o dono da largura da tela.
+    assert(/\.o_consulta_calendario_wrap\s*\{[\s\S]*?max-width:\s*380px/.test(scss),
+        "calendário com largura limitada");
+    assert(!/style="[^"]*width:\s*100%/.test(xml), "sem largura inline esticando o calendário");
+
+    // Resumo da seleção e motivo visível.
+    assert(/t-esc="resumoSelecao"/.test(xml), "resumo da seleção renderizado");
+    assert(/t-if="motivoBloqueio"/.test(xml), "motivo do bloqueio visível");
+    assert(xml.includes("Marque um ou mais caixas."), "texto auxiliar dos caixas");
+
+    // Manifest: SCSS só no backend, nunca no bundle do POS.
+    assert(
+        /web\.assets_backend':\s*\[([\s\S]*?)consulta_vendas_caixa_dia\.scss/.test(manifest),
+        "SCSS registrado em web.assets_backend"
+    );
+    const posBlock = manifest.match(/'point_of_sale\._assets_pos':\s*\[([\s\S]*?)\],/);
+    assert(posBlock && !posBlock[1].includes("consulta_vendas_caixa_dia"), "SCSS fora do bundle do POS");
+
+    // Escopo: o único seletor de topo é o wrapper da consulta (sem regra global).
+    const semComentarios = scss.replace(/\/\/[^\n]*/g, "");
+    const seletoresTopo = [...semComentarios.matchAll(/^([^\s@/][^{]*)\{/gm)]
+        .map((casamento) => casamento[1].trim());
+    assert.deepStrictEqual(seletoresTopo, [".o_consulta_vendas_caixa_dia"],
+        "todo estilo fica sob .o_consulta_vendas_caixa_dia");
+    assert(!/!important/.test(scss), "sem !important");
+
+    // Comportamento do resumo (helpers puros + métodos do componente).
+    const plural = new Function(
+        "quantidade", "singular", "pluralTexto",
+        extractBody(js, "plural(quantidade, singular, pluralTexto)")
+    );
+    assert.strictEqual(plural(1, "caixa", "caixas"), "caixa");
+    assert.strictEqual(plural(2, "caixa", "caixas"), "caixas");
+    assert.strictEqual(plural(0, "dia", "dias"), "dias");
+
+    const identidade = (texto, ...args) =>
+        args.reduce((acumulado, arg) => acumulado.replace("%s", arg), texto);
+    const resumoPagamento = new Function(
+        "_t", extractBody(js, "resumoPagamento()")
+    );
+    const comMetodos = (metodosIds, metodos) => ({
+        state: { metodosIds, metodos },
+        listar: (itens) => (itens.length <= 1
+            ? itens[0] ?? ""
+            : `${itens.slice(0, -1).join(", ")} e ${itens[itens.length - 1]}`),
+    });
+    assert.strictEqual(
+        resumoPagamento.call(comMetodos([], []), identidade),
+        "Sem filtro de pagamento"
+    );
+    assert.strictEqual(
+        resumoPagamento.call(
+            comMetodos([1, 2], [{ id: 1, name: "Dinheiro" }, { id: 2, name: "Cartão" }]),
+            identidade
+        ),
+        "Pagamento: Dinheiro e Cartão"
+    );
+    assert.strictEqual(
+        resumoPagamento.call(
+            comMetodos([1, 2, 3], [
+                { id: 1, name: "Dinheiro" },
+                { id: 2, name: "Cartão" },
+                { id: 3, name: "PIX" },
+            ]),
+            identidade
+        ),
+        "3 formas selecionadas"
+    );
+    assert.strictEqual(
+        resumoPagamento.call(comMetodos([9], []), identidade),
+        "1 formas selecionadas",
+        "seleção preservada mesmo com o cadastro ainda não carregado"
+    );
+
+    const resumoSelecao = new Function(
+        "plural", "_t", extractBody(js, "get resumoSelecao()")
+    );
+    const montar = (configIds, dias, metodosIds, metodos) => {
+        const contexto = { state: { configIds, dias, metodosIds, metodos } };
+        contexto.resumoPagamento = () => resumoPagamento.call(contexto, identidade);
+        return contexto;
+    };
+    assert.strictEqual(
+        resumoSelecao.call(montar([1, 2], ["2026-10-08", "2026-10-09", "2026-10-10", "2026-10-11", "2026-10-12"], [], []), plural, identidade),
+        "2 caixas · 5 dias · Sem filtro de pagamento"
+    );
+    assert.strictEqual(
+        resumoSelecao.call(montar([1], ["2026-10-08"], [], []), plural, identidade),
+        "1 caixa · 1 dia · Sem filtro de pagamento"
+    );
+
+    console.log("✓ 16: estrutura, faixa de ação e resumo da seleção");
+}
+
 console.log("\nTodos os contratos da tela de consulta passaram.");

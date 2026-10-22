@@ -150,6 +150,9 @@
             # tabela). JS antes do XML — o template usa os helpers do componente.
             'meu_modulo_fiscal/static/src/js/consulta_vendas_caixa_dia.js',
             'meu_modulo_fiscal/static/src/xml/consulta_vendas_caixa_dia.xml',
+            # consulta-vendas-caixa-dia-ui-ux: estilos escopados na consulta
+            # (nunca no bundle do POS nem em componentes globais do backend).
+            'meu_modulo_fiscal/static/src/css/consulta_vendas_caixa_dia.scss',
         ],
     },
     'installable': True,
