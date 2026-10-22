@@ -24,20 +24,35 @@
                              role="group"
                              aria-labelledby="o_consulta_caixas_titulo"
                              aria-describedby="o_consulta_caixas_ajuda">
-                            <div t-foreach="state.caixas" t-as="caixa" t-key="caixa.id" class="form-check">
-                                <input class="form-check-input"
-                                       type="checkbox"
-                                       t-att-id="'consulta_caixa_' + caixa.id"
-                                       t-att-checked="state.configIds.includes(caixa.id)"
-                                       t-att-disabled="state.carregando"
-                                       t-on-change="() => this.toggleCaixa(caixa.id)"/>
-                                <label class="form-check-label"
-                                       t-att-for="'consulta_caixa_' + caixa.id"
-                                       t-esc="caixa.name"/>
+                            <div t-if="state.carregandoCaixas" class="o_consulta_estado" role="status">
+                                <i class="fa fa-spinner fa-spin me-1" aria-hidden="true"/>
+                                Carregando caixas e formas de pagamento…
                             </div>
-                            <div t-if="!state.caixas.length" class="text-muted small">
-                                Nenhum caixa disponível
+                            <div t-elif="state.erroCaixas" class="o_consulta_estado" role="alert">
+                                <p class="mb-1">Não foi possível carregar os caixas.</p>
+                                <p class="o_consulta_erro_detalhe mb-2"><t t-esc="state.erroCaixas"/></p>
+                                <button type="button"
+                                        class="btn btn-link btn-sm p-0"
+                                        t-on-click="() => this.carregarCaixas()">
+                                    Tentar carregar novamente
+                                </button>
                             </div>
+                            <t t-else="">
+                                <div t-foreach="state.caixas" t-as="caixa" t-key="caixa.id" class="form-check">
+                                    <input class="form-check-input"
+                                           type="checkbox"
+                                           t-att-id="'consulta_caixa_' + caixa.id"
+                                           t-att-checked="state.configIds.includes(caixa.id)"
+                                           t-att-disabled="state.carregando"
+                                           t-on-change="() => this.toggleCaixa(caixa.id)"/>
+                                    <label class="form-check-label"
+                                           t-att-for="'consulta_caixa_' + caixa.id"
+                                           t-esc="caixa.name"/>
+                                </div>
+                                <div t-if="!state.caixas.length" class="text-muted small">
+                                    Nenhum caixa disponível para seu usuário.
+                                </div>
+                            </t>
                         </div>
                     </section>
 
@@ -129,20 +144,35 @@
                              role="group"
                              aria-labelledby="o_consulta_pagamento_titulo"
                              aria-describedby="o_consulta_pagamento_ajuda">
-                            <div t-foreach="state.metodos" t-as="metodo" t-key="metodo.id" class="form-check">
-                                <input class="form-check-input"
-                                       type="checkbox"
-                                       t-att-id="'consulta_metodo_' + metodo.id"
-                                       t-att-checked="state.metodosIds.includes(metodo.id)"
-                                       t-att-disabled="state.carregando"
-                                       t-on-change="() => this.toggleMetodo(metodo.id)"/>
-                                <label class="form-check-label"
-                                       t-att-for="'consulta_metodo_' + metodo.id"
-                                       t-esc="metodo.name"/>
+                            <div t-if="state.carregandoMetodos" class="o_consulta_estado" role="status">
+                                <i class="fa fa-spinner fa-spin me-1" aria-hidden="true"/>
+                                Carregando caixas e formas de pagamento…
                             </div>
-                            <div t-if="!state.metodos.length" class="text-muted small">
-                                Nenhuma forma de pagamento disponível
+                            <div t-elif="state.erroMetodos" class="o_consulta_estado" role="alert">
+                                <p class="mb-1">Não foi possível carregar as formas de pagamento.</p>
+                                <p class="o_consulta_erro_detalhe mb-2"><t t-esc="state.erroMetodos"/></p>
+                                <button type="button"
+                                        class="btn btn-link btn-sm p-0"
+                                        t-on-click="() => this.carregarMetodos()">
+                                    Tentar carregar novamente
+                                </button>
                             </div>
+                            <t t-else="">
+                                <div t-foreach="state.metodos" t-as="metodo" t-key="metodo.id" class="form-check">
+                                    <input class="form-check-input"
+                                           type="checkbox"
+                                           t-att-id="'consulta_metodo_' + metodo.id"
+                                           t-att-checked="state.metodosIds.includes(metodo.id)"
+                                           t-att-disabled="state.carregando"
+                                           t-on-change="() => this.toggleMetodo(metodo.id)"/>
+                                    <label class="form-check-label"
+                                           t-att-for="'consulta_metodo_' + metodo.id"
+                                           t-esc="metodo.name"/>
+                                </div>
+                                <div t-if="!state.metodos.length" class="text-muted small">
+                                    Nenhuma forma de pagamento disponível.
+                                </div>
+                            </t>
                         </div>
                     </section>
                 </div>

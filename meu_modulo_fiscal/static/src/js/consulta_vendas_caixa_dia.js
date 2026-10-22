@@ -76,6 +76,10 @@ export class ConsultaVendasCaixaDia extends Component {
             metodosIds: [...(selecaoAtual?.metodosIds ?? [])],
             dias: [...(selecaoAtual?.dias ?? [])],
             mesVisivel: mesInicial(selecaoAtual?.dias),
+            carregandoCaixas: true,
+            carregandoMetodos: true,
+            erroCaixas: "",
+            erroMetodos: "",
             carregando: false,
             erro: "",
             aviso: "",
@@ -89,6 +93,8 @@ export class ConsultaVendasCaixaDia extends Component {
     }
 
     async carregarMetodos() {
+        this.state.carregandoMetodos = true;
+        this.state.erroMetodos = "";
         try {
             this.state.metodos = await this.orm.searchRead(
                 "pos.payment.method",
@@ -102,11 +108,16 @@ export class ConsultaVendasCaixaDia extends Component {
                 disponiveis.includes(id)
             );
         } catch (error) {
-            this.state.erro = this.mensagemErro(error);
+            // A seleção fica preservada; consultar com filtro incompleto não.
+            this.state.erroMetodos = this.mensagemErro(error);
+        } finally {
+            this.state.carregandoMetodos = false;
         }
     }
 
     async carregarCaixas() {
+        this.state.carregandoCaixas = true;
+        this.state.erroCaixas = "";
         try {
             this.state.caixas = await this.orm.searchRead(
                 "pos.config",
@@ -120,13 +131,19 @@ export class ConsultaVendasCaixaDia extends Component {
                 disponiveis.includes(id)
             );
         } catch (error) {
-            this.state.erro = this.mensagemErro(error);
+            this.state.erroCaixas = this.mensagemErro(error);
+        } finally {
+            this.state.carregandoCaixas = false;
         }
     }
 
     get podeConsultar() {
         return Boolean(this.state.configIds.length && this.state.dias.length)
-            && !this.state.carregando;
+            && !this.state.carregando
+            && !this.state.carregandoCaixas
+            && !this.state.carregandoMetodos
+            && !this.state.erroCaixas
+            && !this.state.erroMetodos;
     }
 
     get rotuloMesVisivel() {
@@ -160,6 +177,18 @@ export class ConsultaVendasCaixaDia extends Component {
     get motivoBloqueio() {
         if (this.state.carregando) {
             return "";
+        }
+        if (this.state.erroCaixas) {
+            return _t("Não foi possível carregar os caixas. Tente carregar novamente.");
+        }
+        if (this.state.erroMetodos) {
+            return _t("Não foi possível carregar as formas de pagamento. Tente carregar novamente.");
+        }
+        if (this.state.carregandoCaixas || this.state.carregandoMetodos) {
+            return _t("Aguarde o carregamento das opções.");
+        }
+        if (!this.state.caixas.length) {
+            return _t("Nenhum caixa disponível para seu usuário.");
         }
         if (!this.state.configIds.length) {
             return _t("Selecione ao menos um caixa.");

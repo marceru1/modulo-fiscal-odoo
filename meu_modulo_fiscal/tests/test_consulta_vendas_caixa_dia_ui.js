@@ -531,4 +531,119 @@ function extractBody(src, signature) {
     console.log("✓ 16: estrutura, faixa de ação e resumo da seleção");
 }
 
+// ── 17: carga de opções — carregando ≠ vazio ≠ erro ───────────────────────
+{
+    // Carga em andamento não aparece como ausência definitiva.
+    assert(xml.includes("Carregando caixas e formas de pagamento…"),
+        "mensagem de carga das opções");
+    assert(/t-if="state\.carregandoCaixas"[\s\S]*?role="status"/.test(xml),
+        "carga dos caixas anunciada como status");
+    assert(/t-if="state\.carregandoMetodos"[\s\S]*?role="status"/.test(xml),
+        "carga das formas anunciada como status");
+
+    // Falha identifica o grupo e oferece recuperação.
+    assert(/t-elif="state\.erroCaixas"[\s\S]*?Não foi possível carregar os caixas/.test(xml),
+        "erro dos caixas identificado");
+    assert(/t-elif="state\.erroMetodos"[\s\S]*?Não foi possível carregar as formas de pagamento/.test(xml),
+        "erro das formas identificado");
+    assert(xml.includes("Tentar carregar novamente"), "ação de nova tentativa");
+    assert(/t-on-click="\(\) => this\.carregarCaixas\(\)"/.test(xml), "retry dos caixas");
+    assert(/t-on-click="\(\) => this\.carregarMetodos\(\)"/.test(xml), "retry das formas");
+
+    // Vazio após carga concluída tem mensagem própria.
+    assert(xml.includes("Nenhum caixa disponível para seu usuário."),
+        "ausência de caixas com mensagem específica");
+    assert(xml.includes("Nenhuma forma de pagamento disponível."),
+        "ausência de formas com mensagem específica");
+
+    // Estado por grupo: flags separadas e erro não vira erro de consulta.
+    assert(/carregandoCaixas:\s*true/.test(js) && /carregandoMetodos:\s*true/.test(js),
+        "flags de carga por grupo começam ligadas");
+    assert(/this\.state\.erroCaixas = this\.mensagemErro\(error\)/.test(js),
+        "falha dos caixas guardada no grupo");
+    assert(/this\.state\.erroMetodos = this\.mensagemErro\(error\)/.test(js),
+        "falha das formas guardada no grupo");
+    assert(/finally\s*\{\s*this\.state\.carregandoCaixas = false/.test(js),
+        "carga dos caixas sempre termina");
+    assert(/finally\s*\{\s*this\.state\.carregandoMetodos = false/.test(js),
+        "carga das formas sempre termina");
+
+    const podeConsultar = new Function(extractBody(js, "get podeConsultar()"));
+    const estado = (extra = {}) => ({
+        state: {
+            configIds: [1],
+            dias: ["2026-10-20"],
+            carregando: false,
+            carregandoCaixas: false,
+            carregandoMetodos: false,
+            erroCaixas: "",
+            erroMetodos: "",
+            ...extra,
+        },
+    });
+    assert.strictEqual(podeConsultar.call(estado()), true);
+    assert.strictEqual(podeConsultar.call(estado({ erroCaixas: "falhou" })), false,
+        "falha de caixas bloqueia consulta");
+    assert.strictEqual(podeConsultar.call(estado({ erroMetodos: "falhou" })), false,
+        "falha de formas bloqueia consulta (filtro incompleto)");
+    assert.strictEqual(podeConsultar.call(estado({ carregandoCaixas: true })), false,
+        "consulta espera a carga dos caixas");
+    assert.strictEqual(podeConsultar.call(estado({ carregandoMetodos: true })), false,
+        "consulta espera a carga das formas");
+
+    // Motivo visível acompanha cada bloqueio.
+    const motivo = new Function("_t", extractBody(js, "get motivoBloqueio()"));
+    const traduzir = (texto, ...args) =>
+        args.reduce((acumulado, arg) => acumulado.replace("%s", arg), texto);
+    const motivoCom = (extra = {}) => ({
+        state: {
+            configIds: [],
+            dias: [],
+            caixas: [],
+            carregando: false,
+            carregandoCaixas: false,
+            carregandoMetodos: false,
+            erroCaixas: "",
+            erroMetodos: "",
+            ...extra,
+        },
+    });
+    assert.strictEqual(
+        motivo.call(motivoCom({ carregandoCaixas: true }), traduzir),
+        "Aguarde o carregamento das opções."
+    );
+    assert.strictEqual(
+        motivo.call(motivoCom({ erroCaixas: "falhou" }), traduzir),
+        "Não foi possível carregar os caixas. Tente carregar novamente."
+    );
+    assert.strictEqual(
+        motivo.call(motivoCom({ erroMetodos: "falhou" }), traduzir),
+        "Não foi possível carregar as formas de pagamento. Tente carregar novamente."
+    );
+    assert.strictEqual(
+        motivo.call(motivoCom(), traduzir),
+        "Nenhum caixa disponível para seu usuário."
+    );
+    assert.strictEqual(
+        motivo.call(motivoCom({ caixas: [{ id: 1 }] }), traduzir),
+        "Selecione ao menos um caixa."
+    );
+    assert.strictEqual(
+        motivo.call(motivoCom({ caixas: [{ id: 1 }], configIds: [1] }), traduzir),
+        "Selecione ao menos um dia."
+    );
+    assert.strictEqual(
+        motivo.call(
+            motivoCom({
+                caixas: [{ id: 1 }],
+                configIds: [1],
+                dias: ["2026-10-20"],
+            }),
+            traduzir
+        ),
+        ""
+    );
+    console.log("✓ 17: carga de opções com estados e recuperação por grupo");
+}
+
 console.log("\nTodos os contratos da tela de consulta passaram.");
