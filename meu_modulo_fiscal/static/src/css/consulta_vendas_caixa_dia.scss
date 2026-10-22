@@ -74,6 +74,18 @@
         overflow-wrap: anywhere;
     }
 
+    .o_consulta_estado {
+        font-size: 0.875rem;
+        color: $gray-700;
+        padding: 0.25rem 0;
+    }
+
+    .o_consulta_erro_detalhe {
+        font-size: 0.8125rem;
+        color: $gray-700;
+        overflow-wrap: anywhere;
+    }
+
     .o_consulta_calendario_wrap {
         max-width: 380px;
     }
