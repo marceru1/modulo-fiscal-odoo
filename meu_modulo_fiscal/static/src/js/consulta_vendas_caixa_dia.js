@@ -1,9 +1,10 @@
 /** @odoo-module **/
 
-import { Component, onWillStart, useState } from "@odoo/owl";
-import { deserializeDateTime } from "@web/core/l10n/dates";
+import { Component, onWillStart, useEffect, useState } from "@odoo/owl";
+import { deserializeDateTime, today } from "@web/core/l10n/dates";
 import { _t } from "@web/core/l10n/translation";
 import { registry } from "@web/core/registry";
+import { user } from "@web/core/user";
 import { useService } from "@web/core/utils/hooks";
 import { formatDateTime, formatMonetary } from "@web/views/fields/formatters";
 
@@ -12,38 +13,120 @@ const TAG = "meu_modulo_fiscal.consulta_vendas_caixa_dia";
 // Máximo de dias avulsos por consulta (mesma guarda do método server-side).
 export const LIMITE_DIAS = 31;
 
+// Quantos chips de dia aparecem antes de "Ver os N dias".
+export const CHIPS_VISIVEIS = 6;
+
+// Idioma de fallback quando o usuário não tem idioma configurado no Odoo.
+export const IDIOMA_FALLBACK = "pt-BR";
+
 // A client action é remontada quando o usuário volta do detalhe da venda.
 // Guardar a seleção fora do componente preserva caixa/dias nesse retorno.
 let selecaoAtual = null;
 
-/** Mês exibido no calendário: o do último dia marcado ou o mês corrente. */
-export function mesInicial(dias) {
-    const referencia = dias && dias.length ? dias[dias.length - 1] : null;
-    if (referencia) {
-        const [ano, mes] = referencia.split("-").map(Number);
-        return { ano, mes };
-    }
-    const agora = new Date();
-    return { ano: agora.getFullYear(), mes: agora.getMonth() + 1 };
+function duasCasas(valor) {
+    return String(valor).padStart(2, "0");
 }
 
-/** Rótulo do mês ("Outubro 2026") no locale do navegador. */
-export function rotuloMes(ano, mes) {
-    const rotulo = new Date(ano, mes - 1, 1).toLocaleDateString(undefined, {
+function capitalizar(texto) {
+    return texto.charAt(0).toUpperCase() + texto.slice(1);
+}
+
+/** Soma dias em uma data ISO sem depender do fuso do navegador. */
+export function somarDias(dataISO, dias) {
+    const [ano, mes, dia] = dataISO.split("-").map(Number);
+    const referencia = new Date(Date.UTC(ano, mes - 1, dia + dias));
+    return referencia.toISOString().slice(0, 10);
+}
+
+/** Soma meses ajustando o dia ao último dia do mês de destino (31/01 + 1 mês). */
+export function somarMeses(dataISO, meses) {
+    const [ano, mes, dia] = dataISO.split("-").map(Number);
+    const indice = mes - 1 + meses;
+    const alvoAno = ano + Math.floor(indice / 12);
+    const alvoMes = ((indice % 12) + 12) % 12 + 1;
+    const ultimoDia = new Date(Date.UTC(alvoAno, alvoMes, 0)).getUTCDate();
+    return `${alvoAno}-${duasCasas(alvoMes)}-${duasCasas(Math.min(dia, ultimoDia))}`;
+}
+
+/** Domingo da semana visual do dia informado (calendário começa no domingo). */
+export function inicioDaSemana(dataISO) {
+    const [ano, mes, dia] = dataISO.split("-").map(Number);
+    const diaDaSemana = new Date(Date.UTC(ano, mes - 1, dia)).getUTCDay();
+    return somarDias(dataISO, -diaDaSemana);
+}
+
+/** Sábado da semana visual do dia informado. */
+export function fimDaSemana(dataISO) {
+    return somarDias(inicioDaSemana(dataISO), 6);
+}
+
+/** Idioma configurado no Odoo (user.lang), com fallback pt-BR. */
+export function idiomaOdoo(lang) {
+    return (lang || IDIOMA_FALLBACK).replace(/_/g, "-");
+}
+
+/** Mês exibido no calendário: o do último dia marcado ou o mês de hoje. */
+export function mesInicial(dias, hojeISO) {
+    const ordenados = [...(dias || [])].sort();
+    const referencia = ordenados.length ? ordenados[ordenados.length - 1] : hojeISO;
+    const [ano, mes] = referencia.split("-").map(Number);
+    return { ano, mes };
+}
+
+/** Rótulo do mês ("Outubro de 2026") no idioma configurado no Odoo. */
+export function rotuloMes(ano, mes, idioma) {
+    const rotulo = new Date(Date.UTC(ano, mes - 1, 1)).toLocaleDateString(
+        idioma || IDIOMA_FALLBACK,
+        { month: "long", year: "numeric", timeZone: "UTC" }
+    );
+    return capitalizar(rotulo);
+}
+
+/** Nomes curtos dos dias da semana ("Dom", "Seg"...) no idioma do Odoo. */
+export function rotulosSemana(idioma) {
+    const formato = new Intl.DateTimeFormat(idioma || IDIOMA_FALLBACK, {
+        weekday: "short",
+        timeZone: "UTC",
+    });
+    // 01/03/2026 é domingo — serve de base para os sete rótulos.
+    return Array.from({ length: 7 }, (_, indice) =>
+        capitalizar(
+            formato
+                .format(new Date(Date.UTC(2026, 2, 1 + indice)))
+                .replace(/\.$/, "")
+        )
+    );
+}
+
+/** Data completa para leitores de tela: "8 de outubro de 2026". */
+export function nomeCompletoData(dataISO, idioma) {
+    const [ano, mes, dia] = dataISO.split("-").map(Number);
+    return new Intl.DateTimeFormat(idioma || IDIOMA_FALLBACK, {
+        day: "numeric",
         month: "long",
         year: "numeric",
-    });
-    return rotulo.charAt(0).toUpperCase() + rotulo.slice(1);
+        timeZone: "UTC",
+    }).format(new Date(Date.UTC(ano, mes - 1, dia)));
+}
+
+/** Nome completo da ação de remover um chip. */
+export function rotuloRemoverDia(dataISO, idioma, prefixo) {
+    return `${prefixo || "Remover"} ${nomeCompletoData(dataISO, idioma)}`;
 }
 
 /** Células do grid do mês: `null` nas posições vazias, uma célula por dia. */
-export function celulasDoMes(ano, mes, diasMarcados) {
+export function celulasDoMes(ano, mes, diasMarcados, hojeISO) {
     const marcados = diasMarcados || [];
     const celulas = new Array(new Date(ano, mes - 1, 1).getDay()).fill(null);
     const diasNoMes = new Date(ano, mes, 0).getDate();
     for (let dia = 1; dia <= diasNoMes; dia++) {
-        const data = `${ano}-${String(mes).padStart(2, "0")}-${String(dia).padStart(2, "0")}`;
-        celulas.push({ dia, data, marcado: marcados.includes(data) });
+        const data = `${ano}-${duasCasas(mes)}-${duasCasas(dia)}`;
+        celulas.push({
+            dia,
+            data,
+            marcado: marcados.includes(data),
+            hoje: data === hojeISO,
+        });
     }
     while (celulas.length % 7) {
         celulas.push(null);
@@ -69,13 +152,22 @@ export class ConsultaVendasCaixaDia extends Component {
     setup() {
         this.orm = useService("orm");
         this.action = useService("action");
+        const hojeISO = today().toISODate();
+        const mes = mesInicial(selecaoAtual?.dias, hojeISO);
+        const diasSelecionados = [...(selecaoAtual?.dias ?? [])].sort();
         this.state = useState({
             caixas: [],
             metodos: [],
             configIds: [...(selecaoAtual?.configIds ?? [])],
             metodosIds: [...(selecaoAtual?.metodosIds ?? [])],
-            dias: [...(selecaoAtual?.dias ?? [])],
-            mesVisivel: mesInicial(selecaoAtual?.dias),
+            dias: diasSelecionados,
+            mesVisivel: mes,
+            // Foco do teclado no calendário — não é seleção.
+            focoData: diasSelecionados.length
+                ? diasSelecionados[diasSelecionados.length - 1]
+                : `${mes.ano}-${duasCasas(mes.mes)}-01`,
+            hoje: hojeISO,
+            mostrarTodosChips: false,
             carregandoCaixas: true,
             carregandoMetodos: true,
             erroCaixas: "",
@@ -84,6 +176,21 @@ export class ConsultaVendasCaixaDia extends Component {
             erro: "",
             aviso: "",
             resultado: null,
+        });
+        // Depois de mover o foco pelo teclado ou remover um chip, o Owl já
+        // renderizou: aplica o foco no elemento correspondente.
+        this._focoPendente = null;
+        useEffect(() => {
+            if (!this._focoPendente) {
+                return;
+            }
+            const seletor = this._focoPendente;
+            this._focoPendente = null;
+            const alvo = this.el?.querySelector(seletor)
+                || this.el?.querySelector(
+                    `.o_consulta_dia[data-data="${this.focoVisivel}"]`
+                );
+            alvo?.focus();
         });
         onWillStart(() => this.carregarOpcoes());
     }
@@ -146,21 +253,164 @@ export class ConsultaVendasCaixaDia extends Component {
             && !this.state.erroMetodos;
     }
 
+    get idioma() {
+        return idiomaOdoo(user.lang);
+    }
+
     get rotuloMesVisivel() {
-        return rotuloMes(this.state.mesVisivel.ano, this.state.mesVisivel.mes);
+        return rotuloMes(
+            this.state.mesVisivel.ano, this.state.mesVisivel.mes, this.idioma
+        );
+    }
+
+    get rotulosSemana() {
+        return rotulosSemana(this.idioma);
     }
 
     get linhasDoMes() {
         const celulas = celulasDoMes(
             this.state.mesVisivel.ano,
             this.state.mesVisivel.mes,
-            this.state.dias
+            this.state.dias,
+            this.state.hoje
         );
         const linhas = [];
         for (let inicio = 0; inicio < celulas.length; inicio += 7) {
             linhas.push(celulas.slice(inicio, inicio + 7));
         }
         return linhas;
+    }
+
+    get calendarioHabilitado() {
+        return Boolean(this.state.configIds.length) && !this.state.carregando;
+    }
+
+    /** Célula que recebe o Tab na grade (roving tabindex). */
+    get focoVisivel() {
+        const { ano, mes } = this.state.mesVisivel;
+        const prefixo = `${ano}-${duasCasas(mes)}-`;
+        if (this.state.focoData && this.state.focoData.startsWith(prefixo)) {
+            return this.state.focoData;
+        }
+        return `${prefixo}01`;
+    }
+
+    get mensagemCalendarioDesabilitado() {
+        return this.state.configIds.length
+            ? ""
+            : _t("Selecione um caixa para escolher os dias.");
+    }
+
+    get contadorDias() {
+        return _t(
+            "%s de %s dias selecionados", this.state.dias.length, LIMITE_DIAS
+        );
+    }
+
+    /** Chips visíveis: seleções grandes começam recolhidas, com acesso a todas. */
+    get diasVisiveis() {
+        if (
+            this.state.mostrarTodosChips
+            || this.state.dias.length <= CHIPS_VISIVEIS
+        ) {
+            return this.state.dias;
+        }
+        return this.state.dias.slice(0, CHIPS_VISIVEIS);
+    }
+
+    get temChipsOcultos() {
+        return this.state.dias.length > CHIPS_VISIVEIS;
+    }
+
+    get rotuloVerChips() {
+        return this.state.mostrarTodosChips
+            ? _t("Mostrar menos")
+            : _t("Ver os %s dias", this.state.dias.length);
+    }
+
+    get anosDistintos() {
+        const anos = new Set(this.state.dias.map((dia) => dia.slice(0, 4)));
+        return anos.size > 1;
+    }
+
+    alternarChips() {
+        this.state.mostrarTodosChips = !this.state.mostrarTodosChips;
+    }
+
+    nomeCompletoData(data) {
+        return nomeCompletoData(data, this.idioma);
+    }
+
+    rotuloRemoverDia(data) {
+        return rotuloRemoverDia(data, this.idioma, _t("Remover"));
+    }
+
+    /** Chip curto (08/10); o ano aparece quando a seleção atravessa anos. */
+    formatarDataCurta(data) {
+        const [ano, mes, dia] = data.split("-");
+        return this.anosDistintos ? `${dia}/${mes}/${ano}` : `${dia}/${mes}`;
+    }
+
+    mudarMes(delta) {
+        const destino = somarMeses(this.focoVisivel, delta);
+        this.state.focoData = destino;
+        const [ano, mes] = destino.split("-").map(Number);
+        this.state.mesVisivel = { ano, mes };
+    }
+
+    /** Move só o foco — nunca marca nem apaga dias. */
+    moverFoco(data) {
+        this.state.focoData = data;
+        const [ano, mes] = data.split("-").map(Number);
+        this.state.mesVisivel = { ano, mes };
+        this._focoPendente = `.o_consulta_dia[data-data="${data}"]`;
+    }
+
+    alternarDiaFocado() {
+        this.toggleDia(this.focoVisivel);
+    }
+
+    /** Teclado da grade (adaptação multisseleção do APG Grid Pattern). */
+    onCalendarioKeydown(ev) {
+        if (!this.calendarioHabilitado) {
+            return;
+        }
+        let destino = null;
+        switch (ev.key) {
+            case "ArrowLeft":
+                destino = somarDias(this.focoVisivel, -1);
+                break;
+            case "ArrowRight":
+                destino = somarDias(this.focoVisivel, 1);
+                break;
+            case "ArrowUp":
+                destino = somarDias(this.focoVisivel, -7);
+                break;
+            case "ArrowDown":
+                destino = somarDias(this.focoVisivel, 7);
+                break;
+            case "Home":
+                destino = inicioDaSemana(this.focoVisivel);
+                break;
+            case "End":
+                destino = fimDaSemana(this.focoVisivel);
+                break;
+            case "PageUp":
+                destino = somarMeses(this.focoVisivel, -1);
+                break;
+            case "PageDown":
+                destino = somarMeses(this.focoVisivel, 1);
+                break;
+            case " ":
+            case "Enter":
+                ev.preventDefault();
+                this.alternarDiaFocado();
+                return;
+            default:
+                return;
+        }
+        ev.preventDefault();
+        this.moverFoco(destino);
     }
 
     get mensagemInicial() {
@@ -256,24 +506,19 @@ export class ConsultaVendasCaixaDia extends Component {
         this.alterouFiltros();
     }
 
-    mudarMes(delta) {
-        const { ano, mes } = this.state.mesVisivel;
-        const referencia = new Date(ano, mes - 1 + delta, 1);
-        this.state.mesVisivel = {
-            ano: referencia.getFullYear(),
-            mes: referencia.getMonth() + 1,
-        };
-    }
-
     toggleDia(data) {
         if (!this.state.configIds.length || this.state.carregando) {
             return;
         }
+        this.state.focoData = data;
         const indice = this.state.dias.indexOf(data);
         if (indice >= 0) {
             this.state.dias.splice(indice, 1);
         } else if (!podeMarcarDia(this.state.dias, data)) {
-            this.state.aviso = _t("Selecione no máximo 31 dias por consulta.");
+            this.state.aviso = _t(
+                "Você já selecionou %s dias. Remova um dia para adicionar outro.",
+                LIMITE_DIAS
+            );
             return;
         } else {
             this.state.dias.push(data);
@@ -281,6 +526,18 @@ export class ConsultaVendasCaixaDia extends Component {
         }
         this.state.aviso = "";
         this.alterouFiltros();
+    }
+
+    removerDia(data) {
+        const indice = this.state.dias.indexOf(data);
+        this.toggleDia(data);
+        if (this.state.dias.length) {
+            // Foco vai para o próximo chip; se não houver, para o grupo de dias.
+            const alvo = Math.min(indice, this.state.dias.length - 1);
+            this._focoPendente = `.o_consulta_chip_remover[data-indice="${alvo}"]`;
+        } else {
+            this._focoPendente = `.o_consulta_dia[data-data="${this.focoVisivel}"]`;
+        }
     }
 
     limparDias() {

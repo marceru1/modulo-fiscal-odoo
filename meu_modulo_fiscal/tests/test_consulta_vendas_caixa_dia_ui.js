@@ -151,8 +151,11 @@ function extractBody(src, signature) {
     assert(!/onWillStart\([^)]*consultar/.test(js), "não consultar ao abrir");
 
     // Ao menos um caixa marcado habilita o calendário.
-    assert(/t-att-disabled="!state\.configIds\.length \|\| state\.carregando"/.test(xml),
-        "calendário desabilitado sem caixa marcado");
+    assert(/get calendarioHabilitado\(\)/.test(js), "getter do calendário habilitado");
+    assert(/configIds\.length/.test(extractBody(js, "get calendarioHabilitado()")),
+        "calendário exige caixa marcado");
+    assert(/t-att-disabled="!calendarioHabilitado"/.test(xml),
+        "navegação do calendário desabilitada sem caixa");
 
     // Consultar habilita só com 1+ caixa, 1+ dia e nunca durante loading.
     assert(/get podeConsultar\(\)/.test(js), "getter podeConsultar");
@@ -275,26 +278,30 @@ function extractBody(src, signature) {
     // Grid do mês com cada dia clicável (toggle) e dia marcado destacado.
     assert(/t-foreach="linhasDoMes"/.test(xml), "grid do mês renderizado");
     assert(/t-on-click="\(\) => this\.toggleDia\(celula\.data\)"/.test(xml), "cada dia é clicável");
-    assert(/celula\.marcado/.test(xml), "dia marcado destacado");
+    assert(/o_consulta_dia_marcado/.test(xml), "dia marcado destacado");
     assert(/mudarMes\(-1\)/.test(xml) && /mudarMes\(1\)/.test(xml), "navegação de mês");
 
-    // Chips dos dias marcados removíveis + Limpar.
-    assert(/t-foreach="state\.dias"/.test(xml), "chips dos dias marcados");
-    assert(/formatarData\(dia\)/.test(xml), "chip mostra o dia");
-    assert(/toggleDia\(dia\)/.test(xml), "chip removível individualmente");
-    assert(/t-on-click="limparDias"/.test(xml), "botão Limpar");
-    assert(xml.includes(">Limpar<"), "rótulo Limpar");
+    // Chips dos dias marcados removíveis + Limpar dias.
+    assert(/t-foreach="diasVisiveis"/.test(xml), "chips dos dias marcados");
+    assert(/formatarDataCurta\(dia\)/.test(xml), "chip mostra o dia");
+    assert(/t-on-click\.stop="\(\) => this\.removerDia\(dia\)"/.test(xml),
+        "chip removível individualmente");
+    assert(/t-on-click="limparDias"/.test(xml), "botão de limpar os dias");
+    assert(xml.includes(">Limpar dias<"), "rótulo Limpar dias");
 
     // Limite de 31 dias na UI, com mensagem.
     assert(/const LIMITE_DIAS = 31/.test(js), "limite de 31 dias no cliente");
-    assert(js.includes("Selecione no máximo 31 dias por consulta."), "mensagem do limite");
+    assert(js.includes("Você já selecionou %s dias. Remova um dia para adicionar outro."),
+        "mensagem do limite");
     assert(/state\.aviso/.test(xml), "aviso do limite visível na tela");
 
     // Cálculo puro do grid: alinhamento, marcação e linha final completa.
+    const pad = (valor) => String(valor).padStart(2, "0");
     const celulasDoMes = new Function(
-        "ano", "mes", "diasMarcados", extractBody(js, "celulasDoMes(ano, mes, diasMarcados)")
+        "ano", "mes", "diasMarcados", "hojeISO", "duasCasas",
+        extractBody(js, "celulasDoMes(ano, mes, diasMarcados, hojeISO)")
     );
-    const outubro = celulasDoMes(2026, 10, ["2026-10-20"]);
+    const outubro = celulasDoMes(2026, 10, ["2026-10-20"], undefined, pad);
     assert.strictEqual(outubro.length % 7, 0, "grid fecha em semanas completas");
     // 01/10/2026 é quinta-feira → 4 células vazias antes do dia 1.
     assert.deepStrictEqual(outubro.slice(0, 4), [null, null, null, null], "alinhamento do 1º dia");
@@ -303,7 +310,7 @@ function extractBody(src, signature) {
     assert.strictEqual(outubro[4].marcado, false);
     const dia20 = outubro.find((celula) => celula && celula.data === "2026-10-20");
     assert.strictEqual(dia20.marcado, true, "dia marcado no grid");
-    assert.strictEqual(celulasDoMes(2026, 10, []).filter(Boolean).length, 31);
+    assert.strictEqual(celulasDoMes(2026, 10, [], undefined, pad).filter(Boolean).length, 31);
 
     const corpoPodeMarcarDia = extractBody(js, "podeMarcarDia(diasMarcados, data)");
     const podeMarcarDia = (diasMarcados, data) =>
@@ -644,6 +651,285 @@ function extractBody(src, signature) {
         ""
     );
     console.log("✓ 17: carga de opções com estados e recuperação por grupo");
+}
+
+// ── 18: calendário acessível (grade ARIA, teclado e idioma) ────────────────
+{
+    const traduzir18 = (texto, ...args) =>
+        args.reduce((acumulado, arg) => acumulado.replace("%s", arg), texto);
+
+    // Grade com semântica e estados (APG Grid Pattern adaptado à multisseleção).
+    assert(/role="grid"/.test(xml), "grade com role=grid");
+    assert(/aria-multiselectable="true"/.test(xml), "grade multisseleção");
+    assert(/role="gridcell"/.test(xml), "células como gridcell");
+    assert(/role="columnheader"/.test(xml), "cabeçalhos de coluna");
+    assert(/t-att-aria-selected="celula\.marcado \? 'true' : 'false'"/.test(xml),
+        "aria-selected por célula");
+    assert(/t-att-aria-current="celula\.hoje \? 'date' : null"/.test(xml),
+        "hoje com aria-current");
+    assert(/t-att-aria-label="nomeCompletoData\(celula\.data\)"/.test(xml),
+        "data completa como nome acessível");
+    assert(/t-att-tabindex="calendarioHabilitado and celula\.data === focoVisivel \? 0 : -1"/.test(xml),
+        "roving tabindex (só a célula focada é tabulável)");
+    assert(/t-on-keydown="onCalendarioKeydown"/.test(xml), "teclado tratado na grade");
+    assert(js.includes("Selecione um caixa para escolher os dias."),
+        "razão do calendário desabilitado");
+    assert(/t-esc="mensagemCalendarioDesabilitado"/.test(xml),
+        "razão renderizada junto ao calendário");
+    assert(/id="o_consulta_mes_rotulo"[\s\S]*?aria-live="polite"/.test(xml),
+        "mês anunciado ao navegar");
+    assert(/class="o_consulta_contador" aria-live="polite"/.test(xml), "contador anunciado");
+
+    // Idioma do Odoo, não o locale do navegador.
+    assert(!/toLocaleDateString\(undefined/.test(js), "sem locale indefinido no mês");
+    assert(/user\.lang/.test(js), "idioma vem de user.lang");
+    assert(/import \{ user \} from "@web\/core\/user"/.test(js), "user importado do core");
+    assert(/import \{[^}]*today[^}]*\} from "@web\/core\/l10n\/dates"/.test(js),
+        "hoje vem do contexto de data do Odoo");
+    assert(/t-foreach="rotulosSemana"/.test(xml), "rótulos da semana renderizados");
+
+    // Helpers de data puros (sem fuso do navegador).
+    const duasCasas = (valor) => String(valor).padStart(2, "0");
+    const capitalizar = (texto) => texto.charAt(0).toUpperCase() + texto.slice(1);
+
+    const somarDias = new Function(
+        "dataISO", "dias", extractBody(js, "somarDias(dataISO, dias)")
+    );
+    assert.strictEqual(somarDias("2026-10-31", 1), "2026-11-01");
+    assert.strictEqual(somarDias("2026-03-01", -1), "2026-02-28");
+    assert.strictEqual(somarDias("2026-10-20", 7), "2026-10-27");
+
+    const somarMeses = new Function(
+        "dataISO", "meses", "duasCasas",
+        extractBody(js, "somarMeses(dataISO, meses)")
+    );
+    const somarMesesCom = (data, meses) => somarMeses(data, meses, duasCasas);
+    assert.strictEqual(somarMesesCom("2026-01-31", 1), "2026-02-28",
+        "dia inexistente ajusta ao último do mês");
+    assert.strictEqual(somarMesesCom("2026-10-31", 1), "2026-11-30");
+    assert.strictEqual(somarMesesCom("2026-12-15", 1), "2027-01-15");
+    assert.strictEqual(somarMesesCom("2026-01-15", -1), "2025-12-15");
+
+    const inicioDaSemana = new Function(
+        "dataISO", "somarDias", extractBody(js, "inicioDaSemana(dataISO)")
+    );
+    const inicioSemana = (data) => inicioDaSemana(data, somarDias);
+    assert.strictEqual(inicioSemana("2026-10-20"), "2026-10-18", "domingo da semana");
+    const fimDaSemana = new Function(
+        "dataISO", "somarDias", "inicioDaSemana",
+        extractBody(js, "fimDaSemana(dataISO)")
+    );
+    const fimSemana = (data) => fimDaSemana(data, somarDias, inicioSemana);
+    assert.strictEqual(fimSemana("2026-10-20"), "2026-10-24",
+        "sábado da semana visual");
+
+    const FALLBACK = "pt-BR";
+    const rotuloMes = new Function(
+        "ano", "mes", "idioma", "capitalizar", "IDIOMA_FALLBACK",
+        extractBody(js, "rotuloMes(ano, mes, idioma)")
+    );
+    assert.strictEqual(rotuloMes(2026, 10, "pt-BR", capitalizar, FALLBACK), "Outubro de 2026");
+    assert.strictEqual(rotuloMes(2026, 10, "en-US", capitalizar, FALLBACK), "October 2026");
+    assert.strictEqual(rotuloMes(2026, 10, undefined, capitalizar, FALLBACK), "Outubro de 2026",
+        "fallback pt-BR quando o idioma não vem");
+
+    const rotulosSemana = new Function(
+        "idioma", "capitalizar", "IDIOMA_FALLBACK",
+        extractBody(js, "rotulosSemana(idioma)")
+    );
+    assert.deepStrictEqual(
+        rotulosSemana("pt-BR", capitalizar, FALLBACK),
+        ["Dom", "Seg", "Ter", "Qua", "Qui", "Sex", "Sáb"]
+    );
+    assert.deepStrictEqual(
+        rotulosSemana("en-US", capitalizar, FALLBACK).slice(0, 3),
+        ["Sun", "Mon", "Tue"]
+    );
+
+    const nomeCompletoData = new Function(
+        "dataISO", "idioma", "IDIOMA_FALLBACK",
+        extractBody(js, "nomeCompletoData(dataISO, idioma)")
+    );
+    assert.strictEqual(
+        nomeCompletoData("2026-10-08", "pt-BR", FALLBACK), "8 de outubro de 2026"
+    );
+    assert.strictEqual(
+        nomeCompletoData("2026-10-08", "en-US", FALLBACK), "October 8, 2026"
+    );
+
+    const rotuloRemoverDia = new Function(
+        "dataISO", "idioma", "prefixo", "nomeCompletoData",
+        extractBody(js, "rotuloRemoverDia(dataISO, idioma, prefixo)")
+    );
+    assert.strictEqual(
+        rotuloRemoverDia("2026-10-08", "pt-BR", "Remover", nomeCompletoData),
+        "Remover 8 de outubro de 2026"
+    );
+
+    // "Hoje" é um estado próprio da célula, sem marcar a data automaticamente.
+    const celulasDoMes = new Function(
+        "ano", "mes", "diasMarcados", "hojeISO", "duasCasas",
+        extractBody(js, "celulasDoMes(ano, mes, diasMarcados, hojeISO)")
+    );
+    const outubro = celulasDoMes(2026, 10, [], "2026-10-20", duasCasas);
+    assert.strictEqual(outubro.find((c) => c && c.data === "2026-10-20").hoje, true);
+    assert.strictEqual(outubro.find((c) => c && c.data === "2026-10-21").hoje, false);
+
+    // Teclado: setas, Home/End, Page Up/Down e Espaço/Enter.
+    const handler = new Function(
+        "somarDias", "somarMeses", "inicioDaSemana", "fimDaSemana", "ev",
+        extractBody(js, "onCalendarioKeydown(ev)")
+    );
+    const contextoTeclado = () => ({
+        calendarioHabilitado: true,
+        focoVisivel: "2026-10-20",
+        movido: null,
+        alternou: 0,
+        moverFoco(data) {
+            this.movido = data;
+        },
+        alternarDiaFocado() {
+            this.alternou++;
+        },
+    });
+    const tecla = (key, contexto) => {
+        const evento = {
+            key,
+            defaultPrevented: false,
+            preventDefault() {
+                this.defaultPrevented = true;
+            },
+        };
+        handler.call(
+            contexto, somarDias, somarMesesCom, inicioSemana, fimSemana, evento
+        );
+        return evento;
+    };
+    let contexto = contextoTeclado();
+    assert.strictEqual(tecla("ArrowRight", contexto).defaultPrevented, true);
+    assert.strictEqual(contexto.movido, "2026-10-21", "→ anda um dia");
+    contexto = contextoTeclado();
+    tecla("ArrowLeft", contexto);
+    assert.strictEqual(contexto.movido, "2026-10-19", "← anda um dia");
+    contexto = contextoTeclado();
+    tecla("ArrowUp", contexto);
+    assert.strictEqual(contexto.movido, "2026-10-13", "↑ anda uma semana");
+    contexto = contextoTeclado();
+    tecla("ArrowDown", contexto);
+    assert.strictEqual(contexto.movido, "2026-10-27", "↓ anda uma semana");
+    contexto = contextoTeclado();
+    tecla("Home", contexto);
+    assert.strictEqual(contexto.movido, "2026-10-18", "Home = início da semana visual");
+    contexto = contextoTeclado();
+    tecla("End", contexto);
+    assert.strictEqual(contexto.movido, "2026-10-24", "End = fim da semana visual");
+    contexto = contextoTeclado();
+    tecla("PageUp", contexto);
+    assert.strictEqual(contexto.movido, "2026-09-20", "Page Up = mês anterior");
+    contexto = contextoTeclado();
+    tecla("PageDown", contexto);
+    assert.strictEqual(contexto.movido, "2026-11-20", "Page Down = próximo mês");
+    for (const key of [" ", "Enter"]) {
+        contexto = contextoTeclado();
+        const evento = tecla(key, contexto);
+        assert.strictEqual(contexto.alternou, 1, `${key} marca/desmarca o dia focado`);
+        assert.strictEqual(contexto.movido, null, `${key} não move o foco`);
+        assert.strictEqual(evento.defaultPrevented, true);
+    }
+    contexto = contextoTeclado();
+    const naoTratada = tecla("a", contexto);
+    assert.strictEqual(contexto.movido, null, "tecla comum não move o foco");
+    assert.strictEqual(naoTratada.defaultPrevented, false, "tecla comum não é bloqueada");
+    contexto = contextoTeclado();
+    contexto.calendarioHabilitado = false;
+    tecla("ArrowRight", contexto);
+    assert.strictEqual(contexto.movido, null, "calendário desabilitado ignora o teclado");
+
+    // Mover foco muda mês e prepara o foco do DOM; não altera a seleção.
+    const moverFoco = new Function("data", extractBody(js, "moverFoco(data)"));
+    const componente = {
+        state: { focoData: "2026-10-20", mesVisivel: { ano: 2026, mes: 10 } },
+        _focoPendente: null,
+    };
+    moverFoco.call(componente, "2026-11-05");
+    assert.strictEqual(componente.state.focoData, "2026-11-05");
+    assert.deepStrictEqual(componente.state.mesVisivel, { ano: 2026, mes: 11 });
+    assert(componente._focoPendente.includes('data-data="2026-11-05"'),
+        "foco do DOM pendente na célula de destino");
+
+    const alternarDiaFocado = new Function(extractBody(js, "alternarDiaFocado()"));
+    const focado = {
+        focoVisivel: "2026-10-20",
+        alternado: null,
+        toggleDia(data) {
+            this.alternado = data;
+        },
+    };
+    alternarDiaFocado.call(focado);
+    assert.strictEqual(focado.alternado, "2026-10-20", "Enter/Espaço alternam o dia focado");
+
+    // Remover chip: foco vai para o próximo chip ou para a grade quando acaba.
+    const removerDia = new Function("data", extractBody(js, "removerDia(data)"));
+    const comChips = {
+        state: { dias: ["2026-10-08", "2026-10-09", "2026-10-10"] },
+        focoVisivel: "2026-10-08",
+        toggleDia(data) {
+            this.state.dias = this.state.dias.filter((dia) => dia !== data);
+        },
+        _focoPendente: null,
+    };
+    removerDia.call(comChips, "2026-10-08");
+    assert.strictEqual(comChips._focoPendente, '.o_consulta_chip_remover[data-indice="0"]',
+        "foco no próximo chip");
+    const ultimoChip = {
+        state: { dias: ["2026-10-08"] },
+        focoVisivel: "2026-10-08",
+        toggleDia(data) {
+            this.state.dias = this.state.dias.filter((dia) => dia !== data);
+        },
+        _focoPendente: null,
+    };
+    removerDia.call(ultimoChip, "2026-10-08");
+    assert(ultimoChip._focoPendente.includes("o_consulta_dia"), "sem chips, foco na grade");
+
+    // Chips recolhidos: poucos visíveis + "Ver os N dias"; data curta com ano
+    // só quando a seleção atravessa anos.
+    const diasVisiveis = new Function(
+        "CHIPS_VISIVEIS", extractBody(js, "get diasVisiveis()")
+    );
+    const trintaEUm = Array.from(
+        { length: 31 }, (_, i) => `2026-10-${String(i + 1).padStart(2, "0")}`
+    );
+    assert.strictEqual(
+        diasVisiveis.call({ state: { mostrarTodosChips: false, dias: trintaEUm } }, 6).length,
+        6, "seleção longa começa recolhida"
+    );
+    assert.strictEqual(
+        diasVisiveis.call({ state: { mostrarTodosChips: true, dias: trintaEUm } }, 6).length,
+        31, "expansão acessa todos os dias"
+    );
+    const rotuloVerChips = new Function(
+        "_t", extractBody(js, "get rotuloVerChips()")
+    );
+    assert.strictEqual(
+        rotuloVerChips.call({ state: { mostrarTodosChips: false, dias: trintaEUm } }, traduzir18),
+        "Ver os 31 dias"
+    );
+    assert.strictEqual(
+        rotuloVerChips.call({ state: { mostrarTodosChips: true, dias: trintaEUm } }, traduzir18),
+        "Mostrar menos"
+    );
+    const formatarDataCurta = new Function(
+        "data", extractBody(js, "formatarDataCurta(data)")
+    );
+    assert.strictEqual(
+        formatarDataCurta.call({ anosDistintos: false }, "2026-10-08"), "08/10"
+    );
+    assert.strictEqual(
+        formatarDataCurta.call({ anosDistintos: true }, "2026-10-08"), "08/10/2026"
+    );
+
+    console.log("✓ 18: calendário acessível, teclado e idioma do Odoo");
 }
 
 console.log("\nTodos os contratos da tela de consulta passaram.");

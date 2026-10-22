@@ -62,68 +62,96 @@
                             Dias <span class="o_consulta_marcador">obrigatório</span>
                         </h3>
                         <div class="o_consulta_calendario_wrap">
-                            <div class="d-flex justify-content-between align-items-center mb-2">
+                            <div class="o_consulta_calendario_nav">
                                 <button type="button"
                                         class="btn btn-sm btn-light"
-                                        t-att-disabled="!state.configIds.length || state.carregando"
+                                        t-att-disabled="!calendarioHabilitado"
                                         t-on-click="() => this.mudarMes(-1)"
                                         aria-label="Mês anterior">
-                                    <i class="fa fa-chevron-left"/>
+                                    <i class="fa fa-chevron-left" aria-hidden="true"/>
                                 </button>
-                                <strong t-esc="rotuloMesVisivel"/>
+                                <strong id="o_consulta_mes_rotulo"
+                                        class="o_consulta_mes"
+                                        aria-live="polite"
+                                        t-esc="rotuloMesVisivel"/>
                                 <button type="button"
                                         class="btn btn-sm btn-light"
-                                        t-att-disabled="!state.configIds.length || state.carregando"
+                                        t-att-disabled="!calendarioHabilitado"
                                         t-on-click="() => this.mudarMes(1)"
                                         aria-label="Próximo mês">
-                                    <i class="fa fa-chevron-right"/>
+                                    <i class="fa fa-chevron-right" aria-hidden="true"/>
                                 </button>
                             </div>
-                            <table class="table table-sm table-borderless text-center mb-0 o_consulta_calendario">
+
+                            <p t-if="mensagemCalendarioDesabilitado"
+                               id="o_consulta_calendario_aviso"
+                               class="o_consulta_ajuda o_consulta_calendario_aviso"
+                               t-esc="mensagemCalendarioDesabilitado"/>
+
+                            <table class="o_consulta_calendario"
+                                   role="grid"
+                                   aria-labelledby="o_consulta_dias_titulo o_consulta_mes_rotulo"
+                                   aria-multiselectable="true"
+                                   t-att-aria-disabled="!calendarioHabilitado"
+                                   t-att-aria-describedby="mensagemCalendarioDesabilitado ? 'o_consulta_calendario_aviso' : null"
+                                   t-on-keydown="onCalendarioKeydown">
                                 <thead>
-                                    <tr class="text-muted small">
-                                        <th scope="col">D</th>
-                                        <th scope="col">S</th>
-                                        <th scope="col">T</th>
-                                        <th scope="col">Q</th>
-                                        <th scope="col">Q</th>
-                                        <th scope="col">S</th>
-                                        <th scope="col">S</th>
+                                    <tr role="row">
+                                        <th scope="col"
+                                            role="columnheader"
+                                            t-foreach="rotulosSemana"
+                                            t-as="rotulo"
+                                            t-key="rotulo_index"
+                                            t-esc="rotulo"/>
                                     </tr>
                                 </thead>
                                 <tbody>
-                                    <tr t-foreach="linhasDoMes" t-as="semana" t-key="semana_index">
-                                        <td t-foreach="semana" t-as="celula" t-key="celula_index" class="p-0 py-1 px-1">
-                                            <t t-if="celula">
-                                                <button type="button"
-                                                        t-attf-class="btn btn-sm w-100 py-1 #{celula.marcado ? 'btn-primary' : 'btn-light border'}"
-                                                        t-att-disabled="!state.configIds.length || state.carregando"
-                                                        t-on-click="() => this.toggleDia(celula.data)"
-                                                        t-esc="celula.dia"/>
-                                            </t>
-                                        </td>
+                                    <tr t-foreach="linhasDoMes" t-as="semana" t-key="semana_index" role="row">
+                                        <t t-foreach="semana" t-as="celula" t-key="celula_index">
+                                            <td t-if="celula"
+                                                role="gridcell"
+                                                t-attf-class="o_consulta_dia #{celula.marcado ? 'o_consulta_dia_marcado' : ''} #{celula.hoje ? 'o_consulta_dia_hoje' : ''}"
+                                                t-att-data-data="celula.data"
+                                                t-att-tabindex="calendarioHabilitado and celula.data === focoVisivel ? 0 : -1"
+                                                t-att-aria-selected="celula.marcado ? 'true' : 'false'"
+                                                t-att-aria-label="nomeCompletoData(celula.data)"
+                                                t-att-aria-current="celula.hoje ? 'date' : null"
+                                                t-on-click="() => this.toggleDia(celula.data)">
+                                                <span class="o_consulta_dia_numero" t-esc="celula.dia"/>
+                                            </td>
+                                            <td t-else="" class="o_consulta_dia_vazio" aria-hidden="true"/>
+                                        </t>
                                     </tr>
                                 </tbody>
                             </table>
 
-                            <div t-if="state.dias.length" class="d-flex flex-wrap align-items-center gap-1 mt-2">
-                                <span t-foreach="state.dias"
+                            <p class="o_consulta_contador" aria-live="polite" t-esc="contadorDias"/>
+
+                            <div t-if="state.dias.length" class="o_consulta_chips">
+                                <span t-foreach="diasVisiveis"
                                       t-as="dia"
                                       t-key="dia"
-                                      class="badge rounded-pill bg-secondary d-inline-flex align-items-center">
-                                    <t t-esc="formatarData(dia)"/>
+                                      class="o_consulta_chip">
+                                    <span t-esc="formatarDataCurta(dia)"/>
                                     <button type="button"
-                                            class="btn btn-sm p-0 ms-1 text-white"
+                                            class="o_consulta_chip_remover"
+                                            t-att-data-indice="state.dias.indexOf(dia)"
+                                            t-att-aria-label="rotuloRemoverDia(dia)"
                                             t-att-disabled="state.carregando"
-                                            t-on-click.stop="() => this.toggleDia(dia)"
-                                            aria-label="Remover dia">
-                                        <i class="fa fa-times"/>
+                                            t-on-click.stop="() => this.removerDia(dia)">
+                                        <i class="fa fa-times" aria-hidden="true"/>
                                     </button>
                                 </span>
+                                <button t-if="temChipsOcultos"
+                                        type="button"
+                                        class="btn btn-link btn-sm p-0"
+                                        t-att-aria-expanded="state.mostrarTodosChips ? 'true' : 'false'"
+                                        t-on-click="alternarChips"
+                                        t-esc="rotuloVerChips"/>
                                 <button type="button"
-                                        class="btn btn-sm btn-link"
+                                        class="btn btn-link btn-sm p-0"
                                         t-att-disabled="state.carregando"
-                                        t-on-click="limparDias">Limpar</button>
+                                        t-on-click="limparDias">Limpar dias</button>
                             </div>
 
                             <div t-if="state.aviso" class="alert alert-warning py-1 px-2 mb-0 mt-2 small" role="alert">

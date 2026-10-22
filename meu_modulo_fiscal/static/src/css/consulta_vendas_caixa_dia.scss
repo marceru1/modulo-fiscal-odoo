@@ -90,9 +90,27 @@
         max-width: 380px;
     }
 
+    .o_consulta_calendario_nav {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 8px;
+        margin-bottom: 8px;
+    }
+
+    .o_consulta_mes {
+        font-size: 0.9375rem;
+    }
+
+    .o_consulta_calendario_aviso {
+        margin-bottom: 8px;
+    }
+
     .o_consulta_calendario {
         width: 100%;
         table-layout: fixed;
+        border-collapse: separate;
+        border-spacing: 2px;
         margin-bottom: 0;
     }
 
@@ -101,6 +119,111 @@
         font-size: 0.8125rem;
         font-weight: 500;
         color: $gray-700;
+        text-align: center;
+    }
+
+    // Célula = alvo de clique e de foco (padrão APG de grade).
+    .o_consulta_dia {
+        position: relative;
+        height: 2.5rem;
+        padding: 0;
+        text-align: center;
+        vertical-align: middle;
+        border: 1px solid $border-color;
+        border-radius: 0.375rem;
+        background-color: $white;
+        cursor: pointer;
+        user-select: none;
+    }
+
+    .o_consulta_dia:hover {
+        background-color: $gray-100;
+    }
+
+    // Hoje: contorno interno, independente do preenchimento de seleção.
+    .o_consulta_dia_hoje {
+        box-shadow: inset 0 0 0 1px $gray-600;
+    }
+
+    // Selecionado: fundo claro + borda + ponto — não depende só da cor.
+    .o_consulta_dia_marcado {
+        background-color: rgba($o-brand-primary, 0.12);
+        border-color: $o-brand-primary;
+        font-weight: 600;
+    }
+
+    .o_consulta_dia_marcado::after {
+        content: "";
+        position: absolute;
+        bottom: 3px;
+        left: 50%;
+        width: 4px;
+        height: 4px;
+        margin-left: -2px;
+        border-radius: 50%;
+        background-color: $o-brand-primary;
+    }
+
+    .o_consulta_dia:focus-visible {
+        outline: 2px solid $body-color;
+        outline-offset: -2px;
+    }
+
+    .o_consulta_dia_numero {
+        display: block;
+        line-height: 1.2;
+    }
+
+    .o_consulta_dia_vazio {
+        height: 2.5rem;
+    }
+
+    .o_consulta_contador {
+        margin: 8px 0 0;
+        font-size: 0.8125rem;
+        color: $gray-700;
+    }
+
+    .o_consulta_chips {
+        display: flex;
+        flex-wrap: wrap;
+        align-items: center;
+        gap: 6px;
+        margin-top: 8px;
+    }
+
+    .o_consulta_chip {
+        display: inline-flex;
+        align-items: center;
+        gap: 2px;
+        padding: 2px 2px 2px 8px;
+        font-size: 0.8125rem;
+        background-color: $white;
+        border: 1px solid $border-color;
+        border-radius: 9999px;
+        white-space: nowrap;
+    }
+
+    .o_consulta_chip_remover {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        width: 1.75rem;
+        height: 1.75rem;
+        padding: 0;
+        color: $body-color;
+        background: transparent;
+        border: 0;
+        border-radius: 50%;
+    }
+
+    .o_consulta_chip_remover:hover {
+        background-color: $gray-200;
+    }
+
+    .o_consulta_chip_remover:focus-visible {
+        outline: 2px solid $body-color;
+        outline-offset: 1px;
     }
 
     // Faixa de ação depois de todos os filtros: resumo + motivo + Consultar.
