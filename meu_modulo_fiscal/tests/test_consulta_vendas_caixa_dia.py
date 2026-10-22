@@ -208,11 +208,22 @@ class TestConsultaVendasCaixaDia(TransactionCase):
         )
 
         self.assertEqual(venda_devolvida["valor"], -30.0)
+        self.assertTrue(venda_devolvida["devolucao"],
+                        "contrato identifica a devolução para a tela")
         self.assertEqual(resultado["resumo"]["quantidade"], 2)
         self.assertEqual(resultado["resumo"]["quantidade_devolucoes"], 1)
         totais = {total["currency_id"]: total["total"]
                   for total in resultado["resumo"]["totais"]}
         self.assertEqual(totais[self.caixa.currency_id.id], 70.0)
+
+    def test_venda_positiva_nao_e_marcada_como_devolucao(self):
+        """A identificação vem do sinal do total final, não do estado."""
+        pedido = self._criar_pedido("2026-10-20 09:00:00", valor=100.0)
+
+        venda = self._consultar()["vendas"][0]
+
+        self.assertEqual(venda["id"], pedido.id)
+        self.assertFalse(venda["devolucao"])
 
     # ── Resultado vazio / ordenação ────────────────────────────────────────
     def test_dia_sem_vendas(self):

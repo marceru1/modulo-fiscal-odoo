@@ -615,7 +615,10 @@ export class ConsultaVendasCaixaDia extends Component {
     }
 
     formatarDataHora(valor) {
-        return valor ? formatDateTime(deserializeDateTime(valor)) : "";
+        // Minutos bastam para a conferência; segundos ficam no detalhe.
+        return valor
+            ? formatDateTime(deserializeDateTime(valor), { showSeconds: false })
+            : "";
     }
 
     formatarValor(valor, currencyId) {
@@ -660,6 +663,29 @@ export class ConsultaVendasCaixaDia extends Component {
 
     rotuloCupons(quantidade) {
         return quantidade === 1 ? _t("cupom") : _t("cupons");
+    }
+
+    /** "2 cupons" com espaço e plural corretos, inclusive no vazio ("0 cupons"). */
+    get resumoQuantidade() {
+        const quantidade = this.state.resultado.resumo.quantidade;
+        return `${quantidade} ${this.rotuloCupons(quantidade)}`;
+    }
+
+    /** Contexto efetivamente aplicado — vem do retorno, não da seleção atual. */
+    get contextoResultado() {
+        const resultado = this.state.resultado;
+        if (!resultado) {
+            return "";
+        }
+        const pagamento = resultado.formas.length
+            ? this.formatarNomes(resultado.formas)
+            : _t("sem filtro");
+        return [
+            `${_t("Caixas")}: ${this.formatarNomes(resultado.caixas)}`,
+            `${_t("Dias")}: ${this.formatarDias(resultado.datas)}`,
+            `${_t("Pagamento")}: ${pagamento}`,
+            `${_t("Fuso")}: ${resultado.fuso}`,
+        ].join(" · ");
     }
 
     rotuloDevolucoes(quantidade) {

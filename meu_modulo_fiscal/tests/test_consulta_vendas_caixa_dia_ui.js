@@ -169,7 +169,7 @@ function extractBody(src, signature) {
 
     // Erro != vazio.
     assert(/state\.erro = this\.mensagemErro\(error\)/.test(js), "erro tratado à parte");
-    assert(xml.includes("Nenhuma venda encontrada para este caixa nos dias selecionados"),
+    assert(xml.includes("Nenhum cupom encontrado com os filtros selecionados."),
         "mensagem de dias sem vendas");
 
     // Trocar filtro limpa o resultado velho.
@@ -189,12 +189,15 @@ function extractBody(src, signature) {
     console.log("✓ 7: detalhe da venda read-only");
 }
 
-// ── 8: rodapé usa o resumo do servidor, não subtotal de página ────────────
+// ── 8: resumo do resultado usa o servidor, não subtotal de página ─────────
 {
-    assert(/state\.resultado\.resumo\.quantidade/.test(xml), "rodapé usa resumo.quantidade");
-    assert(/state\.resultado\.resumo\.totais/.test(xml), "rodapé usa total por moeda do resumo");
+    assert(/get resumoQuantidade\(\)/.test(js), "quantidade vem de um getter do resumo");
+    assert(/state\.resultado\.resumo\.quantidade/.test(
+        extractBody(js, "get resumoQuantidade()")), "getter lê resumo.quantidade");
+    assert(/state\.resultado\.resumo\.totais/.test(xml),
+        "total por moeda lido do resumo do servidor");
     assert(!/vendas\.length\s*[-+*/]/.test(xml), "não calcular total no cliente");
-    console.log("✓ 8: rodapé usa o resumo server-side");
+    console.log("✓ 8: resumo do resultado vem do server-side");
 }
 
 // ── 9: t-esc para dados (XSS) e nunca t-raw ────────────────────────────────
@@ -376,9 +379,10 @@ function extractBody(src, signature) {
         "célula Caixa condicional");
     assert(/t-esc="venda\.caixa"/.test(xml), "nome do caixa por linha");
 
-    // Cabeçalho do resultado lista os caixas marcados.
-    assert(/formatarNomes\(state\.resultado\.caixas\)/.test(xml),
-        "cabeçalho lista os caixas consultados");
+    // Contexto do resultado lista os caixas efetivamente consultados.
+    assert(/formatarNomes\(resultado\.caixas\)/.test(
+        extractBody(js, "get contextoResultado()")),
+        "contexto lista os caixas consultados");
 
     const formatarNomes = new Function(
         "itens", extractBody(js, "formatarNomes(itens)")
@@ -409,17 +413,20 @@ function extractBody(src, signature) {
 
     // Chamada envia o filtro e o resultado expõe o filtro aplicado.
     assert(/state\.metodosIds\]/.test(js), "filtro enviado ao servidor");
-    assert(/state\.resultado\.formas\.length/.test(xml), "cabeçalho mostra o filtro quando ativo");
-    assert(/Formas:/.test(xml), "rótulo Formas: no cabeçalho");
-    assert(/formatarNomes\(state\.resultado\.formas\)/.test(xml), "nomes das formas aplicadas");
+    const contexto = extractBody(js, "get contextoResultado()");
+    assert(/resultado\.formas\.length/.test(contexto),
+        "contexto mostra o filtro quando ativo");
+    assert(/_t\("Pagamento"\)/.test(contexto), "rótulo Pagamento no contexto aplicado");
+    assert(/formatarNomes\(resultado\.formas\)/.test(contexto),
+        "nomes das formas aplicadas");
 
     // Marcar/desmarcar forma zera resultado antigo.
     assert(/toggleMetodo\(metodoId\)[\s\S]*alterouFiltros/.test(js),
         "mudar o filtro de formas limpa o resultado");
 
-    // Filtro vazio não aparece no cabeçalho (t-if pelo length).
-    assert(/t-if="state\.resultado\.formas\.length"/.test(xml),
-        "sem filtro, cabeçalho não mostra Formas");
+    // Filtro vazio aparece como "sem filtro" no contexto aplicado.
+    assert(/_t\("sem filtro"\)/.test(contexto),
+        "sem filtro, contexto diz 'sem filtro'");
     console.log("✓ 15: filtro opcional por forma de pagamento");
 }
 
@@ -1005,6 +1012,82 @@ function extractBody(src, signature) {
         "tabela continua exibindo todos os métodos do cupom");
 
     console.log("✓ 19: filtro de pagamento explicado, removível e sem conversão implícita");
+}
+
+// ── 20: resultado legível — resumo, contexto e devoluções ─────────────────
+{
+    const model = read(path.join(MODULE_ROOT, "models", "consulta_vendas_caixa_dia.py"));
+    assert(/'devolucao':\s*pedido\.amount_total\s*<\s*0/.test(model),
+        "backend identifica a devolução no contrato");
+    assert(/devolucao.*valor negativo/.test(model), "contrato documentado");
+
+    // Quantidade e total vêm antes da tabela (não no rodapé).
+    const posResumo = xml.indexOf('class="o_consulta_resumo"');
+    const posTabela = xml.indexOf("o_consulta_tabela_wrap");
+    assert(posResumo >= 0 && posTabela > posResumo,
+        "resumo do resultado acima da tabela");
+    assert(/role="status" aria-live="polite"/.test(xml), "resumo anunciado");
+
+    // Plural e vazio: "0 cupons" sem inventar moeda/total.
+    const resumoQuantidade = new Function(
+        extractBody(js, "get resumoQuantidade()")
+    );
+    const comResultado = (quantidade) => ({
+        state: { resultado: { resumo: { quantidade } } },
+        rotuloCupons: (numero) => (numero === 1 ? "cupom" : "cupons"),
+    });
+    assert.strictEqual(resumoQuantidade.call(comResultado(1)), "1 cupom");
+    assert.strictEqual(resumoQuantidade.call(comResultado(2)), "2 cupons");
+    assert.strictEqual(resumoQuantidade.call(comResultado(0)), "0 cupons");
+    assert(!/R\$ 0,00/.test(xml), "não inventa total zerado no vazio");
+    assert(/t-foreach="state\.resultado\.resumo\.totais"/.test(xml),
+        "totais só existem quando o servidor devolve moeda");
+
+    // Contexto aplicado usa o retorno do servidor, não a seleção corrente.
+    const contextoResultado = new Function(
+        "_t", extractBody(js, "get contextoResultado()")
+    );
+    const traduzir = (texto, ...args) =>
+        args.reduce((acumulado, arg) => acumulado.replace("%s", arg), texto);
+    const contexto = {
+        state: {
+            resultado: {
+                caixas: [{ nome: "Caixa 1" }, { nome: "Caixa 2" }],
+                formas: [],
+                datas: ["2026-10-15", "2026-10-20"],
+                fuso: "America/Manaus",
+            },
+        },
+        formatarNomes: (itens) => itens.map((item) => item.nome).join(" + "),
+        formatarDias: (datas) => datas.map((data) => data.split("-").reverse().join("/")).join(" e "),
+    };
+    assert.strictEqual(
+        contextoResultado.call(contexto, traduzir),
+        "Caixas: Caixa 1 + Caixa 2 · Dias: 15/10/2026 e 20/10/2026 · Pagamento: sem filtro · Fuso: America/Manaus"
+    );
+    contexto.state.resultado.formas = [{ nome: "PIX" }, { nome: "Cartão" }];
+    assert.strictEqual(
+        contextoResultado.call(contexto, traduzir),
+        "Caixas: Caixa 1 + Caixa 2 · Dias: 15/10/2026 e 20/10/2026 · Pagamento: PIX + Cartão · Fuso: America/Manaus"
+    );
+
+    // Devolução: identificada por texto, sinal preservado, sem coluna Situação.
+    assert(/venda\.devolucao/.test(xml), "linha usa a flag devolucao do servidor");
+    assert(/Devolução/.test(xml), "texto Devolução junto ao cupom");
+    assert(xml.includes("O total inclui devoluções com valor negativo."),
+        "nota quando há devolução");
+    assert(/sendo/.test(xml) && /rotuloDevolucoes/.test(xml),
+        "devoluções como subconjunto da contagem");
+    assert(/formatarValor\(venda\.valor/.test(xml), "sinal negativo preservado no valor");
+    assert(!/venda\.valor\s*</.test(xml), "tela não reinterpreta o sinal");
+    assert(!/Situação/.test(xml), "sem coluna Situação");
+
+    // Nota de sincronização e leitura até minutos.
+    assert(xml.includes("Exibe vendas sincronizadas com o servidor."),
+        "nota de sincronização");
+    assert(/showSeconds:\s*false/.test(js), "data/hora até minutos na tabela");
+
+    console.log("✓ 20: resumo, contexto aplicado, devoluções e pluralização");
 }
 
 console.log("\nTodos os contratos da tela de consulta passaram.");
