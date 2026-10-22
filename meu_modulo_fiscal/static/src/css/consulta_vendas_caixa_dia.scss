@@ -323,10 +323,22 @@
 
     .o_consulta_tabela_wrap {
         margin-top: 12px;
+        // Rolagem própria da tabela; a página nunca rola na horizontal.
+        max-width: 100%;
+        overflow-x: auto;
+    }
+
+    .o_consulta_tabela_wrap:focus-visible {
+        outline: 2px solid $body-color;
+        outline-offset: 2px;
     }
 
     .o_consulta_tabela td {
         vertical-align: middle;
+    }
+
+    .o_consulta_valor {
+        font-variant-numeric: tabular-nums;
     }
 
     .o_consulta_devolucao {
@@ -365,5 +377,48 @@
     .o_consulta_erro_titulo {
         margin-bottom: 4px;
         font-weight: 600;
+    }
+
+    // Responsivo pela largura REAL do painel do Odoo (não do monitor).
+    @container consulta-vendas (max-width: 1100px) {
+        .o_consulta_filtros {
+            grid-template-columns: minmax(180px, 1fr) minmax(300px, 380px);
+        }
+
+        .o_consulta_grupo_pagamento {
+            grid-column: 1 / -1;
+        }
+    }
+
+    @container consulta-vendas (max-width: 780px) {
+        .o_consulta_container {
+            padding: 12px 12px 20px;
+        }
+
+        .o_consulta_filtros {
+            grid-template-columns: minmax(0, 1fr);
+        }
+
+        .o_consulta_grupo_pagamento {
+            grid-column: auto;
+        }
+
+        .o_consulta_acao {
+            flex-direction: column;
+            align-items: stretch;
+        }
+
+        .o_consulta_botao {
+            width: 100%;
+        }
+
+        .o_consulta_calendario_wrap {
+            max-width: none;
+        }
+
+        .o_consulta_resumo {
+            flex-direction: column;
+            align-items: flex-start;
+        }
     }
 }

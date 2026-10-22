@@ -305,7 +305,11 @@
                         Nenhum cupom encontrado com os filtros selecionados.
                     </div>
 
-                    <div t-else="" class="o_consulta_tabela_wrap">
+                    <div t-else=""
+                         class="o_consulta_tabela_wrap"
+                         tabindex="0"
+                         role="region"
+                         aria-label="Cupons encontrados">
                         <table class="table table-sm table-striped table-hover align-middle o_consulta_tabela">
                             <thead>
                                 <tr>
@@ -333,7 +337,7 @@
                                         </span>
                                     </td>
                                     <td t-esc="venda.operador"/>
-                                    <td class="text-end text-nowrap"
+                                    <td class="text-end text-nowrap o_consulta_valor"
                                         t-esc="formatarValor(venda.valor, venda.currency_id)"/>
                                     <td t-esc="venda.formas_pagamento"/>
                                 </tr>
