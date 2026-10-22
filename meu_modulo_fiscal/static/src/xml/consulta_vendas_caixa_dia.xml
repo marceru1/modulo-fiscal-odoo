@@ -165,9 +165,8 @@
                         <h3 class="o_consulta_grupo_titulo" id="o_consulta_pagamento_titulo">
                             Formas de pagamento <span class="o_consulta_marcador">opcional</span>
                         </h3>
-                        <p class="o_consulta_ajuda" id="o_consulta_pagamento_ajuda">
-                            Sem filtro: qualquer forma de pagamento.
-                        </p>
+                        <p class="o_consulta_ajuda" id="o_consulta_pagamento_ajuda"
+                           t-esc="mensagemFiltroPagamento"/>
                         <div class="o_consulta_lista"
                              role="group"
                              aria-labelledby="o_consulta_pagamento_titulo"
@@ -202,6 +201,25 @@
                                 </div>
                             </t>
                         </div>
+                        <button t-if="state.metodosIds.length"
+                                type="button"
+                                class="btn btn-link btn-sm p-0 o_consulta_remover_filtro"
+                                t-att-disabled="state.carregando"
+                                t-on-click="removerFiltroPagamento">
+                            Remover filtro de pagamento
+                        </button>
+                        <details class="o_consulta_ajuda_pagamento">
+                            <summary>Como o filtro afeta o valor?</summary>
+                            <p>
+                                O filtro encontra cupons que contêm a forma selecionada. O total
+                                considera o valor inteiro de cada cupom, mesmo com pagamento dividido.
+                            </p>
+                            <p>
+                                Exemplo: um cupom de R$ 100,00 com R$ 40,00 em dinheiro e
+                                R$ 60,00 em cartão aparece uma vez, com R$ 100,00, ao filtrar
+                                por dinheiro.
+                            </p>
+                        </details>
                     </section>
                 </div>
 
