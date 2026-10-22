@@ -425,6 +425,15 @@ export class ConsultaVendasCaixaDia extends Component {
         return "";
     }
 
+    /** A orientação inicial não compete com carga/falha das opções. */
+    get exibirMensagemInicial() {
+        return Boolean(this.mensagemInicial)
+            && !this.state.carregandoCaixas
+            && !this.state.carregandoMetodos
+            && !this.state.erroCaixas
+            && !this.state.erroMetodos;
+    }
+
     /** Motivo visível ao lado de Consultar — nunca depender só de tooltip. */
     get motivoBloqueio() {
         if (this.state.carregando) {

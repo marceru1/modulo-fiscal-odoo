@@ -1235,6 +1235,36 @@ function extractBody(src, signature) {
             ""
         );
 
+        // A orientação inicial não disputa espaço com carga/falha das opções.
+        const exibirMensagemInicial = new Function(
+            extractBody(js, "get exibirMensagemInicial()")
+        );
+        const contextoInicial = (extra = {}) => ({
+            state: {
+                carregandoCaixas: false,
+                carregandoMetodos: false,
+                erroCaixas: "",
+                erroMetodos: "",
+                ...extra,
+            },
+            mensagemInicial: extra.mensagemInicial ?? "Selecione ao menos um caixa e um dia para consultar.",
+        });
+        assert.strictEqual(exibirMensagemInicial.call(contextoInicial()), true);
+        assert.strictEqual(
+            exibirMensagemInicial.call(contextoInicial({ carregandoCaixas: true })), false,
+            "carregando não mostra orientação"
+        );
+        assert.strictEqual(
+            exibirMensagemInicial.call(contextoInicial({ erroMetodos: "falhou" })), false,
+            "falha de opções não mostra orientação"
+        );
+        assert.strictEqual(
+            exibirMensagemInicial.call(contextoInicial({ mensagemInicial: "" })), false,
+            "seleção pronta dispensa orientação"
+        );
+        assert(/t-elif="exibirMensagemInicial"/.test(xml),
+            "template usa a condição de exibição da orientação");
+
         console.log("✓ 21: feedback de filtros alterados, consulta, erro e vazio");
     })());
 }
