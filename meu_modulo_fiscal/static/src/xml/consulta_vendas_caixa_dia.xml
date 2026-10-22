@@ -263,7 +263,7 @@
                         Filtros alterados. Clique em Consultar para atualizar os resultados.
                     </div>
 
-                    <div t-elif="mensagemInicial" class="alert alert-info">
+                    <div t-elif="exibirMensagemInicial" class="alert alert-info">
                         <t t-esc="mensagemInicial"/>
                     </div>
 
