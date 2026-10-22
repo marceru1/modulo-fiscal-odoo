@@ -30,6 +30,9 @@ const js = read(path.join(MODULE_ROOT, "static", "src", "js", "consulta_vendas_c
 const xml = read(path.join(MODULE_ROOT, "static", "src", "xml", "consulta_vendas_caixa_dia.xml"));
 const views = read(path.join(MODULE_ROOT, "views", "consulta_vendas_caixa_dia_views.xml"));
 const manifest = read(path.join(MODULE_ROOT, "__manifest__.py"));
+const scss = read(path.join(
+    MODULE_ROOT, "static", "src", "css", "consulta_vendas_caixa_dia.scss"
+));
 
 const TAG = "meu_modulo_fiscal.consulta_vendas_caixa_dia";
 
@@ -437,7 +440,6 @@ function extractBody(src, signature) {
         MODULE_ROOT, "static", "src", "css", "consulta_vendas_caixa_dia.scss"
     );
     assert(fs.existsSync(scssPath), "SCSS da consulta existe");
-    const scss = read(scssPath);
 
     // Ordem de leitura: caixas -> dias -> pagamento -> faixa de ação.
     const posCaixas = xml.indexOf("o_consulta_grupo_caixas");
@@ -1239,7 +1241,46 @@ function extractBody(src, signature) {
 
 Promise.all(promessas)
     .then(() => {
-        console.log("\nTodos os contratos da tela de consulta passaram.");
+        // ── 22: responsividade e tabela ───────────────────────────────────────────
+{
+    // Responsivo pela largura do painel (container queries), não do monitor.
+    assert(/container-type:\s*inline-size/.test(scss), "consulta é um contêiner de consulta");
+    assert(/@container consulta-vendas \(max-width: 1100px\)/.test(scss),
+        "quebra para dois grupos em painel médio");
+    assert(/@container consulta-vendas \(max-width: 780px\)/.test(scss),
+        "quebra para uma coluna em painel estreito");
+    assert(
+        /@container consulta-vendas \(max-width: 780px\)[\s\S]*?\.o_consulta_filtros\s*\{[\s\S]*?grid-template-columns:\s*minmax\(0,\s*1fr\)/.test(scss),
+        "uma coluna na ordem de leitura"
+    );
+    assert(
+        /@container consulta-vendas \(max-width: 780px\)[\s\S]*?\.o_consulta_acao\s*\{[\s\S]*?flex-direction:\s*column/.test(scss),
+        "faixa de ação empilha no estreito"
+    );
+
+    // Só a tabela pode rolar; a página não ganha rolagem horizontal.
+    assert(/\.o_consulta_tabela_wrap\s*\{[\s\S]*?overflow-x:\s*auto/.test(scss),
+        "tabela com rolagem própria");
+    assert(!/\.o_consulta_container\s*\{[^}]*overflow:\s*hidden/.test(scss),
+        "conteúdo não é cortado com overflow oculto");
+    assert(/\.o_consulta_tabela_wrap:focus-visible/.test(scss),
+        "área rolável com foco visível");
+
+    // Região da tabela acessível por teclado e nomeada.
+    assert(/class="o_consulta_tabela_wrap"\s+tabindex="0"\s+role="region"\s+aria-label="Cupons encontrados"/.test(xml),
+        "região da tabela focável e rotulada");
+
+    // Valores alinhados e com algarismos de largura uniforme.
+    assert(/class="text-end text-nowrap o_consulta_valor"/.test(xml),
+        "coluna de valor alinhada à direita");
+    assert(/font-variant-numeric:\s*tabular-nums/.test(scss), "algarismos uniformes");
+    assert(/\.o_consulta_calendario\s*\{[\s\S]*?table-layout:\s*fixed/.test(scss),
+        "sete colunas regulares do calendário");
+
+    console.log("✓ 22: responsividade por painel e tabela com rolagem própria");
+}
+
+console.log("\nTodos os contratos da tela de consulta passaram.");
     })
     .catch((error) => {
         console.error(error);
