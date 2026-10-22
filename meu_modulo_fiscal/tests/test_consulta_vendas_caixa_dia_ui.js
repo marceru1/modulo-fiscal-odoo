@@ -932,4 +932,79 @@ function extractBody(src, signature) {
     console.log("✓ 18: calendário acessível, teclado e idioma do Odoo");
 }
 
+// ── 19: formas de pagamento — sem filtro, OU e valor integral ────────────
+{
+    const traduzir = (texto, ...args) =>
+        args.reduce((acumulado, arg) => acumulado.replace("%s", arg), texto);
+
+    const mensagemFiltroPagamento = new Function(
+        "_t", extractBody(js, "get mensagemFiltroPagamento()")
+    );
+    assert.strictEqual(
+        mensagemFiltroPagamento.call({ state: { metodosIds: [] } }, traduzir),
+        "Sem filtro: qualquer forma de pagamento."
+    );
+    assert.strictEqual(
+        mensagemFiltroPagamento.call({ state: { metodosIds: [2] } }, traduzir),
+        "Cupons com pelo menos uma das formas marcadas."
+    );
+
+    // Ação explícita para voltar ao conjunto irrestrito.
+    const removerFiltroPagamento = new Function(
+        extractBody(js, "removerFiltroPagamento()")
+    );
+    let limpou = 0;
+    const comFiltro = {
+        state: { metodosIds: [1, 2, 3], carregando: false },
+        alterouFiltros() {
+            limpou++;
+        },
+    };
+    removerFiltroPagamento.call(comFiltro);
+    assert.deepStrictEqual(comFiltro.state.metodosIds, [],
+        "remover filtro esvazia a lista de métodos");
+    assert.strictEqual(limpou, 1, "resultado anterior é invalidado");
+    const duranteConsulta = {
+        state: { metodosIds: [1], carregando: true },
+        alterouFiltros() {
+            limpou++;
+        },
+    };
+    removerFiltroPagamento.call(duranteConsulta);
+    assert.deepStrictEqual(duranteConsulta.state.metodosIds, [1],
+        "não muda filtro no meio de uma consulta");
+
+    // Marcar todos os métodos listados não vira "sem filtro" automaticamente.
+    const toggleMetodo = new Function(
+        "metodoId", extractBody(js, "toggleMetodo(metodoId)")
+    );
+    const todosMarcados = {
+        state: { metodosIds: [1, 2], metodos: [{ id: 1 }, { id: 2 }], carregando: false },
+        alterouFiltros() {},
+    };
+    toggleMetodo.call(todosMarcados, 1);
+    assert.deepStrictEqual(todosMarcados.state.metodosIds, [2],
+        "desmarcar um método mantém o filtro com os demais");
+
+    // Contrato da tela.
+    assert(/t-if="state\.metodosIds\.length"/.test(xml), "ação só aparece com filtro ativo");
+    assert(/t-on-click="removerFiltroPagamento"/.test(xml), "botão de remover filtro ligado");
+    assert(xml.includes("Remover filtro de pagamento"), "rótulo explícito do filtro");
+    assert(!xml.includes("Limpar tudo"), "sem rótulo genérico Limpar tudo");
+    assert(xml.includes("Cupons com pelo menos uma das formas marcadas.")
+        || js.includes("Cupons com pelo menos uma das formas marcadas."),
+        "regra de OU explicada");
+    assert(js.includes("Sem filtro: qualquer forma de pagamento."),
+        "vazio explicado como sem filtro");
+    assert(xml.includes("Como o filtro afeta o valor?"), "ajuda do valor integral disponível");
+    assert(xml.includes("O total") && xml.includes("mesmo com pagamento dividido."),
+        "valor integral do cupom explicado");
+    assert(xml.includes("R$ 100,00") && xml.includes("R$ 40,00"),
+        "exemplo fictício do cupom misto");
+    assert(/t-esc="venda\.formas_pagamento"/.test(xml),
+        "tabela continua exibindo todos os métodos do cupom");
+
+    console.log("✓ 19: filtro de pagamento explicado, removível e sem conversão implícita");
+}
+
 console.log("\nTodos os contratos da tela de consulta passaram.");

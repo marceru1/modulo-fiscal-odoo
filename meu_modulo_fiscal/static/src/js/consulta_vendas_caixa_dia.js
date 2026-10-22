@@ -480,6 +480,22 @@ export class ConsultaVendasCaixaDia extends Component {
         return _t("%s formas selecionadas", nomes.length);
     }
 
+    /** Explica o estado do filtro sem deixar "vazio" ambíguo. */
+    get mensagemFiltroPagamento() {
+        return this.state.metodosIds.length
+            ? _t("Cupons com pelo menos uma das formas marcadas.")
+            : _t("Sem filtro: qualquer forma de pagamento.");
+    }
+
+    /** Desmarca todos os métodos — o caminho explícito para "sem filtro". */
+    removerFiltroPagamento() {
+        if (this.state.carregando) {
+            return;
+        }
+        this.state.metodosIds = [];
+        this.alterouFiltros();
+    }
+
     toggleMetodo(metodoId) {
         if (this.state.carregando) {
             return;
