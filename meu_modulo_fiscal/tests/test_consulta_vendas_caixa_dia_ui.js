@@ -33,6 +33,9 @@ const manifest = read(path.join(MODULE_ROOT, "__manifest__.py"));
 
 const TAG = "meu_modulo_fiscal.consulta_vendas_caixa_dia";
 
+// Blocos assíncronos (comportamento de consultar) resolvem antes do resumo final.
+const promessas = [];
+
 // ── XML bem-formado: scanner de balanceamento de tags ─────────────────────
 function assertBalancedTags(source) {
     const noComments = source.replace(/<!--[\s\S]*?-->/g, "");
@@ -144,10 +147,8 @@ function extractBody(src, signature) {
 // ── 6: estados da tela ─────────────────────────────────────────────────────
 {
     // Abertura: orientação e nenhuma consulta automática.
-    assert(
-        (js + xml).includes("Marque um ou mais caixas e ao menos um dia para consultar as vendas"),
-        "mensagem inicial (caixas no plural)"
-    );
+    assert(js.includes("Selecione ao menos um caixa e um dia para consultar."),
+        "mensagem inicial");
     assert(!/onWillStart\([^)]*consultar/.test(js), "não consultar ao abrir");
 
     // Ao menos um caixa marcado habilita o calendário.
@@ -1090,4 +1091,157 @@ function extractBody(src, signature) {
     console.log("✓ 20: resumo, contexto aplicado, devoluções e pluralização");
 }
 
-console.log("\nTodos os contratos da tela de consulta passaram.");
+// ── 21: feedback — filtros alterados, consultando, erro e vazio ──────────
+{
+    const traduzir = (texto, ...args) =>
+        args.reduce((acumulado, arg) => acumulado.replace("%s", arg), texto);
+
+    // Alterar filtro invalida o resultado e pede nova consulta.
+    const alterouFiltros = new Function(
+        "selecaoAtual", extractBody(js, "alterouFiltros()")
+    );
+    const comResultado = {
+        state: {
+            resultado: { vendas: [] },
+            erro: "erro antigo",
+            filtrosAlterados: false,
+            configIds: [1],
+            metodosIds: [2],
+            dias: ["2026-10-20"],
+        },
+    };
+    alterouFiltros.call(comResultado, null);
+    assert.strictEqual(comResultado.state.resultado, null, "resultado antigo sai de cena");
+    assert.strictEqual(comResultado.state.erro, "", "erro antigo é limpo");
+    assert.strictEqual(comResultado.state.filtrosAlterados, true,
+        "aviso de filtros alterados aparece após um resultado");
+    alterouFiltros.call(comResultado, null);
+    assert.strictEqual(comResultado.state.filtrosAlterados, true,
+        "aviso persiste em mudanças seguintes");
+    const semResultado = {
+        state: {
+            resultado: null,
+            erro: "",
+            filtrosAlterados: false,
+            configIds: [],
+            metodosIds: [],
+            dias: [],
+        },
+    };
+    alterouFiltros.call(semResultado, null);
+    assert.strictEqual(semResultado.state.filtrosAlterados, false,
+        "sem resultado anterior, não anuncia alteração");
+
+    // Consulta: limpa o aviso, preserva a seleção em falha e libera o loading.
+    const corpoConsultar = extractBody(js, "async consultar()");
+    const consultar = new Function(
+        "selecaoAtual",
+        `return (async () => {${corpoConsultar}})();`
+    );
+    const contextoFalha = {
+        podeConsultar: true,
+        state: {
+            carregando: false,
+            erro: "erro antigo",
+            resultado: null,
+            filtrosAlterados: true,
+            configIds: [1, 2],
+            dias: ["2026-10-20"],
+            metodosIds: [3],
+        },
+        orm: {
+            async call() {
+                throw { data: { message: "Falha de rede" } };
+            },
+        },
+        mensagemErro(error) {
+            return error.data.message;
+        },
+    };
+    promessas.push((async () => {
+        await consultar.call(contextoFalha, null);
+        assert.strictEqual(contextoFalha.state.erro, "Falha de rede", "erro é exibido");
+        assert.strictEqual(contextoFalha.state.carregando, false, "loading termina");
+        assert.strictEqual(contextoFalha.state.filtrosAlterados, false,
+            "consulta limpa o aviso de alteração");
+        assert.deepStrictEqual(contextoFalha.state.configIds, [1, 2],
+            "seleção de caixas preservada na falha");
+        assert.deepStrictEqual(contextoFalha.state.dias, ["2026-10-20"],
+            "seleção de dias preservada na falha");
+        assert.deepStrictEqual(contextoFalha.state.metodosIds, [3],
+            "filtro de pagamento preservado na falha");
+
+        const selecaoSalva = {};
+        const contextoSucesso = {
+            podeConsultar: true,
+            state: {
+                carregando: false,
+                erro: "",
+                resultado: null,
+                filtrosAlterados: true,
+                configIds: [1],
+                dias: ["2026-10-20"],
+                metodosIds: [],
+            },
+            orm: {
+                async call() {
+                    return { vendas: [], resumo: { quantidade: 0, totais: [] } };
+                },
+            },
+            mensagemErro: () => "",
+        };
+        await consultar.call(contextoSucesso, selecaoSalva);
+        assert.deepStrictEqual(contextoSucesso.state.resultado,
+            { vendas: [], resumo: { quantidade: 0, totais: [] } },
+            "resultado do servidor é exibido");
+        assert(/selecaoAtual = \{\s*configIds: \[\.\.\.this\.state\.configIds\]/.test(js),
+            "seleção salva para o retorno do detalhe");
+
+        // Contrato da tela.
+        assert(/t-att-aria-busy="state\.carregando \? 'true' : null"/.test(xml),
+            "área de resultado marcada como ocupada");
+        assert(/t-if="state\.carregando"[\s\S]*?role="status"[\s\S]*?Consultando…/.test(xml),
+            "carregamento anunciado na área de resultado");
+        assert(xml.includes("Consultando…"), "texto Consultando…");
+        assert(xml.includes("Não foi possível consultar as vendas. Sua seleção foi mantida."),
+            "erro com mensagem de seleção preservada");
+        assert(/t-on-click="consultar"/.test(xml)
+            && xml.includes("Consultar novamente"), "ação para repetir a consulta");
+        assert(xml.includes("Filtros alterados. Clique em Consultar para atualizar os resultados."),
+            "aviso explícito de filtros alterados");
+        assert(/t-elif="state\.filtrosAlterados"[\s\S]*?role="status"/.test(xml),
+            "aviso anunciado como status");
+        assert(xml.includes("Nenhum cupom encontrado com os filtros selecionados."),
+            "vazio com mensagem própria, distinta do erro");
+        assert(!/Carregando\.\.\.[\s\S]{0,200}Nenhum cupom encontrado/.test(xml),
+            "estados de carga e vazio não se confundem");
+
+        // Inicial: orientação só enquanto a seleção está incompleta.
+        const mensagemInicial = new Function(
+            "_t", extractBody(js, "get mensagemInicial()")
+        );
+        assert.strictEqual(
+            mensagemInicial.call({ state: { configIds: [], dias: [] } }, traduzir),
+            "Selecione ao menos um caixa e um dia para consultar."
+        );
+        assert.strictEqual(
+            mensagemInicial.call({ state: { configIds: [1], dias: [] } }, traduzir),
+            "Selecione ao menos um dia para consultar."
+        );
+        assert.strictEqual(
+            mensagemInicial.call({ state: { configIds: [1], dias: ["2026-10-20"] } }, traduzir),
+            ""
+        );
+
+        console.log("✓ 21: feedback de filtros alterados, consulta, erro e vazio");
+    })());
+}
+
+Promise.all(promessas)
+    .then(() => {
+        console.log("\nTodos os contratos da tela de consulta passaram.");
+    })
+    .catch((error) => {
+        console.error(error);
+        process.exit(1);
+    });
