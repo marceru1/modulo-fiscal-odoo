@@ -53,7 +53,7 @@ class PosOrder(models.Model):
                 'vendas': [{
                     'id', 'date_order' (UTC), 'cupom', 'pos_reference',
                     'caixa' (nome), 'operador', 'valor', 'currency_id', 'moeda',
-                    'formas_pagamento',
+                    'formas_pagamento', 'devolucao' (valor negativo),
                 }],
                 'resumo': {
                     'quantidade': int,
@@ -128,6 +128,9 @@ class PosOrder(models.Model):
                 'currency_id': moeda.id,
                 'moeda': moeda.name,
                 'formas_pagamento': formas_por_pedido.get(pedido.id, ''),
+                # Devolução é identificada no servidor para a tela não
+                # depender de reinterpretar o sinal do valor.
+                'devolucao': pedido.amount_total < 0,
             })
 
         return {
