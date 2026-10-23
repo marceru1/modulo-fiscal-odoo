@@ -7,7 +7,16 @@
     container-name: consulta-vendas;
     color: $body-color;
 
+    // Texto vermelho sobre branco/badge claro precisa de 4,5:1; o $danger
+    // puro fica em ~4,0:1 no fundo do badge de devolução.
+    $consulta-danger: darken($danger, 12%);
+
+    // Odoo: .o_action é flex-column e .o_content é o flex item. Com
+    // max-width + margin auto, width 100% mantém o stretch até 1360px e
+    // min-width 0 deixa o painel encolher sem estourar pelo conteúdo.
     .o_consulta_container {
+        width: 100%;
+        min-width: 0;
         max-width: 1360px;
         margin: 0 auto;
         padding: 20px 24px 32px;
@@ -391,7 +400,7 @@
     .o_consulta_aviso {
         margin: 0.5rem 0 0;
         font-size: 0.75rem;
-        color: $danger;
+        color: $consulta-danger;
     }
 
     // ── Pagamento: regra curta sempre visível, exemplo sob demanda ─────────
@@ -454,7 +463,7 @@
     .o_consulta_motivo {
         margin: 0;
         font-size: 0.75rem;
-        color: $danger;
+        color: $consulta-danger;
     }
 
     .o_consulta_botao {
@@ -665,7 +674,7 @@
         padding: 1px 5px;
         border-radius: 0.25rem;
         background-color: rgba($danger, 0.08);
-        color: $danger;
+        color: $consulta-danger;
         font-size: 0.625rem;
         font-weight: normal;
         white-space: nowrap;
@@ -680,7 +689,7 @@
     }
 
     .o_consulta_valor_negativo {
-        color: $danger;
+        color: $consulta-danger;
     }
 
     .o_consulta_rodape_tabela {

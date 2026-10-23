@@ -1314,6 +1314,14 @@ Promise.all(promessas)
 {
     // Responsivo pela largura do painel (container queries), não do monitor.
     assert(/container-type:\s*inline-size/.test(scss), "consulta é um contêiner de consulta");
+    // .o_action do Odoo é flex-column e .o_content é o flex item: com
+    // max-width + margin auto, width 100% mantém o stretch e min-width 0
+    // permite encolher sem estourar pelo conteúdo.
+    assert(
+        /\.o_consulta_container\s*\{[\s\S]*?width:\s*100%/.test(scss)
+        && /\.o_consulta_container\s*\{[\s\S]*?min-width:\s*0/.test(scss),
+        "container preenche o flex do Odoo e encolhe sem overflow"
+    );
     assert(/@container consulta-vendas \(max-width: 1100px\)/.test(scss),
         "quebra para dois grupos em painel médio");
     assert(/@container consulta-vendas \(max-width: 780px\)/.test(scss),
