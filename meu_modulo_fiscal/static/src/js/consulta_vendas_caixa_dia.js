@@ -162,10 +162,12 @@ export class ConsultaVendasCaixaDia extends Component {
         const hojeISO = today().toISODate();
         const mes = mesInicial(selecaoAtual?.dias, hojeISO);
         const diasSelecionados = [...(selecaoAtual?.dias ?? [])].sort();
+        const voltandoDoDetalhe = Boolean(selecaoAtual);
+        const configIds = [...(selecaoAtual?.configIds ?? [])];
         this.state = useState({
             caixas: [],
             metodos: [],
-            configIds: [...(selecaoAtual?.configIds ?? [])],
+            configIds,
             metodosIds: [...(selecaoAtual?.metodosIds ?? [])],
             dias: diasSelecionados,
             mesVisivel: mes,
@@ -182,8 +184,13 @@ export class ConsultaVendasCaixaDia extends Component {
             carregando: false,
             erro: "",
             aviso: "",
-            filtrosAlterados: false,
+            // Ao voltar do detalhe a seleção é restaurada, mas o resultado
+            // não: avisamos que é preciso consultar novamente.
+            filtrosAlterados: voltandoDoDetalhe
+                && Boolean(configIds.length && diasSelecionados.length),
             resultado: null,
+            // Painel expandido na primeira visita; recolhido após consultar.
+            painelExpandido: true,
         });
         // Depois de mover o foco pelo teclado ou remover um chip, o Owl já
         // renderizou: aplica o foco no elemento correspondente.
@@ -313,6 +320,10 @@ export class ConsultaVendasCaixaDia extends Component {
         return _t(
             "%s de %s dias selecionados", this.state.dias.length, LIMITE_DIAS
         );
+    }
+
+    get limiteDias() {
+        return LIMITE_DIAS;
     }
 
     /** Chips visíveis: seleções grandes começam recolhidas, com acesso a todas. */
@@ -587,6 +598,23 @@ export class ConsultaVendasCaixaDia extends Component {
         this.alterouFiltros();
     }
 
+    editarFiltros() {
+        if (this.state.carregando) {
+            return;
+        }
+        // Expandir o painel é uma edição: invalida o resultado anterior e
+        // exige nova consulta para atualizar a tabela.
+        this.state.painelExpandido = true;
+        this.alterouFiltros();
+    }
+
+    recolherFiltros() {
+        if (this.state.carregando) {
+            return;
+        }
+        this.state.painelExpandido = false;
+    }
+
     alterouFiltros() {
         // Resultado antigo nunca fica visível como se fosse da nova seleção.
         const tinhaResultado = Boolean(this.state.resultado);
@@ -615,6 +643,7 @@ export class ConsultaVendasCaixaDia extends Component {
                 "get_vendas_caixa_dia",
                 [this.state.configIds, this.state.dias, this.state.metodosIds]
             );
+            this.recolherFiltros();
             selecaoAtual = {
                 configIds: [...this.state.configIds],
                 metodosIds: [...this.state.metodosIds],

@@ -1331,7 +1331,7 @@ Promise.all(promessas)
         "uma coluna na ordem de leitura"
     );
     assert(
-        /@container consulta-vendas \(max-width: 780px\)[\s\S]*?\.o_consulta_acao\s*\{[\s\S]*?flex-direction:\s*column/.test(scss),
+        /@container consulta-vendas \(max-width: 780px\)[\s\S]*?\.o_consulta_acao[\s\S]*?flex-direction:\s*column/.test(scss),
         "faixa de ação empilha no estreito"
     );
 

@@ -27,11 +27,12 @@
     }
 
     .o_consulta_titulo {
-        font-size: 1.5625rem;
-        font-weight: 600;
+        font-size: 1.625rem;
+        font-weight: 700;
         line-height: 1.25;
-        letter-spacing: -0.03em;
+        letter-spacing: -0.02em;
         margin-bottom: 0.25rem;
+        color: $body-color;
     }
 
     .o_consulta_descricao {
@@ -73,7 +74,8 @@
         margin-bottom: 0.1875rem;
     }
 
-    // Marcador 1/2/3 é decorativo: o título continua sendo o nome do grupo.
+    // Marcador 1/2/3 é decorativo e neutro: o roxo fica reservado para
+    // seleção e ação.
     .o_consulta_passo {
         display: inline-flex;
         align-items: center;
@@ -82,8 +84,8 @@
         width: 21px;
         height: 21px;
         border-radius: 50%;
-        background-color: rgba($o-brand-primary, 0.08);
-        color: darken($o-brand-primary, 12%);
+        background-color: $gray-100;
+        color: $gray-700;
         font-size: 0.6875rem;
         font-weight: 600;
     }
@@ -92,12 +94,34 @@
         margin-left: auto;
         font-size: 0.6875rem;
         font-weight: normal;
+        color: $gray-600;
+    }
+
+    // Pagamento é um refinamento secundário: visual mais discreto que os
+    // grupos obrigatórios (caixas e dias).
+    .o_consulta_grupo_pagamento {
+        padding: 0.75rem 0.875rem;
+        border: 1px dashed $border-color;
+        border-radius: 0.4375rem;
+        background-color: rgba($gray-100, 0.5);
+    }
+
+    .o_consulta_grupo_pagamento .o_consulta_grupo_titulo {
+        font-size: 0.9375rem;
         color: $gray-700;
+    }
+
+    .o_consulta_grupo_pagamento .o_consulta_ajuda {
+        margin-bottom: 0.75rem;
+    }
+
+    .o_consulta_grupo_pagamento .o_consulta_nota_pagamento {
+        background-color: $white;
     }
 
     .o_consulta_ajuda {
         font-size: 0.75rem;
-        color: $gray-700;
+        color: $gray-600;
         margin: 0.25rem 0 0.9375rem;
     }
 
@@ -106,7 +130,25 @@
         padding-top: 0.8125rem;
         border-top: 1px solid $border-color;
         font-size: 0.75rem;
+        color: $gray-600;
+    }
+
+    // Ajuda expansível dos grupos: discreta, sem competir com os controles.
+    .o_consulta_ajuda_grupo {
+        margin-top: 0.9375rem;
+        font-size: 0.75rem;
+        color: $gray-600;
+    }
+
+    .o_consulta_ajuda_grupo summary {
+        cursor: pointer;
         color: $gray-700;
+        font-weight: 500;
+    }
+
+    .o_consulta_ajuda_grupo p {
+        margin: 0.25rem 0 0;
+        max-width: 46ch;
     }
 
     // ── Listas de opções: linhas generosas, sem caixinha por item ──────────
@@ -439,6 +481,16 @@
         margin: 0.25rem 0 0;
     }
 
+    // ── Filtros recolhidos após consultar: resumo + Editar filtros ─────────
+    .o_consulta_filtros_resumo {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 12px;
+        padding: 14px 24px;
+        background-color: mix($o-brand-primary, $white, 2%);
+    }
+
     // ── Faixa de ação: resumo + Consultar, abaixo de todos os filtros ──────
     .o_consulta_acao {
         display: flex;
@@ -506,6 +558,13 @@
         margin: 0 0 1rem;
     }
 
+    // Cabeçalho único do resultado: uma linha só com quantidade e total.
+    .o_consulta_resultados_cabecalho {
+        margin-bottom: 0.75rem;
+        padding: 1rem 0;
+        border-bottom: 1px solid $border-color;
+    }
+
     .o_consulta_resumo {
         display: flex;
         flex-wrap: wrap;
@@ -562,16 +621,16 @@
     }
 
     .o_consulta_contexto {
-        margin: 16px 0 0;
+        margin: 0 0 12px;
         font-size: 0.75rem;
-        color: $gray-700;
+        color: $gray-600;
         overflow-wrap: anywhere;
     }
 
     .o_consulta_nota {
         margin: 0;
         font-size: 0.6875rem;
-        color: $gray-700;
+        color: $gray-600;
     }
 
     // ── Tabela: superfície branca, cabeçalho neutro, divisórias sutis ──────
@@ -786,7 +845,8 @@
             grid-template-columns: repeat(2, minmax(0, 1fr));
         }
 
-        .o_consulta_acao {
+        .o_consulta_acao,
+        .o_consulta_filtros_resumo {
             flex-direction: column;
             align-items: stretch;
             gap: 12px;
@@ -823,6 +883,10 @@
 
         .o_consulta_resumo_total {
             align-items: flex-start;
+        }
+
+        .o_consulta_resultados_cabecalho {
+            padding: 0.75rem 0;
         }
     }
 

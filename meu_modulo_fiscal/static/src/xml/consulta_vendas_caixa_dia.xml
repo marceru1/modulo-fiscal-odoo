@@ -12,8 +12,9 @@
                 </header>
 
                 <div class="o_consulta_painel">
-                    <div class="o_consulta_filtros">
-                        <section class="o_consulta_grupo o_consulta_grupo_caixas"
+                    <div t-if="state.painelExpandido" class="o_consulta_filtros_expandido">
+                        <div class="o_consulta_filtros">
+                        <section class="o_consulta_grupo o_consulta_grupo_caixas o_consulta_grupo_destaque"
                                  t-att-aria-labelledby="uid + '_caixas_titulo'">
                             <h3 class="o_consulta_grupo_titulo"
                                 t-att-id="uid + '_caixas_titulo'">
@@ -58,12 +59,17 @@
                                     </div>
                                 </t>
                             </div>
-                            <p class="o_consulta_subnota">
-                                A consulta reúne as vendas de todas as sessões dos caixas escolhidos.
-                            </p>
+                            <details class="o_consulta_ajuda_grupo">
+                                <summary>Como funciona a seleção de caixas?</summary>
+                                <p>
+                                    A consulta reúne as vendas de todas as sessões dos caixas
+                                    escolhidos. Marque um ou mais caixas; nenhum selecionado não
+                                    significa todos.
+                                </p>
+                            </details>
                         </section>
 
-                        <section class="o_consulta_grupo o_consulta_grupo_dias"
+                        <section class="o_consulta_grupo o_consulta_grupo_dias o_consulta_grupo_destaque"
                                  t-att-aria-labelledby="uid + '_dias_titulo'">
                             <h3 class="o_consulta_grupo_titulo"
                                 t-att-id="uid + '_dias_titulo'">
@@ -170,6 +176,14 @@
 
                                 <p t-if="state.aviso" class="o_consulta_aviso" role="alert" t-esc="state.aviso"/>
                             </div>
+                            <details class="o_consulta_ajuda_grupo">
+                                <summary>Como escolher dias?</summary>
+                                <p>
+                                    Você pode marcar dias avulsos, consecutivos ou separados, em
+                                    meses diferentes. O limite é <t t-esc="limiteDias"/> dias por
+                                    consulta.
+                                </p>
+                            </details>
                         </section>
 
                         <section class="o_consulta_grupo o_consulta_grupo_pagamento"
@@ -263,6 +277,16 @@
                             </t>
                         </button>
                     </div>
+                    </div>
+                    <div t-else="" class="o_consulta_filtros_resumo">
+                        <span class="o_consulta_resumo_selecao" t-esc="resumoSelecao"/>
+                        <button type="button"
+                                class="o_consulta_texto_botao"
+                                t-att-disabled="state.carregando"
+                                t-on-click="editarFiltros">
+                            Editar filtros
+                        </button>
+                    </div>
                 </div>
 
                 <div class="o_consulta_saida"
@@ -295,38 +319,36 @@
                     <section t-if="state.resultado"
                              class="o_consulta_resultados"
                              t-att-aria-labelledby="uid + '_resultados_titulo'">
-                    <h3 class="o_consulta_resultados_titulo"
-                        t-att-id="uid + '_resultados_titulo'">
-                        Resultados
-                    </h3>
-
-                    <div class="o_consulta_resumo" role="status" aria-live="polite" aria-atomic="true">
-                        <div class="o_consulta_resumo_quantidade">
-                            <strong t-esc="resumoQuantidade"/>
-                            <span t-if="state.resultado.resumo.quantidade_devolucoes">
-                                , sendo
-                                <t t-esc="state.resultado.resumo.quantidade_devolucoes"/>
-                                <t t-esc="rotuloDevolucoes(state.resultado.resumo.quantidade_devolucoes)"/>
-                            </span>
-                        </div>
-                        <div class="o_consulta_resumo_totais">
-                            <div t-foreach="state.resultado.resumo.totais"
-                                 t-as="total"
-                                 t-key="total.currency_id"
-                                 class="o_consulta_resumo_total">
-                                <span class="o_consulta_resumo_total_rotulo">Total dos cupons<t t-if="state.resultado.resumo.totais.length > 1"> (<t t-esc="total.moeda"/>)</t></span>
-                                <strong class="o_consulta_resumo_total_valor" t-esc="formatarValor(total.total, total.currency_id)"/>
+                        <header class="o_consulta_resultados_cabecalho"
+                                  t-att-id="uid + '_resultados_titulo'">
+                            <div class="o_consulta_resumo" role="status" aria-live="polite" aria-atomic="true">
+                                <div class="o_consulta_resumo_quantidade">
+                                    <strong t-esc="resumoQuantidade"/>
+                                    <span t-if="state.resultado.resumo.quantidade_devolucoes">
+                                        , sendo
+                                        <t t-esc="state.resultado.resumo.quantidade_devolucoes"/>
+                                        <t t-esc="rotuloDevolucoes(state.resultado.resumo.quantidade_devolucoes)"/>
+                                    </span>
+                                </div>
+                                <div class="o_consulta_resumo_totais">
+                                    <div t-foreach="state.resultado.resumo.totais"
+                                         t-as="total"
+                                         t-key="total.currency_id"
+                                         class="o_consulta_resumo_total">
+                                        <span class="o_consulta_resumo_total_rotulo">Total dos cupons<t t-if="state.resultado.resumo.totais.length > 1"> (<t t-esc="total.moeda"/>)</t></span>
+                                        <strong class="o_consulta_resumo_total_valor" t-esc="formatarValor(total.total, total.currency_id)"/>
+                                    </div>
+                                </div>
                             </div>
+                        </header>
+
+                        <p class="o_consulta_contexto" t-esc="contextoResultado"/>
+
+                        <div t-if="!state.resultado.vendas.length" class="alert alert-warning">
+                            Nenhum cupom encontrado com os filtros selecionados.
                         </div>
-                    </div>
 
-                    <p class="o_consulta_contexto" t-esc="contextoResultado"/>
-
-                    <div t-if="!state.resultado.vendas.length" class="alert alert-warning">
-                        Nenhum cupom encontrado com os filtros selecionados.
-                    </div>
-
-                    <div t-else="" class="o_consulta_resultado_tabela">
+                        <div t-else="" class="o_consulta_resultado_tabela">
                         <div class="o_consulta_tabela_box">
                             <div class="o_consulta_tabela_wrap"
                                  tabindex="0"
