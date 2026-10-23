@@ -3,3 +3,4 @@ from . import test_fechamento_simplificado
 from . import test_fechamento_report_doctype
 from . import test_etiquetas_wizard
 from . import test_analise_vendas_pdv
+from . import test_consulta_vendas_caixa_dia

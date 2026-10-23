@@ -1,0 +1,406 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<templates xml:space="preserve">
+
+    <t t-name="meu_modulo_fiscal.ConsultaVendasCaixaDia">
+        <div class="o_action o_consulta_vendas_caixa_dia">
+            <div class="o_content o_consulta_container">
+                <header class="o_consulta_cabecalho">
+                    <h2 class="o_consulta_titulo">Vendas por caixa e dia</h2>
+                    <p class="o_consulta_descricao">
+                        Escolha os caixas e os dias para conferir seus cupons.
+                    </p>
+                </header>
+
+                <div class="o_consulta_painel">
+                    <div t-if="state.painelExpandido" class="o_consulta_filtros_expandido">
+                        <div class="o_consulta_filtros">
+                        <section class="o_consulta_grupo o_consulta_grupo_caixas o_consulta_grupo_destaque"
+                                 t-att-aria-labelledby="uid + '_caixas_titulo'">
+                            <h3 class="o_consulta_grupo_titulo"
+                                t-att-id="uid + '_caixas_titulo'">
+                                <span class="o_consulta_passo" aria-hidden="true">1</span>
+                                <span>Caixas</span>
+                            </h3>
+                            <p class="o_consulta_ajuda" t-att-id="uid + '_caixas_ajuda'">
+                                Marque um ou mais caixas.
+                            </p>
+                            <div class="o_consulta_lista"
+                                 role="group"
+                                 t-att-aria-labelledby="uid + '_caixas_titulo'"
+                                 t-att-aria-describedby="uid + '_caixas_ajuda'">
+                                <div t-if="state.carregandoCaixas" class="o_consulta_estado" role="status">
+                                    <i class="fa fa-spinner fa-spin me-1" aria-hidden="true"/>
+                                    Carregando caixas e formas de pagamento…
+                                </div>
+                                <div t-elif="state.erroCaixas" class="o_consulta_estado" role="alert">
+                                    <p class="mb-1">Não foi possível carregar os caixas.</p>
+                                    <p class="o_consulta_erro_detalhe mb-2"><t t-esc="state.erroCaixas"/></p>
+                                    <button type="button"
+                                            class="o_consulta_texto_botao"
+                                            t-on-click="() => this.carregarCaixas()">
+                                        Tentar carregar novamente
+                                    </button>
+                                </div>
+                                <t t-else="">
+                                    <label t-foreach="state.caixas"
+                                           t-as="caixa"
+                                           t-key="caixa.id"
+                                           class="o_consulta_opcao">
+                                        <input class="form-check-input o_consulta_opcao_input"
+                                               type="checkbox"
+                                               t-att-id="uid + '_caixa_' + caixa.id"
+                                               t-att-checked="state.configIds.includes(caixa.id)"
+                                               t-att-disabled="state.carregando"
+                                               t-on-change="() => this.toggleCaixa(caixa.id)"/>
+                                        <span class="o_consulta_opcao_rotulo" t-esc="caixa.name"/>
+                                    </label>
+                                    <div t-if="!state.caixas.length" class="text-muted small">
+                                        Nenhum caixa disponível para seu usuário.
+                                    </div>
+                                </t>
+                            </div>
+                            <details class="o_consulta_ajuda_grupo">
+                                <summary>Como funciona a seleção de caixas?</summary>
+                                <p>
+                                    A consulta reúne as vendas de todas as sessões dos caixas
+                                    escolhidos. Marque um ou mais caixas; nenhum selecionado não
+                                    significa todos.
+                                </p>
+                            </details>
+                        </section>
+
+                        <section class="o_consulta_grupo o_consulta_grupo_dias o_consulta_grupo_destaque"
+                                 t-att-aria-labelledby="uid + '_dias_titulo'">
+                            <h3 class="o_consulta_grupo_titulo"
+                                t-att-id="uid + '_dias_titulo'">
+                                <span class="o_consulta_passo" aria-hidden="true">2</span>
+                                <span>Dias</span>
+                            </h3>
+                            <p class="o_consulta_ajuda">
+                                Escolha dias juntos ou separados.
+                            </p>
+                            <div class="o_consulta_calendario_wrap">
+                                <div class="o_consulta_calendario_nav">
+                                    <button type="button"
+                                            class="o_consulta_nav_botao"
+                                            t-att-disabled="!calendarioHabilitado"
+                                            t-on-click="() => this.mudarMes(-1)"
+                                            aria-label="Mês anterior">
+                                        <i class="fa fa-chevron-left" aria-hidden="true"/>
+                                    </button>
+                                    <strong t-att-id="uid + '_mes_rotulo'"
+                                            class="o_consulta_mes"
+                                            aria-live="polite"
+                                            t-esc="rotuloMesVisivel"/>
+                                    <button type="button"
+                                            class="o_consulta_nav_botao"
+                                            t-att-disabled="!calendarioHabilitado"
+                                            t-on-click="() => this.mudarMes(1)"
+                                            aria-label="Próximo mês">
+                                        <i class="fa fa-chevron-right" aria-hidden="true"/>
+                                    </button>
+                                </div>
+
+                                <p t-if="mensagemCalendarioDesabilitado"
+                                   t-att-id="uid + '_calendario_aviso'"
+                                   class="o_consulta_ajuda o_consulta_calendario_aviso"
+                                   t-esc="mensagemCalendarioDesabilitado"/>
+
+                                <table class="o_consulta_calendario"
+                                       role="grid"
+                                       t-att-aria-labelledby="uid + '_dias_titulo' + ' ' + uid + '_mes_rotulo'"
+                                       aria-multiselectable="true"
+                                       t-att-aria-describedby="mensagemCalendarioDesabilitado ? uid + '_calendario_aviso' : null"
+                                       t-on-keydown="onCalendarioKeydown">
+                                    <thead>
+                                        <tr role="row">
+                                            <th scope="col"
+                                                role="columnheader"
+                                                t-foreach="rotulosSemana"
+                                                t-as="rotulo"
+                                                t-key="rotulo_index"
+                                                t-esc="rotulo"/>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        <tr t-foreach="linhasDoMes" t-as="semana" t-key="semana_index" role="row">
+                                            <t t-foreach="semana" t-as="celula" t-key="celula_index">
+                                                <td t-if="celula"
+                                                    role="gridcell"
+                                                    t-attf-class="o_consulta_dia #{celula.marcado ? 'o_consulta_dia_marcado' : ''} #{celula.hoje ? 'o_consulta_dia_hoje' : ''}"
+                                                    t-att-data-data="celula.data"
+                                                    t-att-tabindex="calendarioHabilitado and celula.data === focoVisivel ? 0 : -1"
+                                                    t-att-aria-selected="celula.marcado ? 'true' : 'false'"
+                                                    t-att-aria-label="nomeCompletoData(celula.data)"
+                                                    t-att-aria-current="celula.hoje ? 'date' : null"
+                                                    t-att-aria-disabled="!calendarioHabilitado ? 'true' : null"
+                                                    t-on-click="() => this.toggleDia(celula.data)">
+                                                    <span class="o_consulta_dia_numero" t-esc="celula.dia"/>
+                                                </td>
+                                                <td t-else="" class="o_consulta_dia_vazio" aria-hidden="true"/>
+                                            </t>
+                                        </tr>
+                                    </tbody>
+                                </table>
+
+                                <div class="o_consulta_dias_rodape">
+                                    <p class="o_consulta_contador" aria-live="polite" t-esc="contadorDias"/>
+                                    <button type="button"
+                                            class="o_consulta_texto_botao"
+                                            t-att-disabled="state.carregando || !state.dias.length"
+                                            t-on-click="limparDias">Limpar dias</button>
+                                </div>
+
+                                <div t-if="state.dias.length" class="o_consulta_chips">
+                                    <span t-foreach="diasVisiveis"
+                                          t-as="dia"
+                                          t-key="dia"
+                                          class="o_consulta_chip">
+                                        <span t-esc="formatarDataCurta(dia)"/>
+                                        <button type="button"
+                                                class="o_consulta_chip_remover"
+                                                t-att-data-indice="state.dias.indexOf(dia)"
+                                                t-att-aria-label="rotuloRemoverDia(dia)"
+                                                t-att-disabled="state.carregando"
+                                                t-on-click.stop="() => this.removerDia(dia)">
+                                            <i class="fa fa-times" aria-hidden="true"/>
+                                        </button>
+                                    </span>
+                                    <button t-if="temChipsOcultos"
+                                            type="button"
+                                            class="o_consulta_texto_botao"
+                                            t-att-aria-expanded="state.mostrarTodosChips ? 'true' : 'false'"
+                                            t-on-click="alternarChips"
+                                            t-esc="rotuloVerChips"/>
+                                </div>
+
+                                <p t-if="state.aviso" class="o_consulta_aviso" role="alert" t-esc="state.aviso"/>
+                            </div>
+                            <details class="o_consulta_ajuda_grupo">
+                                <summary>Como escolher dias?</summary>
+                                <p>
+                                    Você pode marcar dias avulsos, consecutivos ou separados, em
+                                    meses diferentes. O limite é <t t-esc="limiteDias"/> dias por
+                                    consulta.
+                                </p>
+                            </details>
+                        </section>
+
+                        <section class="o_consulta_grupo o_consulta_grupo_pagamento"
+                                 t-att-aria-labelledby="uid + '_pagamento_titulo'">
+                            <h3 class="o_consulta_grupo_titulo"
+                                t-att-id="uid + '_pagamento_titulo'">
+                                <span class="o_consulta_passo" aria-hidden="true">3</span>
+                                <span>Formas de pagamento</span>
+                                <span class="o_consulta_opcional">Opcional</span>
+                            </h3>
+                            <p class="o_consulta_ajuda" t-att-id="uid + '_pagamento_ajuda'"
+                               t-esc="mensagemFiltroPagamento"/>
+                            <div class="o_consulta_lista"
+                                 role="group"
+                                 t-att-aria-labelledby="uid + '_pagamento_titulo'"
+                                 t-att-aria-describedby="uid + '_pagamento_ajuda'">
+                                <div t-if="state.carregandoMetodos" class="o_consulta_estado" role="status">
+                                    <i class="fa fa-spinner fa-spin me-1" aria-hidden="true"/>
+                                    Carregando caixas e formas de pagamento…
+                                </div>
+                                <div t-elif="state.erroMetodos" class="o_consulta_estado" role="alert">
+                                    <p class="mb-1">Não foi possível carregar as formas de pagamento.</p>
+                                    <p class="o_consulta_erro_detalhe mb-2"><t t-esc="state.erroMetodos"/></p>
+                                    <button type="button"
+                                            class="o_consulta_texto_botao"
+                                            t-on-click="() => this.carregarMetodos()">
+                                        Tentar carregar novamente
+                                    </button>
+                                </div>
+                                <t t-else="">
+                                    <label t-foreach="state.metodos"
+                                           t-as="metodo"
+                                           t-key="metodo.id"
+                                           class="o_consulta_opcao">
+                                        <input class="form-check-input o_consulta_opcao_input"
+                                               type="checkbox"
+                                               t-att-id="uid + '_metodo_' + metodo.id"
+                                               t-att-checked="state.metodosIds.includes(metodo.id)"
+                                               t-att-disabled="state.carregando"
+                                               t-on-change="() => this.toggleMetodo(metodo.id)"/>
+                                        <span class="o_consulta_opcao_rotulo" t-esc="metodo.name"/>
+                                    </label>
+                                    <div t-if="!state.metodos.length" class="text-muted small">
+                                        Nenhuma forma de pagamento disponível.
+                                    </div>
+                                </t>
+                            </div>
+                            <button t-if="state.metodosIds.length"
+                                    type="button"
+                                    class="o_consulta_texto_botao o_consulta_remover_filtro"
+                                    t-att-disabled="state.carregando"
+                                    t-on-click="removerFiltroPagamento">
+                                Remover filtro de pagamento
+                            </button>
+                            <div class="o_consulta_nota_pagamento">
+                                <strong>O total é do cupom inteiro.</strong>
+                                O filtro encontra cupons com a forma escolhida, mesmo quando o
+                                pagamento foi dividido.
+                            </div>
+                            <details class="o_consulta_ajuda_pagamento">
+                                <summary>Como o filtro afeta o valor?</summary>
+                                <p>
+                                    O filtro encontra cupons que contêm a forma selecionada. O total
+                                    considera o valor inteiro de cada cupom, mesmo com pagamento dividido.
+                                </p>
+                                <p>
+                                    Exemplo: um cupom de R$ 100,00 com R$ 40,00 em dinheiro e
+                                    R$ 60,00 em cartão aparece uma vez, com R$ 100,00, ao filtrar
+                                    por dinheiro.
+                                </p>
+                            </details>
+                        </section>
+                    </div>
+
+                    <div class="o_consulta_acao">
+                        <div class="o_consulta_acao_texto">
+                            <p class="o_consulta_resumo_selecao" t-esc="resumoSelecao"/>
+                            <p t-if="motivoBloqueio" class="o_consulta_motivo" t-esc="motivoBloqueio"/>
+                        </div>
+                        <button type="button"
+                                class="btn btn-primary o_consulta_botao"
+                                t-att-disabled="!podeConsultar"
+                                t-on-click="consultar">
+                            <t t-if="state.carregando">
+                                <i class="fa fa-spinner fa-spin" role="img" aria-label="Carregando"/>
+                                Consultando...
+                            </t>
+                            <t t-else="">
+                                <i class="fa fa-search" aria-hidden="true"/>
+                                Consultar vendas
+                            </t>
+                        </button>
+                    </div>
+                    </div>
+                    <div t-else="" class="o_consulta_filtros_resumo">
+                        <span class="o_consulta_resumo_selecao" t-esc="resumoSelecao"/>
+                        <button type="button"
+                                class="o_consulta_texto_botao"
+                                t-att-disabled="state.carregando"
+                                t-on-click="editarFiltros">
+                            Editar filtros
+                        </button>
+                    </div>
+                </div>
+
+                <div class="o_consulta_saida"
+                     t-att-aria-busy="state.carregando ? 'true' : null">
+                    <div t-if="state.carregando" class="o_consulta_carregando" role="status" aria-live="polite">
+                        <i class="fa fa-spinner fa-spin me-1" aria-hidden="true"/>
+                        Consultando…
+                    </div>
+
+                    <div t-elif="state.erro" class="alert alert-danger" role="alert">
+                        <p class="o_consulta_erro_titulo">
+                            Não foi possível consultar as vendas. Sua seleção foi mantida.
+                        </p>
+                        <p class="o_consulta_erro_detalhe"><t t-esc="state.erro"/></p>
+                        <button type="button"
+                                class="btn btn-sm btn-secondary"
+                                t-on-click="consultar">
+                            Consultar novamente
+                        </button>
+                    </div>
+
+                    <div t-elif="state.filtrosAlterados" class="alert alert-info" role="status">
+                        Filtros alterados. Clique em Consultar para atualizar os resultados.
+                    </div>
+
+                    <div t-elif="exibirMensagemInicial" class="alert alert-info">
+                        <t t-esc="mensagemInicial"/>
+                    </div>
+
+                    <section t-if="state.resultado"
+                             class="o_consulta_resultados"
+                             t-att-aria-labelledby="uid + '_resultados_titulo'">
+                        <header class="o_consulta_resultados_cabecalho"
+                                  t-att-id="uid + '_resultados_titulo'">
+                            <div class="o_consulta_resumo" role="status" aria-live="polite" aria-atomic="true">
+                                <div class="o_consulta_resumo_quantidade">
+                                    <strong t-esc="resumoQuantidade"/>
+                                    <span t-if="state.resultado.resumo.quantidade_devolucoes">
+                                        , sendo
+                                        <t t-esc="state.resultado.resumo.quantidade_devolucoes"/>
+                                        <t t-esc="rotuloDevolucoes(state.resultado.resumo.quantidade_devolucoes)"/>
+                                    </span>
+                                </div>
+                                <div class="o_consulta_resumo_totais">
+                                    <div t-foreach="state.resultado.resumo.totais"
+                                         t-as="total"
+                                         t-key="total.currency_id"
+                                         class="o_consulta_resumo_total">
+                                        <span class="o_consulta_resumo_total_rotulo">Total dos cupons<t t-if="state.resultado.resumo.totais.length > 1"> (<t t-esc="total.moeda"/>)</t></span>
+                                        <strong class="o_consulta_resumo_total_valor" t-esc="formatarValor(total.total, total.currency_id)"/>
+                                    </div>
+                                </div>
+                            </div>
+                        </header>
+
+                        <p class="o_consulta_contexto" t-esc="contextoResultado"/>
+
+                        <div t-if="!state.resultado.vendas.length" class="alert alert-warning">
+                            Nenhum cupom encontrado com os filtros selecionados.
+                        </div>
+
+                        <div t-else="" class="o_consulta_resultado_tabela">
+                        <div class="o_consulta_tabela_box">
+                            <div class="o_consulta_tabela_wrap"
+                                 tabindex="0"
+                                 role="region"
+                                 aria-label="Cupons encontrados">
+                                <table class="table o_consulta_tabela">
+                                    <thead>
+                                        <tr>
+                                            <th scope="col">Data e hora</th>
+                                            <th scope="col" t-if="state.resultado.caixas.length > 1">Caixa</th>
+                                            <th scope="col">Venda / cupom</th>
+                                            <th scope="col">Operador</th>
+                                            <th scope="col" class="text-end">Valor total</th>
+                                            <th scope="col">Forma de pagamento</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        <tr t-foreach="state.resultado.vendas" t-as="venda" t-key="venda.id">
+                                            <td class="text-nowrap o_consulta_data"
+                                                t-esc="formatarDataHora(venda.date_order)"/>
+                                            <td t-if="state.resultado.caixas.length > 1">
+                                                <span class="o_consulta_caixa" t-esc="venda.caixa"/>
+                                            </td>
+                                            <td class="o_consulta_cupom">
+                                                <a href="#"
+                                                   class="o_consulta_link"
+                                                   t-on-click.prevent="() => this.abrirVenda(venda)"
+                                                   t-esc="venda.cupom"/>
+                                                <span t-if="venda.devolucao" class="o_consulta_devolucao">
+                                                    Devolução
+                                                </span>
+                                            </td>
+                                            <td t-esc="venda.operador"/>
+                                            <td class="text-end text-nowrap o_consulta_valor">
+                                                <span t-attf-class="o_consulta_valor_numero #{venda.devolucao ? 'o_consulta_valor_negativo' : ''}"
+                                                      t-esc="formatarValor(venda.valor, venda.currency_id)"/>
+                                            </td>
+                                            <td t-esc="venda.formas_pagamento"/>
+                                        </tr>
+                                    </tbody>
+                                </table>
+                            </div>
+                        </div>
+                        <div class="o_consulta_rodape_tabela">
+                            <span class="o_consulta_nota o_consulta_sincronizacao">Exibe vendas sincronizadas com o servidor.</span>
+                            <span t-if="state.resultado.resumo.quantidade_devolucoes"
+                                  class="o_consulta_nota">O total inclui devoluções com valor negativo.</span>
+                        </div>
+                    </div>
+                </section>
+                </div>
+            </div>
+        </div>
+    </t>
+</templates>

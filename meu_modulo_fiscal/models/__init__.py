@@ -5,6 +5,7 @@ from . import pos_payment_method
 from . import campos_fiscais
 from . import recursos_variantes
 from . import pos_order
+from . import consulta_vendas_caixa_dia
 from . import tabela_ncm
 from . import ir_http
 from . import res_company

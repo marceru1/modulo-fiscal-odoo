@@ -30,6 +30,7 @@
         'views/pos_session_fechamento_views.xml',
         'views/web_login_cleanup.xml',
         'views/pos_order_report_analise_views.xml',
+        'views/consulta_vendas_caixa_dia_views.xml',
     ],
     'assets': {
         'point_of_sale._assets_pos': [
@@ -145,6 +146,13 @@
             'meu_modulo_fiscal/static/src/js/env_badge.js',
             'meu_modulo_fiscal/static/src/xml/env_badge.xml',
             'meu_modulo_fiscal/static/src/css/env_badge.scss',
+            # consulta-vendas-caixa-dia: client action backend (caixa -> dia ->
+            # tabela). JS antes do XML — o template usa os helpers do componente.
+            'meu_modulo_fiscal/static/src/js/consulta_vendas_caixa_dia.js',
+            'meu_modulo_fiscal/static/src/xml/consulta_vendas_caixa_dia.xml',
+            # consulta-vendas-caixa-dia-ui-ux: estilos escopados na consulta
+            # (nunca no bundle do POS nem em componentes globais do backend).
+            'meu_modulo_fiscal/static/src/css/consulta_vendas_caixa_dia.scss',
         ],
     },
     'installable': True,

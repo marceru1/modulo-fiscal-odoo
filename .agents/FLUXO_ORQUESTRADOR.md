@@ -9,7 +9,7 @@ O Hermes roda como pane dentro do Orca, no workspace `my_addons/`. O usuário s�
 ```
 Hermes (pane no Orca, workspace my_addons) — orquestrador
     │
-    ├── 1. Pre-grill (3 perguntas) + task no Obsidian PM
+    ├── 1. Pre-grill (3 perguntas) + pendência pro caderno (sem kanban digital)
     ├── 2. SPLIT → agy (Claude Sonnet 4.6): fiscal-planner + fiscal-taskbreaker
     ├── 3. SPLIT → Claude Code (deepseek-v4.1-flash:cloud): fiscal-coder, TDD
     └── 4. SPLIT → Claude Code (kimi-k2.7-code:cloud): fiscal-reviewer, 5 eixos
@@ -29,9 +29,9 @@ Usuário: "adicionar botão de teste no PDV"
 
 O Hermes lê o AGENTS.md automático e identifica que é feature nova.
 
-### Passo 2 — Hermes cria task no Obsidian PM
+### Passo 2 — Registro da task (caderno; kanban digital aposentado em 17/10)
 
-O Hermes cria um `.md` em `Modulo Odoo_tasks/botao-teste-pdv.md` (formato no AGENTS.md). O task aparece no Kanban, coluna Backlog.
+O Kanban digital foi aposentado (cards arquivados em `04_Archive/kanban-aposentado-2026-10-17/` do vault). O Hermes lista a pendência no report; o Marcelo anota no caderno. Nenhum `.md` de task nasce no Obsidian — o status real mora no frontmatter dos tickets em `.agents/tickets/` e no `git log`.
 
 ### Passo 3 — Pre-grill (Hermes → Usuário)
 
@@ -66,7 +66,7 @@ O agy carrega AGENTS.md automático, grilla o usuário, gera spec em `.agents/sp
 Usuário: "spec e tickets prontos, feature: botao-teste-pdv"
 ```
 
-O Hermes atualiza o task pra A Fazer e cria subtasks com os tickets.
+Nada de card/subtask digital — os tickets em `.agents/tickets/<feature>/` SÃO as sub-tasks (o frontmatter `status:` de cada um é o estado).
 
 ### Passo 6 — Hermes splita o terminal pro CODER (Claude Code + DeepSeek)
 
@@ -79,13 +79,19 @@ Mesmo workspace: o Hermes cria a branch `feat/<slug>` (a partir de dev, `git sta
 
 O usuário aceita as permissões de escrita manualmente no terminal (y/Enter).
 
+### Regra de tamanho (PRs/diffs pequenos — revisão manual do Marcelo)
+
+- Cada **round** = 1 ticket (ou 1 mudança fechável): diff alvo **≤ ~300 linhas / poucos arquivos**. O ticket que estourar → o Hermes quebra em mais rounds ANTES de despachar (com o taskbreaker).
+- **1 commit por mudança** — nada de commit misturando concerns.
+- No gate de cada round o Hermes reporta `<sha>` + `git show --stat` + 1 linha do que mudou — a revisão do Marcelo é sempre `git show <sha>` isolado, nunca o diff acumulado da branch.
+
 ### Passo 7 — Usuário volta no Hermes
 
 ```
 Usuário: "código pronto"
 ```
 
-O Hermes move o task pra Revisão.
+O Hermes roda o review (typecheck/suite + diff contra a spec) — sem mover card nenhum (kanban aposentado).
 
 ### Passo 8 — Hermes splita o terminal pro REVIEWER (Claude Code + Kimi)
 
@@ -98,8 +104,8 @@ O reviewer le o relatório do coder, revisa o diff desde dev nos 5 eixos e salva
 
 ### Passo 9 — Resultado
 
-- **Review passou** → Hermes move pra Teste → usuário testa manualmente no PDV → push/PR **quando o usuário pedir** (`feat/<slug>` → dev) → merge → Hermes limpa branch e move pra Concluído
-- **Review falhou** → Hermes move pra Em Andamento e splita novo terminal do coder com o relatório da review
+- **Review passou** → usuário testa manualmente no PDV → push/PR **quando o usuário pedir** (`feat/<slug>` → dev) → merge → Hermes limpa branch
+- **Review falhou** → splita novo terminal do coder com o relatório da review
 
 ## Features em paralelo (exceção)
 
