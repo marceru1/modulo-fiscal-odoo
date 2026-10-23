@@ -474,8 +474,8 @@ function extractBody(src, signature) {
     );
 
     // O calendário não é mais o dono da largura da tela.
-    assert(/\.o_consulta_calendario_wrap\s*\{[\s\S]*?max-width:\s*380px/.test(scss),
-        "calendário com largura limitada");
+    assert(/\.o_consulta_calendario_wrap\s*\{[\s\S]*?max-width:\s*348px/.test(scss),
+        "calendário com largura limitada (mesma proporção da prévia aprovada)");
     assert(!/style="[^"]*width:\s*100%/.test(xml), "sem largura inline esticando o calendário");
 
     // Resumo da seleção e motivo visível.
