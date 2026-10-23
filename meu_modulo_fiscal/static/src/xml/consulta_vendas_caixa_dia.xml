@@ -13,17 +13,18 @@
 
                 <div class="o_consulta_filtros">
                     <section class="o_consulta_grupo o_consulta_grupo_caixas"
-                             aria-labelledby="o_consulta_caixas_titulo">
-                        <h3 class="o_consulta_grupo_titulo" id="o_consulta_caixas_titulo">
+                             t-att-aria-labelledby="uid + '_caixas_titulo'">
+                        <h3 class="o_consulta_grupo_titulo"
+                            t-att-id="uid + '_caixas_titulo'">
                             Caixas <span class="o_consulta_marcador">obrigatório</span>
                         </h3>
-                        <p class="o_consulta_ajuda" id="o_consulta_caixas_ajuda">
+                        <p class="o_consulta_ajuda" t-att-id="uid + '_caixas_ajuda'">
                             Marque um ou mais caixas.
                         </p>
                         <div class="o_consulta_lista"
                              role="group"
-                             aria-labelledby="o_consulta_caixas_titulo"
-                             aria-describedby="o_consulta_caixas_ajuda">
+                             t-att-aria-labelledby="uid + '_caixas_titulo'"
+                             t-att-aria-describedby="uid + '_caixas_ajuda'">
                             <div t-if="state.carregandoCaixas" class="o_consulta_estado" role="status">
                                 <i class="fa fa-spinner fa-spin me-1" aria-hidden="true"/>
                                 Carregando caixas e formas de pagamento…
@@ -41,12 +42,12 @@
                                 <div t-foreach="state.caixas" t-as="caixa" t-key="caixa.id" class="form-check">
                                     <input class="form-check-input"
                                            type="checkbox"
-                                           t-att-id="'consulta_caixa_' + caixa.id"
+                                           t-att-id="uid + '_caixa_' + caixa.id"
                                            t-att-checked="state.configIds.includes(caixa.id)"
                                            t-att-disabled="state.carregando"
                                            t-on-change="() => this.toggleCaixa(caixa.id)"/>
                                     <label class="form-check-label"
-                                           t-att-for="'consulta_caixa_' + caixa.id"
+                                           t-att-for="uid + '_caixa_' + caixa.id"
                                            t-esc="caixa.name"/>
                                 </div>
                                 <div t-if="!state.caixas.length" class="text-muted small">
@@ -57,8 +58,9 @@
                     </section>
 
                     <section class="o_consulta_grupo o_consulta_grupo_dias"
-                             aria-labelledby="o_consulta_dias_titulo">
-                        <h3 class="o_consulta_grupo_titulo" id="o_consulta_dias_titulo">
+                             t-att-aria-labelledby="uid + '_dias_titulo'">
+                        <h3 class="o_consulta_grupo_titulo"
+                            t-att-id="uid + '_dias_titulo'">
                             Dias <span class="o_consulta_marcador">obrigatório</span>
                         </h3>
                         <div class="o_consulta_calendario_wrap">
@@ -70,7 +72,7 @@
                                         aria-label="Mês anterior">
                                     <i class="fa fa-chevron-left" aria-hidden="true"/>
                                 </button>
-                                <strong id="o_consulta_mes_rotulo"
+                                <strong t-att-id="uid + '_mes_rotulo'"
                                         class="o_consulta_mes"
                                         aria-live="polite"
                                         t-esc="rotuloMesVisivel"/>
@@ -84,16 +86,15 @@
                             </div>
 
                             <p t-if="mensagemCalendarioDesabilitado"
-                               id="o_consulta_calendario_aviso"
+                               t-att-id="uid + '_calendario_aviso'"
                                class="o_consulta_ajuda o_consulta_calendario_aviso"
                                t-esc="mensagemCalendarioDesabilitado"/>
 
                             <table class="o_consulta_calendario"
                                    role="grid"
-                                   aria-labelledby="o_consulta_dias_titulo o_consulta_mes_rotulo"
+                                   t-att-aria-labelledby="uid + '_dias_titulo' + ' ' + uid + '_mes_rotulo'"
                                    aria-multiselectable="true"
-                                   t-att-aria-disabled="!calendarioHabilitado"
-                                   t-att-aria-describedby="mensagemCalendarioDesabilitado ? 'o_consulta_calendario_aviso' : null"
+                                   t-att-aria-describedby="mensagemCalendarioDesabilitado ? uid + '_calendario_aviso' : null"
                                    t-on-keydown="onCalendarioKeydown">
                                 <thead>
                                     <tr role="row">
@@ -116,6 +117,7 @@
                                                 t-att-aria-selected="celula.marcado ? 'true' : 'false'"
                                                 t-att-aria-label="nomeCompletoData(celula.data)"
                                                 t-att-aria-current="celula.hoje ? 'date' : null"
+                                                t-att-aria-disabled="!calendarioHabilitado ? 'true' : null"
                                                 t-on-click="() => this.toggleDia(celula.data)">
                                                 <span class="o_consulta_dia_numero" t-esc="celula.dia"/>
                                             </td>
@@ -161,16 +163,17 @@
                     </section>
 
                     <section class="o_consulta_grupo o_consulta_grupo_pagamento"
-                             aria-labelledby="o_consulta_pagamento_titulo">
-                        <h3 class="o_consulta_grupo_titulo" id="o_consulta_pagamento_titulo">
+                             t-att-aria-labelledby="uid + '_pagamento_titulo'">
+                        <h3 class="o_consulta_grupo_titulo"
+                            t-att-id="uid + '_pagamento_titulo'">
                             Formas de pagamento <span class="o_consulta_marcador">opcional</span>
                         </h3>
-                        <p class="o_consulta_ajuda" id="o_consulta_pagamento_ajuda"
+                        <p class="o_consulta_ajuda" t-att-id="uid + '_pagamento_ajuda'"
                            t-esc="mensagemFiltroPagamento"/>
                         <div class="o_consulta_lista"
                              role="group"
-                             aria-labelledby="o_consulta_pagamento_titulo"
-                             aria-describedby="o_consulta_pagamento_ajuda">
+                             t-att-aria-labelledby="uid + '_pagamento_titulo'"
+                             t-att-aria-describedby="uid + '_pagamento_ajuda'">
                             <div t-if="state.carregandoMetodos" class="o_consulta_estado" role="status">
                                 <i class="fa fa-spinner fa-spin me-1" aria-hidden="true"/>
                                 Carregando caixas e formas de pagamento…
@@ -188,12 +191,12 @@
                                 <div t-foreach="state.metodos" t-as="metodo" t-key="metodo.id" class="form-check">
                                     <input class="form-check-input"
                                            type="checkbox"
-                                           t-att-id="'consulta_metodo_' + metodo.id"
+                                           t-att-id="uid + '_metodo_' + metodo.id"
                                            t-att-checked="state.metodosIds.includes(metodo.id)"
                                            t-att-disabled="state.carregando"
                                            t-on-change="() => this.toggleMetodo(metodo.id)"/>
                                     <label class="form-check-label"
-                                           t-att-for="'consulta_metodo_' + metodo.id"
+                                           t-att-for="uid + '_metodo_' + metodo.id"
                                            t-esc="metodo.name"/>
                                 </div>
                                 <div t-if="!state.metodos.length" class="text-muted small">
@@ -269,8 +272,9 @@
 
                     <section t-if="state.resultado"
                              class="o_consulta_resultados"
-                             aria-labelledby="o_consulta_resultados_titulo">
-                    <h3 class="o_consulta_resultados_titulo" id="o_consulta_resultados_titulo">
+                             t-att-aria-labelledby="uid + '_resultados_titulo'">
+                    <h3 class="o_consulta_resultados_titulo"
+                        t-att-id="uid + '_resultados_titulo'">
                         Resultados
                     </h3>
 
