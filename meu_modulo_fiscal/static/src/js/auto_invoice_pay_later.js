@@ -109,14 +109,23 @@ patch(PaymentScreen.prototype, {
                         employees
                     );
 
-                    // 4. Modal bloqueante ANTES de super.validateOrder().
-                    //    Cancelar aborta a venda; prosseguir segue o fluxo normal.
-                    if (result.tipo === "excedido" || result.tipo === "sem_limite") {
+                    // 4. Modal ANTES de super.validateOrder().
+                    //    "excedido" é HARD BLOCK: informativo, único botão "Entendi",
+                    //    e a venda a prazo NÃO valida.
+                    //    "sem_limite" mantém o comportamento vigente: permite prosseguir.
+                    if (result.tipo === "excedido") {
+                        await ask(this.dialog, {
+                            title: "⚠️ Limite a Prazo Excedido",
+                            body: result.msg,
+                            confirmLabel: "Entendi",
+                        });
+                        // Sempre aborta — não passa nem um real acima do limite.
+                        return;
+                    }
+
+                    if (result.tipo === "sem_limite") {
                         const confirmed = await ask(this.dialog, {
-                            title:
-                                result.tipo === "excedido"
-                                    ? "⚠️ Limite a Prazo Excedido"
-                                    : "⚠️ Cliente Sem Limite a Prazo",
+                            title: "⚠️ Cliente Sem Limite a Prazo",
                             body: result.msg,
                             confirmLabel: "Prosseguir mesmo assim",
                             cancelLabel: "Cancelar",
@@ -127,18 +136,17 @@ patch(PaymentScreen.prototype, {
                         }
                     }
                 } catch (err) {
-                    // Offline/ORM failure — nunca bloquear a venda por falha de
-                    // checagem de limite. Avisa e prossegue (degradação graceful).
+                    // Offline/ORM failure com pay_later no pedido → HARD BLOCK.
+                    // Não é seguro emitir a prazo sem verificar o limite.
                     console.warn("[LIMITE-CREDITO] Erro ao verificar limite:", err);
-                    const notif =
-                        this.notification ||
-                        (this.env.services && this.env.services.notification);
-                    if (notif && typeof notif.add === "function") {
-                        notif.add("Não foi possível verificar limite a prazo.", {
-                            type: "warning",
-                            sticky: false,
-                        });
-                    }
+                    await ask(this.dialog, {
+                        title: "⚠️ Não foi possível verificar limite a prazo",
+                        body:
+                            "A verificação de limite de crédito está indisponível no momento. " +
+                            "A compra a prazo não será emitida agora. Tente novamente ou use outra forma de pagamento.",
+                        confirmLabel: "Entendi",
+                    });
+                    return;
                 }
             }
             // ── End credit-limit check ────────────────────────────────────────
