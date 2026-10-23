@@ -23,6 +23,10 @@ export const IDIOMA_FALLBACK = "pt-BR";
 // Guardar a seleção fora do componente preserva caixa/dias nesse retorno.
 let selecaoAtual = null;
 
+// Prefixo único por instância da tela: evita IDs duplicados de aria-* quando
+// a mesma client action é aberta em mais de uma aba.
+let proximaInstancia = 0;
+
 function duasCasas(valor) {
     return String(valor).padStart(2, "0");
 }
@@ -114,11 +118,13 @@ export function rotuloRemoverDia(dataISO, idioma, prefixo) {
     return `${prefixo || "Remover"} ${nomeCompletoData(dataISO, idioma)}`;
 }
 
-/** Células do grid do mês: `null` nas posições vazias, uma célula por dia. */
+/** Células do grid do mês: `null` nas posições vazias, uma célula por dia.
+ *  Tudo em UTC: o alinhamento não depende do fuso do navegador. */
 export function celulasDoMes(ano, mes, diasMarcados, hojeISO) {
     const marcados = diasMarcados || [];
-    const celulas = new Array(new Date(ano, mes - 1, 1).getDay()).fill(null);
-    const diasNoMes = new Date(ano, mes, 0).getDate();
+    const primeiroDiaSemana = new Date(Date.UTC(ano, mes - 1, 1)).getUTCDay();
+    const celulas = new Array(primeiroDiaSemana).fill(null);
+    const diasNoMes = new Date(Date.UTC(ano, mes, 0)).getUTCDate();
     for (let dia = 1; dia <= diasNoMes; dia++) {
         const data = `${ano}-${duasCasas(mes)}-${duasCasas(dia)}`;
         celulas.push({
@@ -152,6 +158,7 @@ export class ConsultaVendasCaixaDia extends Component {
     setup() {
         this.orm = useService("orm");
         this.action = useService("action");
+        this.uid = `o_consulta_${++proximaInstancia}`;
         const hojeISO = today().toISODate();
         const mes = mesInicial(selecaoAtual?.dias, hojeISO);
         const diasSelecionados = [...(selecaoAtual?.dias ?? [])].sort();
@@ -483,12 +490,16 @@ export class ConsultaVendasCaixaDia extends Component {
             .filter((metodo) => ids.includes(metodo.id))
             .map((metodo) => metodo.name);
         if (!nomes.length) {
-            return _t("%s formas selecionadas", ids.length);
+            return `${ids.length} ${plural(
+                ids.length, _t("forma selecionada"), _t("formas selecionadas")
+            )}`;
         }
         if (nomes.length <= 2) {
             return _t("Pagamento: %s", this.listar(nomes));
         }
-        return _t("%s formas selecionadas", nomes.length);
+        return `${nomes.length} ${plural(
+            nomes.length, _t("forma selecionada"), _t("formas selecionadas")
+        )}`;
     }
 
     /** Explica o estado do filtro sem deixar "vazio" ambíguo. */

@@ -303,6 +303,12 @@ function extractBody(src, signature) {
     assert(/state\.aviso/.test(xml), "aviso do limite visível na tela");
 
     // Cálculo puro do grid: alinhamento, marcação e linha final completa.
+    assert(!/new Date\(ano, mes/.test(js),
+        "grid não usa Date local (alinhamento independente do fuso do navegador)");
+    assert(/new Date\(Date\.UTC\(ano, mes - 1, 1\)\)\.getUTCDay\(\)/.test(js),
+        "primeiro dia da semana calculado em UTC");
+    assert(/new Date\(Date\.UTC\(ano, mes, 0\)\)\.getUTCDate\(\)/.test(js),
+        "último dia do mês calculado em UTC");
     const pad = (valor) => String(valor).padStart(2, "0");
     const celulasDoMes = new Function(
         "ano", "mes", "diasMarcados", "hojeISO", "duasCasas",
@@ -318,6 +324,19 @@ function extractBody(src, signature) {
     const dia20 = outubro.find((celula) => celula && celula.data === "2026-10-20");
     assert.strictEqual(dia20.marcado, true, "dia marcado no grid");
     assert.strictEqual(celulasDoMes(2026, 10, [], undefined, pad).filter(Boolean).length, 31);
+    // Independência de fuso: alinhamento e tamanho batem com o cálculo em UTC
+    // para meses que começam em domingo, em sábado e em ano bissexto.
+    for (const [ano, mes] of [[2026, 3], [2026, 8], [2024, 2], [2027, 1], [2026, 10]]) {
+        const celulas = celulasDoMes(ano, mes, [], undefined, pad);
+        const vaziasAntes = new Date(Date.UTC(ano, mes - 1, 1)).getUTCDay();
+        assert(celulas.slice(0, vaziasAntes).every((celula) => celula === null),
+            `alinhamento UTC de ${mes}/${ano}`);
+        assert.strictEqual(
+            celulas.filter(Boolean).length,
+            new Date(Date.UTC(ano, mes, 0)).getUTCDate(),
+            `dias do mês ${mes}/${ano}`
+        );
+    }
 
     const corpoPodeMarcarDia = extractBody(js, "podeMarcarDia(diasMarcados, data)");
     const podeMarcarDia = (diasMarcados, data) =>
@@ -492,7 +511,7 @@ function extractBody(src, signature) {
     const identidade = (texto, ...args) =>
         args.reduce((acumulado, arg) => acumulado.replace("%s", arg), texto);
     const resumoPagamento = new Function(
-        "_t", extractBody(js, "resumoPagamento()")
+        "_t", "plural", extractBody(js, "resumoPagamento()")
     );
     const comMetodos = (metodosIds, metodos) => ({
         state: { metodosIds, metodos },
@@ -501,13 +520,14 @@ function extractBody(src, signature) {
             : `${itens.slice(0, -1).join(", ")} e ${itens[itens.length - 1]}`),
     });
     assert.strictEqual(
-        resumoPagamento.call(comMetodos([], []), identidade),
+        resumoPagamento.call(comMetodos([], []), identidade, plural),
         "Sem filtro de pagamento"
     );
     assert.strictEqual(
         resumoPagamento.call(
             comMetodos([1, 2], [{ id: 1, name: "Dinheiro" }, { id: 2, name: "Cartão" }]),
-            identidade
+            identidade,
+            plural
         ),
         "Pagamento: Dinheiro e Cartão"
     );
@@ -518,13 +538,14 @@ function extractBody(src, signature) {
                 { id: 2, name: "Cartão" },
                 { id: 3, name: "PIX" },
             ]),
-            identidade
+            identidade,
+            plural
         ),
         "3 formas selecionadas"
     );
     assert.strictEqual(
-        resumoPagamento.call(comMetodos([9], []), identidade),
-        "1 formas selecionadas",
+        resumoPagamento.call(comMetodos([9], []), identidade, plural),
+        "1 forma selecionada",
         "seleção preservada mesmo com o cadastro ainda não carregado"
     );
 
@@ -533,7 +554,8 @@ function extractBody(src, signature) {
     );
     const montar = (configIds, dias, metodosIds, metodos) => {
         const contexto = { state: { configIds, dias, metodosIds, metodos } };
-        contexto.resumoPagamento = () => resumoPagamento.call(contexto, identidade);
+        contexto.resumoPagamento = () =>
+            resumoPagamento.call(contexto, identidade, plural);
         return contexto;
     };
     assert.strictEqual(
@@ -682,12 +704,29 @@ function extractBody(src, signature) {
     assert(/t-att-tabindex="calendarioHabilitado and celula\.data === focoVisivel \? 0 : -1"/.test(xml),
         "roving tabindex (só a célula focada é tabulável)");
     assert(/t-on-keydown="onCalendarioKeydown"/.test(xml), "teclado tratado na grade");
+    // Estado desabilitado fica na célula (consistente para leitores de tela),
+    // não no contêiner da grade.
+    assert(!/<table[^>]*aria-disabled/.test(xml), "grid não carrega aria-disabled");
+    assert(/role="gridcell"[\s\S]*?t-att-aria-disabled="!calendarioHabilitado \? 'true' : null"/.test(xml),
+        "cada célula informa o estado desabilitado");
+    // IDs por instância: a mesma tela em duas abas não duplica aria-labelledby.
+    assert(!/ id="o_consulta_/.test(xml), "nenhum id fixo da consulta");
+    for (const sufixo of ["caixas_titulo", "caixas_ajuda", "dias_titulo", "pagamento_titulo",
+                          "pagamento_ajuda", "resultados_titulo", "calendario_aviso"]) {
+        assert(xml.includes(`uid + '_${sufixo}'`), `id dinâmico de ${sufixo}`);
+    }
+    assert(/t-att-id="uid \+ '_caixa_' \+ caixa\.id"/.test(xml),
+        "checkbox de caixa com id por instância");
+    assert(/t-att-id="uid \+ '_metodo_' \+ metodo\.id"/.test(xml),
+        "checkbox de forma com id por instância");
     assert(js.includes("Selecione um caixa para escolher os dias."),
         "razão do calendário desabilitado");
     assert(/t-esc="mensagemCalendarioDesabilitado"/.test(xml),
         "razão renderizada junto ao calendário");
-    assert(/id="o_consulta_mes_rotulo"[\s\S]*?aria-live="polite"/.test(xml),
-        "mês anunciado ao navegar");
+    assert(/t-att-id="uid \+ '_mes_rotulo'"[\s\S]*?aria-live="polite"/.test(xml),
+        "mês anunciado ao navegar (id por instância)");
+    assert(/t-att-aria-labelledby="uid \+ '_dias_titulo' \+ ' ' \+ uid \+ '_mes_rotulo'"/.test(xml),
+        "grid referenciado pelos títulos da mesma instância");
     assert(/class="o_consulta_contador" aria-live="polite"/.test(xml), "contador anunciado");
 
     // Idioma do Odoo, não o locale do navegador.
