@@ -62,77 +62,24 @@ my_addons/
 
 O Hermes é o orchestrador. O usuário descreve o que quer e o Hermes decide:
 
-1. **Feature nova ou fix complexo** (grill + spec + tickets + code + review) → cria task no Obsidian PM (Backlog), faz pre-grill de 3 perguntas basicas com o usuario, monta o prompt completo, e splita o terminal do agy no Orca (regra de ouro: **o Hermes executa `orca terminal ...` diretamente — o usuario nunca roda comando**)
-2. **"puxa do backlog"** → le tasks no Obsidian PM com status `todo`, lista pro usuario escolher, faz pre-grill da escolhida e splita o terminal do agy (mesmo workspace)
-3. **"puxa tudo do backlog"** → le todos os tasks com status `todo`, mostra todos de uma vez com 1 pergunta essencial cada, usuario responde tudo junto, Hermes cria worktree + terminal do agy pra cada feature em paralelo (unico caso com worktree)
+1. **Feature nova ou fix complexo** (grill + spec + tickets + code + review) → registra a pendência no report final (tracking é manual — caderno do Marcelo; **kanban digital APOSENTADO em 17/10**, cards arquivados; não criar task/card em lugar nenhum), faz pre-grill de 3 perguntas basicas com o usuario, monta o prompt completo, e splita o terminal do agy no Orca (regra de ouro: **o Hermes executa `orca terminal ...` diretamente — o usuario nunca roda comando**)
+2. **"o que tem de pendente?"** → o Hermes lista o que há em aberto: ticket files de `.agents/tickets/` com status != done/cancelled + pendências do último report (NÃO há backlog digital; caderno do Marcelo é o tracking). Escolhida → pre-grill → splita o terminal do agy (mesmo workspace)
+3. **Paralelo (2+ features)** → worktree do Orca pra cada feature (`orca worktree create --name <slug> --base-branch dev`) + terminal do agy em cada uma
 4. **Fix rápido** (uma linha, um import) → pane curta do Claude Code (`rtk ollama launch claude --model deepseek-v4.1-flash:cloud`, prompt em arquivo, MODO INTERATIVO, sem grill/pipeline) — Hermes só orquestra, nunca edita código; exceção: co-piloto mãos-na-massa ("aplica aí")
 5. **Pergunta** (status, dúvida, explicação) → responde direto
 
-### Obsidian PM (Kanban)
+### Tracking de tasks (Kanban digital APOSENTADO em 17/10)
 
-O Hermes gerencia tasks diretamente no filesystem do vault Obsidian. O plugin Project Manager le os `.md` files automaticamente.
+O tracking de features é **manual — caderno do Marcelo**. Nenhum card/task nasce em lugar nenhum (Obsidian/issue/board); o Kanban foi arquivado em `04_Archive/kanban-aposentado-2026-10-17/` do vault.
 
-**Caminhos:**
-- Projeto: `~/Library/Mobile Documents/iCloud~md~obsidian/Documents/brain/Kanban Projects/Modulo Odoo.md`
-- Tasks: `~/Library/Mobile Documents/iCloud~md~obsidian/Documents/brain/Kanban Projects/Modulo Odoo_tasks/<slug>.md`
-- Project ID: `zk233d8lmsku7qbv`
+**Fonte de status real:**
+- `.agents/tickets/<feature>/*.md` — frontmatter `status:` de cada ticket (`todo | in-progress | review | testing | done | cancelled`), atualizado pelo coder
+- `git log` / `git status` do repo (o commit é facto; relatório é claim)
+- Report final do Hermes (pendências listadas → Marcelo anota no caderno)
 
-**Criar task (feature nova no Backlog):**
+**No fechamento:** destilação no **ai-memory** (`ai-memory write-page --workspace default --project marceru1-modulo-fiscal-odoo --tier semantic --pinned --body -`) — NÃO na wiki do vault (`wiki/` é arquivo morto desde 16/10).
 
-Criar `.md` file em `Modulo Odoo_tasks/<feature-slug>.md` com:
 
-```yaml
----
-pm-task: true
-projectId: "zk233d8lmsku7qbv"
-parentId:
-id: "<unique-id>"
-title: "<titulo da feature>"
-type: "task"
-status: "todo"
-priority: "<low|medium|high|critical>"
-start: "<YYYY-MM-DD>"
-due: ""
-progress: 0
-assignees: []
-tags: []
-subtaskIds: []
-dependencies: []
-feature-slug: "<slug>"
-branch: "feat/<slug>"
-createdAt: "<ISO timestamp>"
-updatedAt: "<ISO timestamp>"
----
-
-<descricao da feature>
-
-Project: [[Modulo Odoo|Modulo Odoo]]
-```
-
-**Criar subtask (ticket do taskbreaker):**
-
-Mesmo formato mas com `parentId: "<id do task pai>"` e `type: "subtask"`.
-
-**Atualizar status (mover no Kanban):**
-
-Editar o campo `status` no frontmatter do `.md`:
-
-| Status Kanban | Valor no YAML |
-|---------------|---------------|
-| Backlog | `todo` |
-| A Fazer | `todo` |
-| Em Andamento | `in-progress` |
-| Revisão | `review` |
-| Teste | `testing` |
-| Concluído | `done` |
-
-**Quando o Hermes atualiza status:**
-- Feature nova criada → `todo` (Backlog)
-- Spec + tickets prontos → `todo` (A Fazer) + criar subtasks
-- Coder começou → `in-progress`
-- Código pronto, PR aberto → `review`
-- Review passou → `testing`
-- Teste manual OK + branch contida na dev → `done` (merge sozinho NAO fecha o card)
 
 ### Documentação do projeto (Obsidian vault)
 
@@ -140,7 +87,7 @@ Vault: `/Users/marceloC/Library/Mobile Documents/iCloud~md~obsidian/Documents/br
 
 - **Mapa do módulo (comece por aqui):** `01_Projects/Odoo 18/01 - Odoo ERP/Odoo 18 - Mapa do Modulo.md`
 - **Home do projeto:** `01_Projects/Odoo 18/Odoo 18 - Home.md`
-- **Wiki:** `wiki/entities/odoo-18.md` · `wiki/entities/middleware-nfc-e.md` · `wiki/entities/vps-inventario-2026-09-24.md`
+- **ai-memory (fonte da verdade técnica desde 16/10):** `ai-memory read-page --path entities/odoo-18.md` · `entities/middleware-nfc-e.md` · `entities/vps-inventario-2026-09-24.md` — wiki do vault = arquivo morto desde 16/10
 
 **Regras da fronteira:**
 
@@ -160,7 +107,7 @@ O Hermes faz 3 perguntas rapidas pra montar o prompt com contexto maximo:
 **Vault pass (SEMPRE, antes de montar o prompt):** o Hermes lê o Mapa do Modulo / nota de feature no vault e embute no prompt: componentes existentes pra REUSE, ADRs anteriores da area, pitfalls conhecidos e features ja tentadas/revertidas (propor re-grill v2). O prompt abre com "antes de grillar, leia o vault: <paths>" — e a skill `fiscal-planner` manda o mesmo na Phase 0.
 
 Com as respostas, o Hermes:
-1. Cria o task no Obsidian PM (Backlog)
+1. Registra a pendência no report (caderno do Marcelo) — sem kanban digital
 2. Monta o prompt completo pro agy com a skill certa + contexto (vault pass incluido) + encadeamento de fases
 
 ### Comando base pra splittar terminal do agy no Orca (o Hermes executa)
@@ -177,10 +124,10 @@ O Hermes monta o prompt com:
 - A descrição da feature que o usuário passou
 - Instrução pra encadear fases no mesmo terminal quando fizer sentido (planner → taskbreaker)
 
-## Workflow (Obsidian PM + Git + Orca)
+## Workflow (tracking no caderno + Git + Orca)
 
 ```
-BACKLOG → A FAZER → EM ANDAMENTO → REVISÃO → TESTE → CONCLUÍDO
+PEDIDO → SPEC/TICKETS → CÓDIGO → REVISÃO → TESTE PDV → FECHADO
 ```
 
 **A FAZER:**
@@ -192,7 +139,7 @@ orca terminal split --terminal <handle-do-hermes> --direction horizontal \
   --command "<launcher: agy --model claude-sonnet-4-6 com o prompt em arquivo>" --json
 ```
 
-O agy abre no workspace, carrega AGENTS.md automático, e inicia o grill. Ao final: spec em `.agents/specs/<feature>.md` + ADRs + título do task no Obsidian PM.
+O agy abre no workspace, carrega AGENTS.md automático, e inicia o grill. Ao final: spec em `.agents/specs/<feature>.md` + ADRs + título da feature (pro report/caderno).
 
 2. **Encadear o taskbreaker** — instrução no MESMO prompt inicial (não abrir nova pane):
 
@@ -200,7 +147,7 @@ O agy abre no workspace, carrega AGENTS.md automático, e inicia o grill. Ao fin
 Apos a spec ficar pronta, carrega a skill fiscal-taskbreaker e quebra a spec em tickets.
 ```
 
-3. No Obsidian PM: cria task no projeto "Modulo Odoo" com o título sugerido, anexa checklist, move pra Em andamento
+3. Registra no report o título + checklist dos tickets (o Marcelo anota no caderno) — sem kanban digital
 
 **EM ANDAMENTO:**
 
@@ -245,7 +192,7 @@ orca worktree ps              # resumo compacto
 orca worktree list --json     # detalhado
 ```
 
-**REVISÃO (WIP máx 3 cards):** falhar volta pra Em andamento; passar segue pra Teste.
+**REVISÃO (gate):** falhar volta pra codificação; passar segue pra teste PDV.
 
 **TESTE:** manual no PDV — venda, recibo, offline/contingência, log middleware. Se falhar, usar sub-skill `debugging-and-error-recovery`.
 
@@ -271,9 +218,9 @@ orca terminal read --terminal <handle>   # ler output de um terminal
 | Regra | Detalhe |
 |-------|---------|
 | 1 task = 1 feature | Nunca misturar duas features no mesmo task |
-| Subtasks = tickets | Cada ticket do taskbreaker vira uma subtask no Obsidian PM |
-| Só move pra Em andamento | Depois que as subtasks estiverem criadas no task |
-| Só move pra Concluído | Depois do teste manual OK e merge na dev (PR so quando o usuário pedir) |
+| Subtasks = tickets | Cada ticket do taskbreaker = 1 md em `.agents/tickets/` (frontmatter `status:` é o estado); sem cards digitais |
+| Status do ticket | O coder marca `status:` no frontmatter ao concluir (todo/in-progress/review/testing/done/cancelled) |
+| Só "concluído" | Depois do teste manual OK e merge na dev (PR so quando o usuário pedir) |
 | Branch da feature | Hermes cria `feat/<slug>` a partir de dev ANTES do split do coder (no paralelo o Orca nomeia `<slug>`) |
 | Coder nunca pusha | Commita local; push/PR so quando o usuário pedir e o teste manual passar |
 
@@ -324,9 +271,9 @@ Decision: <o que foi decidido>
 Consequences: <trade-offs, riscos>
 ```
 
-### Output do Grill: título do task no Obsidian PM
+### Output do Grill: título da feature
 
-Sugerir título curto (máx 60 chars) — vira nome do card e prefixo da branch (`feat/<slug>`).
+Sugerir título curto (máx 60 chars) — vai no report pro caderno e é o prefixo da branch (`feat/<slug>`).
 
 Formato: `<type>: <short description>`
 
@@ -431,7 +378,7 @@ Usado quando a spec já está pronta e precisa ser quebrada em tasks (se o plann
 4. **Wide refactors são exceção** — expand-contract, não tracer bullet
 5. **Salvar** em `.agents/tickets/<feature-slug>/<NN>-<short-title>.md`
 6. **Apresentar** lista numerada (Title, Blocked by, What it delivers) → iterar até aprovação
-7. **Checklist pra Obsidian PM (subtasks):**
+7. **Checklist dos tickets (subtasks):**
 
 ```markdown
 ## Checklist
