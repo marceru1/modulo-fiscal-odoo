@@ -15,6 +15,110 @@ def _r(valor):
     return round(float(valor or 0.0), 2)
 
 
+# ── Ambiente de POS compartilhado pelos testes offline ────────────────────
+def montar_pos_offline(teste):
+    """Cria journals, métodos (Dinheiro/Cartão/A Prazo), config, sessão e produto.
+
+    Deixa em ``teste``: ``company``, ``cash_pm``, ``bank_pm``, ``later_pm``,
+    ``pms_por_nome``, ``pos_config``, ``pos_session``, ``product`` e
+    ``pricelist``. Usado pelo teste do snapshot (ticket 01) e pela paridade
+    (ticket 02) para o cenário ser idêntico nos dois.
+    """
+    env = teste.env
+    teste.company = env.company
+
+    teste.cash_journal = env['account.journal'].create({
+        'name': 'Caixa Teste Offline',
+        'type': 'cash',
+        'code': 'OF',
+        'company_id': teste.company.id,
+    })
+    teste.bank_journal = env['account.journal'].create({
+        'name': 'Banco Teste Offline',
+        'type': 'bank',
+        'code': 'OFB',
+        'company_id': teste.company.id,
+    })
+    teste.sale_journal = env['account.journal'].create({
+        'name': 'Vendas Teste Offline',
+        'type': 'sale',
+        'code': 'OFV',
+        'company_id': teste.company.id,
+    })
+
+    teste.cash_pm = env['pos.payment.method'].create({
+        'name': 'Dinheiro',
+        'journal_id': teste.cash_journal.id,
+    })
+    teste.bank_pm = env['pos.payment.method'].create({
+        'name': 'Cartão',
+        'journal_id': teste.bank_journal.id,
+    })
+    teste.later_pm = env['pos.payment.method'].create({
+        'name': 'A Prazo',
+    })
+    teste.pms_por_nome = {
+        'Dinheiro': teste.cash_pm,
+        'Cartão': teste.bank_pm,
+        'A Prazo': teste.later_pm,
+    }
+
+    teste.pos_config = env['pos.config'].create({
+        'name': 'PDV Teste Offline',
+        'journal_id': teste.sale_journal.id,
+        'payment_method_ids': [
+            (6, 0, [teste.cash_pm.id, teste.bank_pm.id, teste.later_pm.id])
+        ],
+    })
+    teste.pos_session = env['pos.session'].create({
+        'config_id': teste.pos_config.id,
+        'user_id': env.user.id,
+    })
+    teste.pos_session.action_pos_session_open()
+
+    teste.product = env['product.product'].create({
+        'name': 'Produto Teste Offline',
+        'type': 'consu',
+        'list_price': 10.0,
+        'available_in_pos': True,
+    })
+    teste.pricelist = env['product.pricelist'].create({
+        'name': 'Pricelist Teste Offline',
+        'currency_id': teste.company.currency_id.id,
+    })
+
+
+def criar_pedido(teste, amount, method, partner=None):
+    """Cria um pos.order 'done' com um pagamento no método informado."""
+    order = teste.env['pos.order'].create({
+        'session_id': teste.pos_session.id,
+        'partner_id': (partner or teste.env.ref('base.public_partner')).id,
+        'pricelist_id': teste.pricelist.id,
+        'state': 'draft',
+        'amount_tax': 0.0,
+        'amount_total': amount,
+        'amount_paid': amount,
+        'amount_return': 0.0,
+        'lines': [(0, 0, {
+            'product_id': teste.product.id,
+            'price_unit': amount,
+            'qty': 1.0,
+            'price_subtotal': amount,
+            'price_subtotal_incl': amount,
+        })],
+        'payment_ids': [(0, 0, {
+            'amount': amount,
+            'payment_method_id': method.id,
+        })],
+    })
+    order.state = 'done'
+    return order
+
+
+def snapshot(teste):
+    return teste.pos_session.get_fechamento_offline_snapshot()
+
+
 def paridade(closing, fechamento):
     """Devolve o subconjunto comparável de ``closing`` + ``fechamento``."""
     cash = closing.get('default_cash_details') or {}
