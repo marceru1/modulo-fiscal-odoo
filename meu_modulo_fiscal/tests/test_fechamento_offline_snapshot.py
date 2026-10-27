@@ -3,7 +3,7 @@ from unittest.mock import patch
 from odoo.exceptions import AccessError
 from odoo.tests import TransactionCase
 
-from .paridade_offline_helper import paridade
+from .paridade_offline_helper import criar_pedido, montar_pos_offline, paridade, snapshot
 
 
 class TestFechamentoOfflineSnapshot(TransactionCase):
@@ -17,92 +17,14 @@ class TestFechamentoOfflineSnapshot(TransactionCase):
 
     def setUp(self):
         super().setUp()
-        self.company = self.env.company
-
-        self.cash_journal = self.env['account.journal'].create({
-            'name': 'Caixa Teste Offline',
-            'type': 'cash',
-            'code': 'OF',
-            'company_id': self.company.id,
-        })
-        self.bank_journal = self.env['account.journal'].create({
-            'name': 'Banco Teste Offline',
-            'type': 'bank',
-            'code': 'OFB',
-            'company_id': self.company.id,
-        })
-        self.sale_journal = self.env['account.journal'].create({
-            'name': 'Vendas Teste Offline',
-            'type': 'sale',
-            'code': 'OFV',
-            'company_id': self.company.id,
-        })
-
-        self.cash_pm = self.env['pos.payment.method'].create({
-            'name': 'Dinheiro',
-            'journal_id': self.cash_journal.id,
-        })
-        self.bank_pm = self.env['pos.payment.method'].create({
-            'name': 'Cartão',
-            'journal_id': self.bank_journal.id,
-        })
-        self.later_pm = self.env['pos.payment.method'].create({
-            'name': 'A Prazo',
-        })
-
-        self.pos_config = self.env['pos.config'].create({
-            'name': 'PDV Teste Offline',
-            'journal_id': self.sale_journal.id,
-            'payment_method_ids': [
-                (6, 0, [self.cash_pm.id, self.bank_pm.id, self.later_pm.id])
-            ],
-        })
-        self.pos_session = self.env['pos.session'].create({
-            'config_id': self.pos_config.id,
-            'user_id': self.env.user.id,
-        })
-        self.pos_session.action_pos_session_open()
-
-        self.product = self.env['product.product'].create({
-            'name': 'Produto Teste Offline',
-            'type': 'consu',
-            'list_price': 10.0,
-            'available_in_pos': True,
-        })
-        self.pricelist = self.env['product.pricelist'].create({
-            'name': 'Pricelist Teste Offline',
-            'currency_id': self.company.currency_id.id,
-        })
+        montar_pos_offline(self)
 
     # ── Helpers ──────────────────────────────────────────────────────────────
     def _create_order(self, amount, method):
-        """Cria um pos.order 'done' com um pagamento no método informado."""
-        order = self.env['pos.order'].create({
-            'session_id': self.pos_session.id,
-            'partner_id': self.env.ref('base.public_partner').id,
-            'pricelist_id': self.pricelist.id,
-            'state': 'draft',
-            'amount_tax': 0.0,
-            'amount_total': amount,
-            'amount_paid': amount,
-            'amount_return': 0.0,
-            'lines': [(0, 0, {
-                'product_id': self.product.id,
-                'price_unit': amount,
-                'qty': 1.0,
-                'price_subtotal': amount,
-                'price_subtotal_incl': amount,
-            })],
-            'payment_ids': [(0, 0, {
-                'amount': amount,
-                'payment_method_id': method.id,
-            })],
-        })
-        order.state = 'done'
-        return order
+        return criar_pedido(self, amount, method)
 
     def _snapshot(self):
-        return self.pos_session.get_fechamento_offline_snapshot()
+        return snapshot(self)
 
     # ── Contrato do snapshot ─────────────────────────────────────────────────
     def test_snapshot_contrato(self):
