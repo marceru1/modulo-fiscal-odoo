@@ -416,25 +416,92 @@ function extractBody(src, signature) {
         formatarNomes([{ nome: "Caixa 2" }, { nome: "Biju" }]),
         "Caixa 2 + Biju"
     );
+    assert.strictEqual(
+        formatarNomes([{ nome: "Dinheiro" }, { nome: "Dinheiro" }]),
+        "Dinheiro",
+        "forma com mesmo nome em vários caixas aparece uma vez"
+    );
     console.log("✓ 14: checkboxes de caixa, coluna condicional e cabeçalho");
 }
 
 // ── 15: filtro opcional por forma de pagamento (DEC-011) ─────────────────
 {
-    // Checkboxes dos pos.payment.method reais, lidos em runtime e por nome.
+    // Checkboxes dos pos.payment.method reais, lidos em runtime e agrupados
+    // por nome: cada caixa tem o próprio registro ("Dinheiro" × N caixas).
     assert(/orm\.searchRead\(\s*"pos\.payment\.method"/.test(js),
         "formas de pagamento lidas do cadastro em runtime");
-    assert(/t-foreach="state\.metodos"/.test(xml), "lista de formas renderizada");
-    assert(/t-on-change="\(\) => this\.toggleMetodo\(metodo\.id\)"/.test(xml),
-        "marcar/desmarcar forma de pagamento");
-    assert(/state\.metodosIds\.includes\(metodo\.id\)/.test(xml), "checkbox reflete a seleção");
+    assert(/t-foreach="gruposMetodos"/.test(xml),
+        "lista de formas renderizada agrupada por nome");
+    assert(!/t-foreach="state\.metodos"/.test(xml),
+        "registros crus não são listados um por caixa");
+    assert(/t-on-change="\(\) => this\.alternarGrupoMetodo\(grupo\.ids\)"/.test(xml),
+        "marcar/desmarcar forma marca o grupo de mesmo nome inteiro");
+    assert(/grupoMarcado\(grupo\.ids\)/.test(xml), "checkbox reflete a seleção do grupo");
     assert(/opcional/i.test(xml), "filtro identificado como opcional");
+
+    // Agrupamento por nome: registros diferentes de mesmo nome viram uma opção.
+    const gruposMetodos = new Function(extractBody(js, "get gruposMetodos()"));
+    assert.deepStrictEqual(
+        gruposMetodos.call({ state: { metodos: [] } }),
+        [],
+        "sem cadastro, nenhum grupo"
+    );
+    assert.deepStrictEqual(
+        gruposMetodos.call({ state: { metodos: [
+            { id: 1, name: "Dinheiro" },
+            { id: 2, name: "Dinheiro" },
+            { id: 3, name: "Dinheiro" },
+            { id: 4, name: "Dinheiro" },
+            { id: 5, name: "Cartão" },
+        ] } }),
+        [
+            { nome: "Dinheiro", ids: [1, 2, 3, 4] },
+            { nome: "Cartão", ids: [5] },
+        ],
+        "um registro de forma por caixa vira uma opção só"
+    );
+
+    // Estado do checkbox é o grupo inteiro (todos marcados ou nenhum).
+    const grupoMarcado = new Function("ids", extractBody(js, "grupoMarcado(ids)"));
+    assert.strictEqual(grupoMarcado.call({ state: { metodosIds: [1, 2] } }, [1, 2]), true);
+    assert.strictEqual(grupoMarcado.call({ state: { metodosIds: [1] } }, [1, 2]), false);
+
+    // Marcar/desmarcar opera no grupo inteiro, preservando os outros nomes.
+    const alternarGrupoMetodo = new Function("ids", extractBody(js, "alternarGrupoMetodo(ids)"));
+    let mudancas = 0;
+    const comGrupos = {
+        state: { metodosIds: [1, 2, 7], carregando: false },
+        grupoMarcado,
+        alterouFiltros() {
+            mudancas += 1;
+        },
+    };
+    alternarGrupoMetodo.call(comGrupos, [1, 2]);
+    assert.deepStrictEqual(comGrupos.state.metodosIds, [7],
+        "desmarcar a forma remove todos os registros com o nome");
+    alternarGrupoMetodo.call(comGrupos, [1, 2]);
+    assert.deepStrictEqual(comGrupos.state.metodosIds, [7, 1, 2],
+        "marcar a forma aplica todos os registros com o nome");
+    assert.strictEqual(mudancas, 2, "cada alternada invalida o resultado");
+    alternarGrupoMetodo.call(comGrupos, [3]);
+    assert.deepStrictEqual(comGrupos.state.metodosIds, [7, 1, 2, 3],
+        "marcar um id ausente o adiciona uma única vez");
+
+    // Consulta em curso não muda o filtro.
+    const emCarga = {
+        state: { metodosIds: [1], carregando: true },
+        grupoMarcado,
+        alterouFiltros() {},
+    };
+    alternarGrupoMetodo.call(emCarga, [1]);
+    assert.deepStrictEqual(emCarga.state.metodosIds, [1],
+        "consulta em curso não muda o filtro");
 
     // Opcional: não entra no podeConsultar (vazio = sem filtro).
     const podeConsultarBody = extractBody(js, "get podeConsultar()");
     assert(!/metodosIds/.test(podeConsultarBody), "formas não são obrigatórias para consultar");
 
-    // Chamada envia o filtro e o resultado expõe o filtro aplicado.
+    // Chamada envia o filtro (todos os ids do grupo) e o resultado expõe o filtro aplicado.
     assert(/state\.metodosIds\]/.test(js), "filtro enviado ao servidor");
     const contexto = extractBody(js, "get contextoResultado()");
     assert(/resultado\.formas\.length/.test(contexto),
@@ -444,13 +511,13 @@ function extractBody(src, signature) {
         "nomes das formas aplicadas");
 
     // Marcar/desmarcar forma zera resultado antigo.
-    assert(/toggleMetodo\(metodoId\)[\s\S]*alterouFiltros/.test(js),
+    assert(/alternarGrupoMetodo\(ids\)[\s\S]*alterouFiltros/.test(js),
         "mudar o filtro de formas limpa o resultado");
 
     // Filtro vazio aparece como "sem filtro" no contexto aplicado.
     assert(/_t\("sem filtro"\)/.test(contexto),
         "sem filtro, contexto diz 'sem filtro'");
-    console.log("✓ 15: filtro opcional por forma de pagamento");
+    console.log("✓ 15: filtro opcional por forma de pagamento, agrupado por nome");
 }
 
 // ── 16: estrutura da tela e faixa de ação ──────────────────────────────────
@@ -542,6 +609,33 @@ function extractBody(src, signature) {
             plural
         ),
         "3 formas selecionadas"
+    );
+    assert.strictEqual(
+        resumoPagamento.call(
+            comMetodos([1, 2, 3], [
+                { id: 1, name: "Dinheiro" },
+                { id: 2, name: "Dinheiro" },
+                { id: 3, name: "Cartão" },
+            ]),
+            identidade,
+            plural
+        ),
+        "Pagamento: Dinheiro e Cartão",
+        "nome repetido entre caixas conta uma vez só"
+    );
+    assert.strictEqual(
+        resumoPagamento.call(
+            comMetodos([1, 2, 3, 4], [
+                { id: 1, name: "Dinheiro" },
+                { id: 2, name: "Dinheiro" },
+                { id: 3, name: "Dinheiro" },
+                { id: 4, name: "Dinheiro" },
+            ]),
+            identidade,
+            plural
+        ),
+        "Pagamento: Dinheiro",
+        "quatro registros de Dinheiro exibem um único nome"
     );
     assert.strictEqual(
         resumoPagamento.call(comMetodos([9], []), identidade, plural),
@@ -717,7 +811,7 @@ function extractBody(src, signature) {
     }
     assert(/t-att-id="uid \+ '_caixa_' \+ caixa\.id"/.test(xml),
         "checkbox de caixa com id por instância");
-    assert(/t-att-id="uid \+ '_metodo_' \+ metodo\.id"/.test(xml),
+    assert(/t-att-id="uid \+ '_metodo_' \+ grupo_index"/.test(xml),
         "checkbox de forma com id por instância");
     assert(js.includes("Selecione um caixa para escolher os dias."),
         "razão do calendário desabilitado");
@@ -1023,17 +1117,18 @@ function extractBody(src, signature) {
     assert.deepStrictEqual(duranteConsulta.state.metodosIds, [1],
         "não muda filtro no meio de uma consulta");
 
-    // Marcar todos os métodos listados não vira "sem filtro" automaticamente.
-    const toggleMetodo = new Function(
-        "metodoId", extractBody(js, "toggleMetodo(metodoId)")
-    );
-    const todosMarcados = {
-        state: { metodosIds: [1, 2], metodos: [{ id: 1 }, { id: 2 }], carregando: false },
+    // Desmarcar a forma não vira "sem filtro" quando outros nomes permanecem
+    // no filtro (o grupo inteiro sai; o restante fica).
+    const grupoMarcado19 = new Function("ids", extractBody(js, "grupoMarcado(ids)"));
+    const alternarGrupo19 = new Function("ids", extractBody(js, "alternarGrupoMetodo(ids)"));
+    const comDemais = {
+        state: { metodosIds: [1, 2, 3], carregando: false },
+        grupoMarcado: grupoMarcado19,
         alterouFiltros() {},
     };
-    toggleMetodo.call(todosMarcados, 1);
-    assert.deepStrictEqual(todosMarcados.state.metodosIds, [2],
-        "desmarcar um método mantém o filtro com os demais");
+    alternarGrupo19.call(comDemais, [1, 2]);
+    assert.deepStrictEqual(comDemais.state.metodosIds, [3],
+        "desmarcar um grupo mantém o filtro com os demais nomes");
 
     // Contrato da tela.
     assert(/t-if="state\.metodosIds\.length"/.test(xml), "ação só aparece com filtro ativo");
@@ -1100,7 +1195,7 @@ function extractBody(src, signature) {
                 fuso: "America/Manaus",
             },
         },
-        formatarNomes: (itens) => itens.map((item) => item.nome).join(" + "),
+        formatarNomes: new Function("itens", extractBody(js, "formatarNomes(itens)")),
         formatarDias: (datas) => datas.map((data) => data.split("-").reverse().join("/")).join(" e "),
     };
     assert.strictEqual(
@@ -1111,6 +1206,17 @@ function extractBody(src, signature) {
     assert.strictEqual(
         contextoResultado.call(contexto, traduzir),
         "Caixas: Caixa 1 + Caixa 2 · Dias: 15/10/2026 e 20/10/2026 · Pagamento: PIX + Cartão · Fuso: America/Manaus"
+    );
+    contexto.state.resultado.formas = [
+        { nome: "Dinheiro" },
+        { nome: "Dinheiro" },
+        { nome: "Dinheiro" },
+        { nome: "Dinheiro" },
+    ];
+    assert.strictEqual(
+        contextoResultado.call(contexto, traduzir),
+        "Caixas: Caixa 1 + Caixa 2 · Dias: 15/10/2026 e 20/10/2026 · Pagamento: Dinheiro · Fuso: America/Manaus",
+        "formas de mesmo nome (um registro por caixa) aparecem uma vez"
     );
 
     // Devolução: identificada por texto, sinal preservado, sem coluna Situação.

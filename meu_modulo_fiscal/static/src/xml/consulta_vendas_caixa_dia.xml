@@ -214,17 +214,17 @@
                                     </button>
                                 </div>
                                 <t t-else="">
-                                    <label t-foreach="state.metodos"
-                                           t-as="metodo"
-                                           t-key="metodo.id"
+                                    <label t-foreach="gruposMetodos"
+                                           t-as="grupo"
+                                           t-key="grupo.nome"
                                            class="o_consulta_opcao">
                                         <input class="form-check-input o_consulta_opcao_input"
                                                type="checkbox"
-                                               t-att-id="uid + '_metodo_' + metodo.id"
-                                               t-att-checked="state.metodosIds.includes(metodo.id)"
+                                               t-att-id="uid + '_metodo_' + grupo_index"
+                                               t-att-checked="grupoMarcado(grupo.ids)"
                                                t-att-disabled="state.carregando"
-                                               t-on-change="() => this.toggleMetodo(metodo.id)"/>
-                                        <span class="o_consulta_opcao_rotulo" t-esc="metodo.name"/>
+                                               t-on-change="() => this.alternarGrupoMetodo(grupo.ids)"/>
+                                        <span class="o_consulta_opcao_rotulo" t-esc="grupo.nome"/>
                                     </label>
                                     <div t-if="!state.metodos.length" class="text-muted small">
                                         Nenhuma forma de pagamento disponível.
