@@ -497,9 +497,13 @@ export class ConsultaVendasCaixaDia extends Component {
         if (!ids.length) {
             return _t("Sem filtro de pagamento");
         }
-        const nomes = this.state.metodos
-            .filter((metodo) => ids.includes(metodo.id))
-            .map((metodo) => metodo.name);
+        // Cada caixa tem o próprio registro de forma (mesmo nome): contam
+        // nomes distintos, não repetir "Dinheiro" por caixa.
+        const nomes = [...new Set(
+            this.state.metodos
+                .filter((metodo) => ids.includes(metodo.id))
+                .map((metodo) => metodo.name)
+        )];
         if (!nomes.length) {
             return `${ids.length} ${plural(
                 ids.length, _t("forma selecionada"), _t("formas selecionadas")
@@ -529,15 +533,41 @@ export class ConsultaVendasCaixaDia extends Component {
         this.alterouFiltros();
     }
 
-    toggleMetodo(metodoId) {
+    /** Grupos de formas por nome: cada caixa tem o próprio registro
+     *  pos.payment.method (ex.: quatro "Dinheiro", um por journal de caixa),
+     *  mas na tela a opção é única. */
+    get gruposMetodos() {
+        const grupos = new Map();
+        for (const metodo of this.state.metodos) {
+            if (!grupos.has(metodo.name)) {
+                grupos.set(metodo.name, { nome: metodo.name, ids: [] });
+            }
+            grupos.get(metodo.name).ids.push(metodo.id);
+        }
+        return [...grupos.values()];
+    }
+
+    /** O grupo está marcado quando todos os registros dele estão no filtro. */
+    grupoMarcado(ids) {
+        return ids.every((id) => this.state.metodosIds.includes(id));
+    }
+
+    /** Marca/desmarca o grupo inteiro: o filtro cobre todos os caixas de
+     *  uma vez, sem repetir o nome na interface. */
+    alternarGrupoMetodo(ids) {
         if (this.state.carregando) {
             return;
         }
-        const indice = this.state.metodosIds.indexOf(metodoId);
-        if (indice >= 0) {
-            this.state.metodosIds.splice(indice, 1);
+        if (this.grupoMarcado(ids)) {
+            this.state.metodosIds = this.state.metodosIds.filter(
+                (id) => !ids.includes(id)
+            );
         } else {
-            this.state.metodosIds.push(metodoId);
+            for (const id of ids) {
+                if (!this.state.metodosIds.includes(id)) {
+                    this.state.metodosIds.push(id);
+                }
+            }
         }
         this.alterouFiltros();
     }
@@ -711,9 +741,16 @@ export class ConsultaVendasCaixaDia extends Component {
         return this.listar(ordenadas.map((data) => this.formatarData(data)));
     }
 
-    /** Nomes de caixas/formas no cabeçalho: "Caixa 2 + Biju". */
+    /** Nomes de caixas/formas no cabeçalho: "Caixa 2 + Biju". Nomes repetidos
+     *  (uma forma por caixa, ex.: quatro "Dinheiro") saem uma vez só. */
     formatarNomes(itens) {
-        return (itens || []).map((item) => item.nome).join(" + ");
+        const nomes = [];
+        for (const item of itens || []) {
+            if (item.nome && !nomes.includes(item.nome)) {
+                nomes.push(item.nome);
+            }
+        }
+        return nomes.join(" + ");
     }
 
     rotuloCupons(quantidade) {
