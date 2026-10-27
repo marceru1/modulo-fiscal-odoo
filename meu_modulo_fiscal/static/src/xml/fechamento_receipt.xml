@@ -205,6 +205,12 @@
                 </div>
             </div>
 
+            <!-- fechamento-offline-fila: marca discreta de relatório gerado
+                 sem rede (DEC-009). O replay NÃO reimprime. -->
+            <div t-if="offline" style="text-align: center; font-size: 10px; margin-top: 6px;">
+                Gerado offline
+            </div>
+
         </div>
     </t>
 
