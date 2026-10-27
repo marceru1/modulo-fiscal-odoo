@@ -66,7 +66,13 @@ patch(PosStore.prototype, {
                 FASE_POR_PASSO[this.fechamentoPendente.passo + 1] || _t("fechando…")
             );
         }
-        return _t("Fechamento pendente — aguardando rede (%s pedidos na fila)", this.fechamentoPendenteQuantidade);
+        // O que é contado aqui são vendas offline ainda não enviadas
+        // (id string); sangrias/suprimentos pendentes ficam na outbox e não
+        // entram nesta contagem. Texto reflete isso.
+        return _t(
+            "Fechamento pendente — aguardando rede (%s vendas não enviadas)",
+            this.fechamentoPendenteQuantidade
+        );
     },
 
     // Vendas bloqueadas: não adiciona item e não vai para o pagamento. A tela
