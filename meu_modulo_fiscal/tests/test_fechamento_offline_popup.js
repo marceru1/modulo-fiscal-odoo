@@ -91,7 +91,10 @@ console.log("✓ 3: online segue o fluxo nativo com o redirect /odoo");
 
 // ── 4. Relatório: "Gerado offline" só quando offline ──────────────────────
 assert.match(
-    trecho("async _imprimirFechamento(dados, offline) {", "/** Aplica os valores informados"),
+    trecho(
+        "async _imprimirFechamento(dados, offline, jaContado = false) {",
+        "/** Aplica os valores informados"
+    ),
     /offline:\s*Boolean\(offline\)/,
     "O template precisa receber a flag offline"
 );

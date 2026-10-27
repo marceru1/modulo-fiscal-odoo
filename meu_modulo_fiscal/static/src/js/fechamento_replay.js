@@ -157,6 +157,9 @@ export function createReplayMachine(deps) {
             notas: dados.notas ?? "",
             diferencas_bancarias: dados.diferencas_bancarias ?? [],
             relatorio: dados.relatorio ?? null,
+            // Dados do popup no instante da confirmação: o popup somente
+            // leitura (ticket 06) reabre com eles, sem recalcular.
+            closing: dados.closing ?? null,
             confirmado_em: dados.confirmado_em ?? null,
             passo: -1,
             status: STATUS_PENDENTE,
