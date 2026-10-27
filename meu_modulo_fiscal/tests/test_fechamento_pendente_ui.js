@@ -93,7 +93,7 @@ console.log("✓ 2: vermelho só em erro_negocio");
 // ── 3. Textos por fase ────────────────────────────────────────────────────
 assert.strictEqual(
     getTexto.call(ctxTexto({ status: "pendente", passo: -1 })),
-    "Fechamento pendente — aguardando rede (2 pedidos na fila)"
+    "Fechamento pendente — aguardando rede (2 vendas não enviadas)"
 );
 assert.strictEqual(
     getTexto.call(ctxTexto({ status: "executando", passo: 1 })),
