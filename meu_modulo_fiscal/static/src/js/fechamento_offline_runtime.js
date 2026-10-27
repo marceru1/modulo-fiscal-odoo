@@ -73,6 +73,19 @@ export function obterEstado() {
     return _estado;
 }
 
+/**
+ * Outbox da sessão atual — instância ÚNICA (vive no runtime).
+ *
+ * O mutex de drenagem (`drenando`) é por instância. Se o popup de sangria
+ * criasse a sua própria outbox sobre o mesmo localStorage, duas drenagens
+ * simultâneas poderiam enviar o mesmo movimento 2x. Todo mundo que precisa da
+ * outbox deve pedir por aqui (o popup usa só adicionar/espelhar; a drenagem é
+ * do runtime/gatilhos, com o mesmo mutex).
+ */
+export function obterOutbox(pos) {
+    return initFechamentoOffline(pos).outbox;
+}
+
 /** Tira um snapshot novo do servidor e limpa do espelho o que já está nele. */
 export async function tirarSnapshot(pos) {
     const estado = initFechamentoOffline(pos);
@@ -201,7 +214,7 @@ function criarRpcsReplay(pos) {
             return sessao ? sessao.state : "closed";
         },
         drenarOutbox: async () => {
-            const resultado = await initFechamentoOffline(pos).outbox.drenar((item) =>
+            const resultado = await obterOutbox(pos).drenar((item) =>
                 enviarMovimento(pos, item)
             );
             if (resultado.erroNegocio) {
