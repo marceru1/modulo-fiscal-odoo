@@ -16,7 +16,7 @@ import { _t } from "@web/core/l10n/translation";
 import { AlertDialog } from "@web/core/confirmation_dialog/confirmation_dialog";
 import {
     enviarMovimento,
-    initFechamentoOffline,
+    obterOutbox,
     obterReplay,
 } from "./fechamento_offline_runtime";
 
@@ -190,11 +190,11 @@ patch(PosStore.prototype, {
         if (obterReplay(this).temPendencia()) {
             return;
         }
-        const estado = initFechamentoOffline(this);
-        if (!estado.outbox.listar().length) {
+        const outbox = obterOutbox(this);
+        if (!outbox.listar().length) {
             return;
         }
-        const resultado = await estado.outbox.drenar((item) => enviarMovimento(this, item));
+        const resultado = await outbox.drenar((item) => enviarMovimento(this, item));
         if (resultado.erroNegocio) {
             // O outbox já loga o detalhe; aqui só destacamos que a drenagem parou.
             console.error("[FECHAMENTO] Drenagem da outbox parou por recusa do servidor.");

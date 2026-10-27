@@ -42,7 +42,8 @@ import { patch } from "@web/core/utils/patch";
 import { renderToElement } from "@web/core/utils/render";
 import { CashMovePopup } from "@point_of_sale/app/navbar/cash_move_popup/cash_move_popup";
 import { printFallback } from "./receipt_print_helper";
-import { createOutbox, solicitarRefreshSnapshot } from "./fechamento_outbox";
+import { solicitarRefreshSnapshot } from "./fechamento_outbox";
+import { obterOutbox } from "./fechamento_offline_runtime";
 
 patch(CashMovePopup.prototype, {
     async confirm() {
@@ -115,16 +116,14 @@ patch(CashMovePopup.prototype, {
         return nome === "ConnectionLostError";
     },
 
-    /** Outbox + espelho, criados sob demanda (1 por config/sessão). */
+    /**
+     * Outbox da sessão — instância ÚNICA, do runtime (fix round 1).
+     * O mutex de drenagem vive na instância; criar outra aqui sobre o mesmo
+     * localStorage poderia duplicar um movimento numa drenagem concorrente.
+     * Este patch só adiciona/espelha (nunca drena).
+     */
     _fechamentoOutbox() {
-        if (!this._fechamentoOutboxInstance) {
-            this._fechamentoOutboxInstance = createOutbox({
-                storage: window.localStorage,
-                configId: this.pos.config.id,
-                sessionId: this.pos.session.id,
-            });
-        }
-        return this._fechamentoOutboxInstance;
+        return obterOutbox(this.pos);
     },
 
     /** Offline: grava na outbox persistida e no espelho; imprime a sangria. */

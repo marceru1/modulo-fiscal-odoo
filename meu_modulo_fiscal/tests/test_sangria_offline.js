@@ -24,18 +24,44 @@ const MANIFEST_PATH = path.join(MODULE_ROOT, "__manifest__.py");
 
 const source = fs.readFileSync(PATCH_PATH, "utf8");
 
-// ── 1. Importa a outbox + gancho de refresh ───────────────────────────────
+// ── 1. Outbox centralizada no runtime + gancho de refresh ────────────────
+// Fix round 1 (Kimi): o patch NÃO cria a própria outbox (evita duas instâncias
+// sobre o mesmo localStorage, cada uma com seu mutex de drenagem).
 assert.match(
     source,
-    /import\s*\{[^}]*createOutbox[^}]*\}\s*from\s*["']\.\/fechamento_outbox["']/,
-    "O patch deve importar createOutbox de ./fechamento_outbox"
+    /import\s*\{[^}]*obterOutbox[^}]*\}\s*from\s*["']\.\/fechamento_offline_runtime["']/,
+    "O patch deve obter a outbox do runtime (obterOutbox)"
+);
+assert.ok(
+    !/import\s*\{[^}]*createOutbox[^}]*\}/.test(source),
+    "O patch não pode criar a própria outbox (createOutbox)"
+);
+assert.match(
+    source,
+    /_fechamentoOutbox\(\)\s*\{\s*return obterOutbox\(this\.pos\);\s*\}/,
+    "_fechamentoOutbox deve devolver a instância única do runtime"
+);
+assert.ok(
+    !/\.drenar\(/.test(source),
+    "O popup de sangria nunca drena a outbox (drenagem é do runtime/gatilhos)"
 );
 assert.match(
     source,
     /import\s*\{[^}]*solicitarRefreshSnapshot[^}]*\}\s*from\s*["']\.\/fechamento_outbox["']/,
     "O patch deve importar solicitarRefreshSnapshot"
 );
-console.log("✓ 1: patch importa a outbox e o gancho de refresh");
+
+// O runtime expõe a instância única.
+const runtimeSource = fs.readFileSync(
+    path.join(MODULE_ROOT, "static", "src", "js", "fechamento_offline_runtime.js"),
+    "utf8"
+);
+assert.match(
+    runtimeSource,
+    /export function obterOutbox\(pos\)\s*\{\s*return initFechamentoOffline\(pos\)\.outbox;\s*\}/,
+    "Runtime deve expor obterOutbox(pos) → estado.outbox"
+);
+console.log("✓ 1: outbox única no runtime + gancho de refresh");
 
 // ── 2. Checagem offline antes do despacho nativo (cobre out E in) ─────────
 const idxOffline = source.indexOf("this.pos.data.network.offline");
