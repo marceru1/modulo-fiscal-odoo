@@ -73,10 +73,6 @@ export function obterEstado() {
     return _estado;
 }
 
-export function obterSnapshot() {
-    return _estado ? _estado.snapshot : null;
-}
-
 /** Tira um snapshot novo do servidor e limpa do espelho o que já está nele. */
 export async function tirarSnapshot(pos) {
     const estado = initFechamentoOffline(pos);
@@ -95,7 +91,7 @@ export async function tirarSnapshot(pos) {
  * Refresca o snapshot (best-effort). Se um refresh for pedido enquanto outro
  * roda, repete ao final para não perder um movimento que chegou no meio.
  */
-export function refrescarSnapshot(pos) {
+function refrescarSnapshot(pos) {
     const estado = _estado;
     if (!estado) {
         return Promise.resolve(null);
@@ -123,7 +119,7 @@ export function refrescarSnapshot(pos) {
 }
 
 /** Pedidos pagos em memória (o delta entra no cálculo; rascunhos ficam fora). */
-export function montarPedidosLocais(pos) {
+function montarPedidosLocais(pos) {
     return pos.models["pos.order"]
         .filter((ordem) => ordem.finalized && ordem.state !== "cancel")
         .map((ordem) => ({
@@ -197,7 +193,7 @@ export async function enviarMovimento(pos, item) {
 }
 
 /** RPCs reais do replay (mesma sequência do core). */
-export function criarRpcsReplay(pos) {
+function criarRpcsReplay(pos) {
     const sessionId = pos.session.id;
     return {
         lerEstadoSessao: async () => {
@@ -263,6 +259,12 @@ export function obterReplay(pos) {
             rpcs: criarRpcsReplay(pos),
             controleCaixa: Boolean(pos.config.cash_control),
             contarVendasNaoEnviadas: () => contarVendasNaoEnviadas(pos),
+            // Banner em tempo real: a UI (ticket 06) relê a pendência a cada passo.
+            aoMudarEstado: () => {
+                if (typeof pos._atualizarFechamentoPendente === "function") {
+                    pos._atualizarFechamentoPendente();
+                }
+            },
         });
     }
     return estado.replay;

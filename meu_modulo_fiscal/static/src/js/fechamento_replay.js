@@ -89,6 +89,7 @@ function classificar(error, isNetworkError) {
  * @param {Function} [deps.isNetworkError] default: ehErroDeRede
  * @param {boolean}  [deps.controleCaixa]  se false, pula o passo 3
  * @param {Function} [deps.contarVendasNaoEnviadas] contagem para o alerta de conflito
+ * @param {Function} [deps.aoMudarEstado] notificado a cada avanço/limpeza (banner)
  * @param {object}   [deps.logger]
  */
 export function createReplayMachine(deps) {
@@ -100,6 +101,7 @@ export function createReplayMachine(deps) {
         isNetworkError = ehErroDeRede,
         controleCaixa = false,
         contarVendasNaoEnviadas = () => 0,
+        aoMudarEstado = () => {},
         logger = console,
     } = deps;
 
@@ -150,6 +152,16 @@ export function createReplayMachine(deps) {
         }
     }
 
+    /** Persiste e avisa a UI (banner) — nunca deixa a notificação quebrar o replay. */
+    function publicar(pendencia) {
+        escreverPendencia(pendencia);
+        try {
+            aoMudarEstado(pendencia);
+        } catch (error) {
+            logger.warn("[FECHAMENTO] Falha ao notificar a UI:", error);
+        }
+    }
+
     function criarPendencia(dados = {}) {
         const pendencia = {
             session_id: sessionId,
@@ -181,6 +193,11 @@ export function createReplayMachine(deps) {
     // ── Execução ───────────────────────────────────────────────────────────
     function abortarSessaoFechada() {
         apagarPendencia();
+        try {
+            aoMudarEstado(null);
+        } catch (error) {
+            logger.warn("[FECHAMENTO] Falha ao notificar a UI:", error);
+        }
         let vendasNaoEnviadas = 0;
         try {
             vendasNaoEnviadas = Number(contarVendasNaoEnviadas() || 0);
@@ -222,7 +239,7 @@ export function createReplayMachine(deps) {
         }
 
         pendencia.status = STATUS_EXECUTANDO;
-        escreverPendencia(pendencia);
+        publicar(pendencia);
 
         try {
             let passoAtual = Number.isInteger(pendencia.passo) ? pendencia.passo : -1;
@@ -237,13 +254,13 @@ export function createReplayMachine(deps) {
                 // core ou por outra tentativa) — vai direto ao fechamento.
                 passoAtual = estado === "closing_control" ? PASSO_ESTADO : PASSO_SESSAO;
                 pendencia.passo = passoAtual;
-                escreverPendencia(pendencia);
+                publicar(pendencia);
             }
 
             for (let passo = passoAtual + 1; passo <= PASSO_FECHAR; passo++) {
                 if (passo === PASSO_DINHEIRO && !controleCaixa) {
                     pendencia.passo = passo;
-                    escreverPendencia(pendencia);
+                    publicar(pendencia);
                     continue;
                 }
                 const resposta = await executarPasso(passo, pendencia);
@@ -254,10 +271,15 @@ export function createReplayMachine(deps) {
                 }
                 pendencia.passo = passo;
                 pendencia.status = STATUS_EXECUTANDO;
-                escreverPendencia(pendencia);
+                publicar(pendencia);
             }
 
             apagarPendencia();
+            try {
+                aoMudarEstado(null);
+            } catch (error) {
+                logger.warn("[FECHAMENTO] Falha ao notificar a UI:", error);
+            }
             return { resultado: "concluido", passo: PASSO_FECHAR };
         } catch (error) {
             const tipo = classificar(error, isNetworkError);
@@ -268,7 +290,7 @@ export function createReplayMachine(deps) {
             if (tipo === "rede") {
                 pendencia.status = STATUS_PENDENTE;
                 pendencia.mensagem = "";
-                escreverPendencia(pendencia);
+                publicar(pendencia);
                 return {
                     resultado: "pendente",
                     passo: pendencia.passo,
@@ -280,7 +302,7 @@ export function createReplayMachine(deps) {
             // Erro de negócio: para de tentar sozinho; o gerente resolve no backend.
             pendencia.status = STATUS_ERRO_NEGOCIO;
             pendencia.mensagem = tipo.mensagem;
-            escreverPendencia(pendencia);
+            publicar(pendencia);
             logger.error("[FECHAMENTO] Replay recusado pelo servidor:", tipo.mensagem);
             return {
                 resultado: "erro_negocio",

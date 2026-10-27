@@ -76,6 +76,8 @@
             # estado pendente: banner da navbar + bloqueio de venda. JS antes
             # do XML — o template usa os getters do patch.
             'meu_modulo_fiscal/static/src/js/fechamento_pendente_ui.js',
+            # gatilhos do replay automático (online, boot com pendência, 30 s).
+            'meu_modulo_fiscal/static/src/js/fechamento_replay_triggers.js',
             'meu_modulo_fiscal/static/src/xml/fechamento_pendente.xml',
             'meu_modulo_fiscal/static/src/css/fechamento_pendente.css',
             # recibo-sangria-impresso: template antes do patch (patch usa renderToElement)
