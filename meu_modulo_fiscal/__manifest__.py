@@ -73,6 +73,11 @@
             'meu_modulo_fiscal/static/src/js/fechamento_replay.js',
             'meu_modulo_fiscal/static/src/js/fechamento_outbox.js',
             'meu_modulo_fiscal/static/src/js/fechamento_offline_runtime.js',
+            # estado pendente: banner da navbar + bloqueio de venda. JS antes
+            # do XML — o template usa os getters do patch.
+            'meu_modulo_fiscal/static/src/js/fechamento_pendente_ui.js',
+            'meu_modulo_fiscal/static/src/xml/fechamento_pendente.xml',
+            'meu_modulo_fiscal/static/src/css/fechamento_pendente.css',
             # recibo-sangria-impresso: template antes do patch (patch usa renderToElement)
             'meu_modulo_fiscal/static/src/xml/sangria_receipt.xml',
             'meu_modulo_fiscal/static/src/js/cash_move_popup_patch.js',

@@ -1,0 +1,22 @@
+/* fechamento-offline-fila (ticket 06): banner fixo do fechamento pendente.
+   Fica logo abaixo da navbar do POS ($navbar-height = 61px) sem empurrar o
+   layout nem conflitar com o selo de ambiente e o nome do caixa. */
+.meu-fechamento-pendente-banner {
+    position: fixed;
+    top: 61px;
+    left: 0;
+    right: 0;
+    z-index: 1050;
+    padding: 6px 12px;
+    text-align: center;
+    font-weight: 600;
+    font-size: 0.95rem;
+    color: #fff;
+    background-color: #b45309; /* âmbar: aguardando rede / enviando */
+    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.25);
+    pointer-events: none; /* não bloqueia cliques da tela abaixo */
+}
+
+.meu-fechamento-pendente-banner.meu-fechamento-pendente-erro {
+    background-color: #b91c1c; /* vermelho: recusado pelo servidor */
+}

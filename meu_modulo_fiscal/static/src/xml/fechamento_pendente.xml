@@ -1,0 +1,23 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<templates id="template" xml:space="preserve">
+
+    <!--
+        fechamento-offline-fila (ticket 06): banner fixo da navbar enquanto
+        houver fechamento pendente. Âncora no container da navbar
+        (div.pos-topheader, navbar.xml:5) — position="inside" preserva o DOM
+        e o CSS posiciona o banner logo abaixo da navbar (61px).
+        Vermelho quando o servidor recusou (erro_negocio). Textos dinâmicos
+        sempre com t-esc.
+    -->
+    <t t-name="meu_modulo.FechamentoPendenteBanner" t-inherit="point_of_sale.Navbar" t-inherit-mode="extension">
+        <xpath expr="//div[hasclass('pos-topheader')]" position="inside">
+            <div t-if="pos.fechamentoPendenteAtivo"
+                class="meu-fechamento-pendente-banner"
+                t-att-class="{ 'meu-fechamento-pendente-erro': pos.fechamentoPendenteErro }">
+                <i class="fa fa-exclamation-triangle me-1" role="img" aria-label="Aviso"/>
+                <span t-esc="pos.fechamentoPendenteTexto"/>
+            </div>
+        </xpath>
+    </t>
+
+</templates>

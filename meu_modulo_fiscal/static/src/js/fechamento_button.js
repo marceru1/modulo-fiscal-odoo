@@ -40,6 +40,25 @@ patch(PosStore.prototype, {
     // cálculo local (snapshot + delta). Online segue o nativo, inalterado.
     async getClosePosInfo() {
         const estado = initFechamentoOffline(this);
+
+        // Fechamento pendente: reabre SOMENTE LEITURA com o relatório já
+        // computado (consultar/reimprimir). Não recalcula nem fecha de novo.
+        const pendencia = obterReplay(this).lerPendencia();
+        if (pendencia) {
+            estado.modoPendente = true;
+            estado.pendencia = pendencia;
+            if (pendencia.closing) {
+                return pendencia.closing;
+            }
+            this.notification.add(
+                _t("Fechamento pendente sem dados de popup salvos. Chame o gerente."),
+                { type: "danger" }
+            );
+            return null;
+        }
+        estado.modoPendente = false;
+        estado.pendencia = null;
+
         if (this.data.network.offline) {
             return this._fechamentoInfoOffline();
         }
@@ -79,6 +98,20 @@ patch(ClosePosPopup.prototype, {
     getInitialState() {
         const state = super.getInitialState(...arguments);
         state.valor_confirmado = !this.pos.config.cash_control;
+
+        // Popup aberto durante a pendência = somente leitura: dinheiro já
+        // confirmado (trava pe-none), contado vindo da pendência e notas.
+        if (this.pos.fechamentoPendenteAtivo) {
+            state.valor_confirmado = true;
+            const pendencia = obterReplay(this.pos).lerPendencia();
+            const cash = this.props.default_cash_details;
+            if (pendencia && cash && cash.id != null && state.payments[cash.id]) {
+                state.payments[cash.id].counted = String(pendencia.dinheiro_contado ?? 0);
+            }
+            if (pendencia && pendencia.notas) {
+                state.notes = pendencia.notas;
+            }
+        }
         return state;
     },
 
@@ -98,6 +131,16 @@ patch(ClosePosPopup.prototype, {
     // OFFLINE: não chama nenhum RPC de fechamento. Grava a pendência
     // (fechamento deferido) e imprime o relatório "Gerado offline".
     async closeSession() {
+        // Durante a pendência o popup é somente leitura: nenhum caminho pode
+        // fechar o caixa de novo (nem o online, nem o offline).
+        if (this.pos.fechamentoPendenteAtivo) {
+            this.env.services.notification.add(
+                _t("Fechamento pendente: aguarde o envio automático ou chame o gerente."),
+                { type: "warning" }
+            );
+            return;
+        }
+
         const estado = obterEstado();
         if (estado && estado.modoOffline) {
             return this._confirmarFechamentoOffline(estado);
@@ -160,8 +203,11 @@ patch(ClosePosPopup.prototype, {
             notas: this.state.notes,
             diferencas_bancarias: diferencasBancarias,
             relatorio: this._aplicarContagem(estado.dadosOffline.fechamento),
+            closing: estado.dadosOffline.closing,
             confirmado_em: new Date().toLocaleString(),
         });
+        // Entra em modo pendente na hora: banner fixo + vendas bloqueadas.
+        this.pos._atualizarFechamentoPendente();
 
         // Relatório impresso UMA vez, agora, com o horário local da confirmação.
         await this._imprimirFechamento(estado.dadosOffline.fechamento, true);
@@ -174,6 +220,13 @@ patch(ClosePosPopup.prototype, {
     },
 
     async showFechamento() {
+        // Fechamento pendente: "Reimprimir" — o relatório persistido já está
+        // com os valores contados; não recalcula nada.
+        const pendencia = obterReplay(this.pos).lerPendencia();
+        if (pendencia && pendencia.relatorio) {
+            return await this._imprimirFechamento(pendencia.relatorio, true, true);
+        }
+
         const estado = obterEstado();
         if (estado && estado.modoOffline && estado.dadosOffline) {
             return await this._imprimirFechamento(estado.dadosOffline.fechamento, true);
@@ -198,8 +251,10 @@ patch(ClosePosPopup.prototype, {
      * `offline` adiciona a linha "Gerado offline" no rodapé do recibo.
      * Clona os dados: reimprimir não pode acumular diferenças.
      */
-    async _imprimirFechamento(dados, offline) {
-        const dadosFinais = this._aplicarContagem(dados);
+    async _imprimirFechamento(dados, offline, jaContado = false) {
+        const dadosFinais = jaContado
+            ? JSON.parse(JSON.stringify(dados))
+            : this._aplicarContagem(dados);
 
         console.log("[FECHAMENTO] Dados finais:", dadosFinais);
 
