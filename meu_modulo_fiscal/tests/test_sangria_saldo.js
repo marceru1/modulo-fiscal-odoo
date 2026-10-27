@@ -157,4 +157,18 @@ function assertAssinatura(name, source) {
     console.log("✓ Consistência: popup e relatório mantêm MOVIMENTACAO TOTAL e SALDO DETALHADO DO CAIXA");
 }
 
+// ── Caso 4: escaping do template do CLIENTE (fix round 1 — Kimi) ───────────
+{
+    const popup = readTemplate("popup");
+    assert(
+        /t-esc="rec\.forma_pagamento/.test(popup),
+        "forma_pagamento é dado de usuário: o template do cliente deve usar t-esc"
+    );
+    assert(
+        !/t-out=/.test(popup),
+        "Template do cliente POS não pode usar t-out (não escapa por padrão)"
+    );
+    console.log("✓ Escaping: FechamentoReceipt usa t-esc para dado de usuário (sem t-out)");
+}
+
 console.log("\nTodos os testes passaram ✓");
