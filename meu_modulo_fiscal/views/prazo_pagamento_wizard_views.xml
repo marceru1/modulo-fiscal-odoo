@@ -1,0 +1,35 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+
+    <!-- Wizard 'Registrar Pagamento' da aba Conta A Prazo (DEC-001).
+         partner_id fica invisível mas presente: o domain de fatura_id usa a
+         fonte única do vínculo (employee._prazo_partner). -->
+    <record id="view_prazo_pagamento_wizard_form" model="ir.ui.view">
+        <field name="name">x.prazo.pagamento.wizard.form</field>
+        <field name="model">x.prazo.pagamento.wizard</field>
+        <field name="arch" type="xml">
+            <form string="Registrar Pagamento">
+                <field name="partner_id" invisible="1"/>
+                <group>
+                    <field name="employee_id" readonly="1"/>
+                    <field name="fatura_id" options="{'no_create': True, 'no_open': True}"/>
+                    <field name="valor"/>
+                    <field name="journal_id" options="{'no_create': True, 'no_open': True}"/>
+                </group>
+                <footer>
+                    <button name="action_confirmar" string="Confirmar" type="object" class="btn-primary"/>
+                    <button string="Cancelar" class="btn-secondary" special="cancel"/>
+                </footer>
+            </form>
+        </field>
+    </record>
+
+    <record id="action_prazo_pagamento_wizard" model="ir.actions.act_window">
+        <field name="name">Registrar Pagamento</field>
+        <field name="res_model">x.prazo.pagamento.wizard</field>
+        <field name="view_mode">form</field>
+        <field name="view_id" ref="view_prazo_pagamento_wizard_form"/>
+        <field name="target">new</field>
+    </record>
+
+</odoo>

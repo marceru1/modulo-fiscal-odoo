@@ -9,6 +9,15 @@
         <field name="arch" type="xml">
             <xpath expr="//page[@name='hr_settings']" position="after">
                 <page name="conta_prazo" string="Conta A Prazo" groups="hr.group_hr_user">
+                    <!-- Pagamento pelo cadastro (DEC-001): abre o wizard com as
+                         faturas em aberto do parceiro do funcionário. -->
+                    <div class="mb-3">
+                        <button name="action_registrar_pagamento_prazo"
+                                type="object"
+                                string="Registrar Pagamento"
+                                class="btn-primary"
+                                groups="hr.group_hr_user"/>
+                    </div>
                     <group>
                         <group string="Limites">
                             <field name="x_limite_prazo"/>
