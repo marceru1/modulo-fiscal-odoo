@@ -9,6 +9,7 @@ import { SelectionPopupComTotal } from "./selection_popup_total";
 import { NumberPopup } from "@point_of_sale/app/utils/input_popups/number_popup";
 import { makeAwaitable, ask } from "@point_of_sale/app/store/make_awaitable_dialog";
 import { printFallback } from "./receipt_print_helper";
+import { solicitarRefreshSnapshot } from "./fechamento_outbox";
 
 patch(Navbar.prototype, {
     setup() {
@@ -216,6 +217,11 @@ patch(Navbar.prototype, {
 
         // ── 8. Exibir resultado ──────────────────────────────────────────────────
         if (response && response.success) {
+            // fechamento-offline-fila (ticket 05): o recebimento altera o
+            // saldo do caixa; refresca o snapshot para o fechamento offline
+            // já nascer contando este valor. Best-effort (no-op se ninguém
+            // registrou o gancho).
+            solicitarRefreshSnapshot();
             // DEC-002: popup de sucesso com "Reimprimir" em vez de notification
             // (notification não tem ação secundária).
             try {

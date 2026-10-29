@@ -97,10 +97,13 @@ function makeSuperMock() {
 }
 
 function buildCloseSession() {
+    // obterEstado devolve null = fluxo ONLINE (sem pendência de fechamento
+    // offline). O desvio offline é coberto em test_fechamento_offline_popup.js.
     return new Function(
         "mockSuperCloseSession",
+        "obterEstado",
         `return async function() { ${body} }`
-    )(makeSuperMock());
+    )(makeSuperMock(), () => null);
 }
 
 function makeCtx() {
@@ -176,8 +179,9 @@ async function run({ successful }) {
         );
         const comErro = new Function(
             "superComErro",
+            "obterEstado",
             `return async function() { ${bodyErro} }`
-        )(superComErro);
+        )(superComErro, () => null);
 
         await assert.rejects(() => comErro.call(ctx), /ConnectionLost/);
         assert.strictEqual(state.replaceState.length, 0, "sem navegação em exceção");

@@ -1,10 +1,94 @@
 /** @odoo-module */
 import { ClosePosPopup } from "@point_of_sale/app/navbar/closing_popup/closing_popup";
+import { PosStore } from "@point_of_sale/app/store/pos_store";
 import { patch } from "@web/core/utils/patch";
 import { renderToElement } from "@web/core/utils/render";
 import { parseFloat } from "@web/views/fields/parsers";
+import { _t } from "@web/core/l10n/translation";
 import { printFallback } from "./receipt_print_helper";
+import {
+    calcularDadosOffline,
+    initFechamentoOffline,
+    obterEstado,
+    obterReplay,
+    tirarSnapshot,
+} from "./fechamento_offline_runtime";
 
+function ehErroDeRede(error) {
+    if (!error) {
+        return false;
+    }
+    const nome = error.name || (error.constructor && error.constructor.name);
+    return nome === "ConnectionLostError";
+}
+
+// ── PosStore: snapshot no boot + popup com dados locais quando offline ────
+patch(PosStore.prototype, {
+    // Snapshot tirado no boot (com rede). É a base do delta local; sem ele o
+    // fechamento offline fica indisponível, mas o PDV segue funcionando.
+    async afterProcessServerData() {
+        const resultado = await super.afterProcessServerData(...arguments);
+        try {
+            await tirarSnapshot(this);
+        } catch (error) {
+            console.warn("[FECHAMENTO] Snapshot inicial indisponível:", error);
+        }
+        return resultado;
+    },
+
+    // Offline (ou RPC falhando por rede): monta o `info` do popup com o
+    // cálculo local (snapshot + delta). Online segue o nativo, inalterado.
+    async getClosePosInfo() {
+        const estado = initFechamentoOffline(this);
+
+        // Fechamento pendente: reabre SOMENTE LEITURA com o relatório já
+        // computado (consultar/reimprimir). Não recalcula nem fecha de novo.
+        const pendencia = obterReplay(this).lerPendencia();
+        if (pendencia) {
+            estado.modoPendente = true;
+            estado.pendencia = pendencia;
+            if (pendencia.closing) {
+                return pendencia.closing;
+            }
+            this.notification.add(
+                _t("Fechamento pendente sem dados de popup salvos. Chame o gerente."),
+                { type: "danger" }
+            );
+            return null;
+        }
+        estado.modoPendente = false;
+        estado.pendencia = null;
+
+        if (this.data.network.offline) {
+            return this._fechamentoInfoOffline();
+        }
+        try {
+            const info = await super.getClosePosInfo(...arguments);
+            // Fechamento online: descarta qualquer estado offline anterior.
+            estado.modoOffline = false;
+            estado.dadosOffline = null;
+            return info;
+        } catch (error) {
+            if (!ehErroDeRede(error)) {
+                throw error;
+            }
+            return this._fechamentoInfoOffline();
+        }
+    },
+
+    _fechamentoInfoOffline() {
+        const info = calcularDadosOffline(this);
+        if (!info) {
+            this.notification.add(
+                _t("Sem dados de fechamento salvos. Conecte a rede para abrir o fechamento."),
+                { type: "danger" }
+            );
+        }
+        return info;
+    },
+});
+
+// ── ClosePosPopup: trava do dinheiro + confirmação offline ────────────────
 patch(ClosePosPopup.prototype, {
     // lock-dinheiro-pos-impressao: o operador deve confirmar o valor do
     // dinheiro antes de imprimir/fechar. State em memória apenas (DEC-002) —
@@ -14,6 +98,20 @@ patch(ClosePosPopup.prototype, {
     getInitialState() {
         const state = super.getInitialState(...arguments);
         state.valor_confirmado = !this.pos.config.cash_control;
+
+        // Popup aberto durante a pendência = somente leitura: dinheiro já
+        // confirmado (trava pe-none), contado vindo da pendência e notas.
+        if (this.pos.fechamentoPendenteAtivo) {
+            state.valor_confirmado = true;
+            const pendencia = obterReplay(this.pos).lerPendencia();
+            const cash = this.props.default_cash_details;
+            if (pendencia && cash && cash.id != null && state.payments[cash.id]) {
+                state.payments[cash.id].counted = String(pendencia.dinheiro_contado ?? 0);
+            }
+            if (pendencia && pendencia.notas) {
+                state.notes = pendencia.notas;
+            }
+        }
         return state;
     },
 
@@ -24,16 +122,30 @@ patch(ClosePosPopup.prototype, {
         this.state.valor_confirmado = true;
     },
 
-    // Fechar caixa sai do POS: o fluxo nativo do core termina em
+    // Fechar caixa ONLINE sai do POS: o fluxo nativo do core termina em
     // location.reload(). Recarregar /pos/ui sem sessão aberta faz o controller
-    // pos_web criar OUTRA pos.session (opening_control) na hora — e no dia
-    // seguinte o operador abre o caixa com a sessão de ontem. Quando o backend
-    // confirma o fechamento, trocamos a URL para a home do Odoo antes do
-    // reload do core: location.reload() recarrega a URL corrente (já trocada
-    // pelo replaceState), então o POS não reabre. Não navegamos por conta
-    // própria aqui — duas navegações concorrentes com o reload do core
-    // poderiam competir; deixamos o core fazer o reload.
+    // pos_web criar OUTRA pos.session na hora — e no dia seguinte o operador
+    // abre o caixa com a sessão de ontem. Quando o backend confirma o
+    // fechamento, trocamos a URL para a home do Odoo antes do reload do core.
+    //
+    // OFFLINE: não chama nenhum RPC de fechamento. Grava a pendência
+    // (fechamento deferido) e imprime o relatório "Gerado offline".
     async closeSession() {
+        // Durante a pendência o popup é somente leitura: nenhum caminho pode
+        // fechar o caixa de novo (nem o online, nem o offline).
+        if (this.pos.fechamentoPendenteAtivo) {
+            this.env.services.notification.add(
+                _t("Fechamento pendente: aguarde o envio automático ou chame o gerente."),
+                { type: "warning" }
+            );
+            return;
+        }
+
+        const estado = obterEstado();
+        if (estado && estado.modoOffline) {
+            return this._confirmarFechamentoOffline(estado);
+        }
+
         const dataService = this.pos.data;
         const originalCall = dataService.call;
         dataService.call = async (...args) => {
@@ -56,51 +168,130 @@ patch(ClosePosPopup.prototype, {
         }
     },
 
-    async showFechamento() {
-        console.log("[FECHAMENTO] Coletando dados do fechamento...");
+    // Confirma o fechamento offline (DEC-011): recusa com venda em andamento,
+    // grava a pendência e imprime o relatório uma única vez.
+    async _confirmarFechamentoOffline(estado) {
+        const rascunho = this.pos.models["pos.order"].find(
+            (ordem) =>
+                !ordem.finalized &&
+                ordem.state !== "cancel" &&
+                ordem.get_orderlines().length > 0
+        );
+        if (rascunho) {
+            this.env.services.notification.add(
+                _t("Finalize ou cancele a venda em andamento antes de fechar o caixa."),
+                { type: "danger" }
+            );
+            return;
+        }
 
+        const cashControl = Boolean(this.pos.config.cash_control);
+        const cashId = this.props.default_cash_details && this.props.default_cash_details.id;
+        let dinheiroContado = 0;
+        if (cashControl && cashId != null) {
+            const informado =
+                (this.state.payments[cashId] && this.state.payments[cashId].counted) || "0";
+            dinheiroContado = this.env.utils.isValidFloat(informado) ? parseFloat(informado) : 0;
+        }
+
+        const diferencasBancarias = this.props.non_cash_payment_methods
+            .filter((pm) => pm.type === "bank")
+            .map((pm) => [pm.id, this.getDifference(pm.id)]);
+
+        obterReplay(this.pos).criarPendencia({
+            dinheiro_contado: dinheiroContado,
+            notas: this.state.notes,
+            diferencas_bancarias: diferencasBancarias,
+            relatorio: this._aplicarContagem(estado.dadosOffline.fechamento),
+            closing: estado.dadosOffline.closing,
+            confirmado_em: new Date().toLocaleString(),
+        });
+        // Entra em modo pendente na hora: banner fixo + vendas bloqueadas.
+        this.pos._atualizarFechamentoPendente();
+
+        // Relatório impresso UMA vez, agora, com o horário local da confirmação.
+        await this._imprimirFechamento(estado.dadosOffline.fechamento, true);
+
+        this.props.close();
+        this.env.services.notification.add(
+            _t("Fechamento registrado offline. Será enviado quando a rede voltar."),
+            4000
+        );
+    },
+
+    async showFechamento() {
+        // Fechamento pendente: "Reimprimir" — o relatório persistido já está
+        // com os valores contados; não recalcula nada.
+        const pendencia = obterReplay(this.pos).lerPendencia();
+        if (pendencia && pendencia.relatorio) {
+            return await this._imprimirFechamento(pendencia.relatorio, true, true);
+        }
+
+        const estado = obterEstado();
+        if (estado && estado.modoOffline && estado.dadosOffline) {
+            return await this._imprimirFechamento(estado.dadosOffline.fechamento, true);
+        }
+
+        console.log("[FECHAMENTO] Coletando dados do fechamento...");
         try {
-            // 1. RPC: pega os dados do backend
+            // RPC: pega os dados do backend
             const dados = await this.env.services.orm.call(
                 "pos.session",
                 "get_fechamento_data",
                 [[this.pos.session.id]]
             );
-
-            // 2. Lê os valores "Counted" que o operador digitou no popup
-            //    e mescla com os dados do backend (saldo detalhado)
-            const countedPayments = this._getCountedValues();
-            for (const saldo of dados.saldo_detalhado) {
-                const counted = countedPayments[saldo.nome];
-                if (counted !== undefined) {
-                    saldo.informado = counted;
-                    saldo.diferenca = counted - saldo.calculado;
-                }
-            }
-
-            console.log("[FECHAMENTO] Dados finais:", dados);
-
-            // 3. Renderiza o template XML num elemento DOM
-            const report = renderToElement("meu_modulo.FechamentoReceipt", {
-                data: dados,
-                formatCurrency: this.env.utils.formatCurrency,
-            });
-
-            // 4. Tenta impressora térmica; se não tiver, fallback pra window.print
-            const printer = this.hardwareProxy.printer;
-            if (printer) {
-                const { successful, message } = await printer.printReceipt(report);
-                if (!successful) {
-                    console.warn("[FECHAMENTO] Impressora falhou, usando window.print");
-                    printFallback(report, "Fechamento de Caixa");
-                }
-            } else {
-                console.log("[FECHAMENTO] Sem impressora, usando window.print");
-                printFallback(report, "Fechamento de Caixa");
-            }
+            return await this._imprimirFechamento(dados, false);
         } catch (error) {
             console.error("[FECHAMENTO] Erro:", error);
         }
+    },
+
+    /**
+     * Mescla os valores "Counted" do popup no saldo detalhado e imprime.
+     * `offline` adiciona a linha "Gerado offline" no rodapé do recibo.
+     * Clona os dados: reimprimir não pode acumular diferenças.
+     */
+    async _imprimirFechamento(dados, offline, jaContado = false) {
+        const dadosFinais = jaContado
+            ? JSON.parse(JSON.stringify(dados))
+            : this._aplicarContagem(dados);
+
+        console.log("[FECHAMENTO] Dados finais:", dadosFinais);
+
+        // Renderiza o template XML num elemento DOM
+        const report = renderToElement("meu_modulo.FechamentoReceipt", {
+            data: dadosFinais,
+            formatCurrency: this.env.utils.formatCurrency,
+            offline: Boolean(offline),
+        });
+
+        // Tenta impressora térmica; se não tiver, fallback pra window.print
+        const printer = this.hardwareProxy.printer;
+        if (printer) {
+            const { successful, message } = await printer.printReceipt(report);
+            if (!successful) {
+                console.warn("[FECHAMENTO] Impressora falhou, usando window.print");
+                printFallback(report, "Fechamento de Caixa");
+            }
+        } else {
+            console.log("[FECHAMENTO] Sem impressora, usando window.print");
+            printFallback(report, "Fechamento de Caixa");
+        }
+        return report;
+    },
+
+    /** Aplica os valores informados no popup sobre uma cópia do relatório. */
+    _aplicarContagem(dados) {
+        const copia = JSON.parse(JSON.stringify(dados));
+        const countedPayments = this._getCountedValues();
+        for (const saldo of copia.saldo_detalhado || []) {
+            const counted = countedPayments[saldo.nome];
+            if (counted !== undefined) {
+                saldo.informado = counted;
+                saldo.diferenca = counted - saldo.calculado;
+            }
+        }
+        return copia;
     },
 
     /**
