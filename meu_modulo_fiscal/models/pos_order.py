@@ -1194,6 +1194,8 @@ class PosSession(models.Model):
                 'data': fields.Datetime.now(),
                 'valor': residual_pos,
                 'tipo': 'pagamento',
+                # DEC-003: a fatura recebida já está em mãos aqui — sem lookback
+                'fatura_name': invoice.name,
             })
             _logger.info(
                 '[RECEBIMENTO-PDV] Movimentacao registrada | Funcionario: %s | Valor residual: %.2f',
