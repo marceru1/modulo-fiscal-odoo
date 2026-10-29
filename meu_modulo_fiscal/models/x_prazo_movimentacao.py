@@ -48,13 +48,11 @@ class XPrazoMovimentacao(models.Model):
 
         refs = list(set(movs.mapped('pos_reference')))
         # O dedupe usa ``order.pos_reference or order.name`` — o retroativo
-        # precisa aceitar as duas origens de cupom.
+        # aceita as duas origens de cupom numa única busca (OR).
         orders = self.env['pos.order'].sudo().search([
             ('account_move', '!=', False),
+            '|',
             ('pos_reference', 'in', refs),
-        ])
-        orders |= self.env['pos.order'].sudo().search([
-            ('account_move', '!=', False),
             ('name', 'in', refs),
         ])
 
