@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <!-- Retroativo one-shot (DEC-004): preenche a fatura nas movimentações
+         A Prazo antigas. Roda a cada instalação/upgrade do módulo; a função
+         só atua em movs de compra ainda sem fatura, então é idempotente.
+         Mecanismo: <function> é executado no load dos data files em install
+         e update (odoo/tools/convert.py:169-188, 257-261) — post_init_hook
+         rodaria só na instalação (odoo/modules/loading.py:242-246). -->
+    <function model="x.prazo.movimentacao" name="_backfill_fatura_name"/>
+</odoo>
