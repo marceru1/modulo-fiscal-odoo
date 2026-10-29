@@ -110,6 +110,58 @@ class TestPrazoFatura(TransactionCase):
         self.assertEqual(len(mov), 1, 'O recebimento deveria gerar 1 movimentação')
         self.assertEqual(mov.fatura_name, invoice.name)
 
+    # ── Retroativo (DEC-004) ─────────────────────────────────────────────────
+    def _order_faturado(self):
+        """Pedido a prazo com fatura, devolvendo (order, mov de compra)."""
+        order = criar_pedido(self, 100.0, self.later_pm, partner=self.funcionaria)
+        order.with_context(generate_pdf=False)._generate_pos_order_invoice()
+        return order, self._movs(order)
+
+    def test_retroativo_preenche_compras_antigas(self):
+        """Histórico anterior à feature: mov de compra sem fatura é preenchida
+        pelo cupom do pedido; sem pedido faturado, fica como está."""
+        order, mov = self._order_faturado()
+        mov.fatura_name = False  # simula mov gravada antes desta feature
+
+        # Compra órfã: cupom que não existe em pos.order → não pode ser casada.
+        orfa = self.mov_model.create({
+            'employee_id': self.employee.id,
+            'partner_id': self.funcionaria.id,
+            'valor': 30.0,
+            'tipo': 'compra',
+            'pos_reference': 'CUPOM-SEM-PEDIDO',
+        })
+        # Recebimento antigo (sem cupom) → fora do escopo do retroativo.
+        recebimento_antigo = self.mov_model.create({
+            'employee_id': self.employee.id,
+            'partner_id': self.funcionaria.id,
+            'valor': 20.0,
+            'tipo': 'pagamento',
+        })
+
+        self.mov_model._backfill_fatura_name()
+
+        self.assertEqual(mov.fatura_name, order.account_move.name)
+        self.assertFalse(orfa.fatura_name, 'Sem pedido faturado não há o que preencher')
+        self.assertFalse(
+            recebimento_antigo.fatura_name,
+            'Recebimentos antigos ficam como estão (out of scope)',
+        )
+
+    def test_retroativo_idempotente(self):
+        """Rodar o backfill duas vezes não muda nada nem duplica movs."""
+        order, mov = self._order_faturado()
+        mov.fatura_name = False
+
+        self.mov_model._backfill_fatura_name()
+        primeira = mov.fatura_name
+        self.assertEqual(primeira, order.account_move.name)
+
+        self.mov_model._backfill_fatura_name()
+
+        self.assertEqual(mov.fatura_name, primeira)
+        self.assertEqual(self._movs(order).ids, [mov.id], 'Nenhuma mov duplicada')
+
     def test_dedupe_intacto_em_resync(self):
         """Re-executar _register_prazo_movimentacoes no mesmo pedido não duplica
         e não apaga a fatura já gravada (pos_reference segue chave de dedupe)."""
