@@ -274,6 +274,8 @@ class PosOrder(models.Model):
         de compra → no-op.
         """
         for order in self:
+            # DEC-007: fatura cancelada mantém o número no histórico (rastreio
+            # contábil) — não filtrar por state.
             fatura = order.account_move.name
             if not fatura or fatura == '/':
                 continue
