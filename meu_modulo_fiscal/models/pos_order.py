@@ -235,6 +235,49 @@ class PosOrder(models.Model):
                     tipo, employee.name, abs(amount), ref
                 )
 
+    # ==========================================================
+    # FATURA NO HISTÓRICO A PRAZO (DEC-002/DEC-003)
+    # ==========================================================
+    def _generate_pos_order_invoice(self):
+        """Gera a fatura do pedido (core) e grava o número nas movimentações
+        A Prazo.
+
+        O core cria o account.move inline (``_create_invoice``) e o posta na
+        mesma chamada — ``order.account_move.name`` já existe ao retornar
+        (addons/point_of_sale/models/pos_order.py:1006-1010). Este ponto único
+        cobre o auto-invoice do PDV (``to_invoice`` → ``_process_saved_order``)
+        e o faturamento manual (``action_pos_order_invoice``).
+        """
+        action = super()._generate_pos_order_invoice()
+        self._set_prazo_fatura_name()
+        return action
+
+    def _set_prazo_fatura_name(self):
+        """Preenche ``fatura_name`` nas movs de compra a prazo do pedido.
+
+        Idempotente: só toca movs ainda sem fatura e usa ``pos_reference``
+        (a mesma chave do dedupe de ``_register_prazo_movimentacoes``).
+        Pedido sem movimentação de compra → no-op.
+        """
+        for order in self:
+            fatura = order.account_move.name
+            if not fatura or fatura == '/':
+                continue
+            ref = order.pos_reference or order.name
+            if not ref:
+                continue
+            movs = self.env['x.prazo.movimentacao'].search([
+                ('pos_reference', '=', ref),
+                ('tipo', '=', 'compra'),
+                ('fatura_name', '=', False),
+            ])
+            if movs:
+                movs.write({'fatura_name': fatura})
+                _logger.info(
+                    '[PRAZO] Fatura %s gravada na movimentação de compra | Pedido: %s',
+                    fatura, ref
+                )
+
     @api.model_create_multi
     def create(self, vals_list):
         """
