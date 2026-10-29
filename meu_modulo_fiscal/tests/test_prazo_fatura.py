@@ -8,6 +8,7 @@ Seams testados:
 - dedupe de ``_register_prazo_movimentacoes`` (pos_reference continua a chave).
 """
 
+from odoo import fields
 from odoo.tests import TransactionCase
 
 from .paridade_offline_helper import criar_pedido, montar_pos_offline
@@ -82,6 +83,32 @@ class TestPrazoFatura(TransactionCase):
             self.mov_model.search_count([('employee_id', '=', self.employee.id)]),
             'O hook não pode criar movimentação para quem não comprou a prazo',
         )
+
+    # ── Recebimento pelo PDV ─────────────────────────────────────────────────
+    def test_recebimento_registra_fatura(self):
+        """Recebimento pelo PDV → mov 'pagamento' nasce com a fatura recebida
+        (DEC-003: o invoice.name já está em mãos no método)."""
+        invoice = self.env['account.move'].create({
+            'move_type': 'out_invoice',
+            'partner_id': self.funcionaria.id,
+            'invoice_date': fields.Date.today(),
+            'invoice_line_ids': [(0, 0, {
+                'name': 'Compra a prazo',
+                'quantity': 1.0,
+                'price_unit': 100.0,
+            })],
+        })
+        invoice.action_post()
+
+        result = self.pos_session.create_recebimento(invoice.id)
+        self.assertTrue(result['success'], result.get('message'))
+
+        mov = self.mov_model.search([
+            ('employee_id', '=', self.employee.id),
+            ('tipo', '=', 'pagamento'),
+        ])
+        self.assertEqual(len(mov), 1, 'O recebimento deveria gerar 1 movimentação')
+        self.assertEqual(mov.fatura_name, invoice.name)
 
     def test_dedupe_intacto_em_resync(self):
         """Re-executar _register_prazo_movimentacoes no mesmo pedido não duplica
