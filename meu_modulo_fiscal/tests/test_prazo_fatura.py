@@ -8,6 +8,8 @@ Seams testados:
 - dedupe de ``_register_prazo_movimentacoes`` (pos_reference continua a chave).
 """
 
+from unittest import mock
+
 from odoo import fields
 from odoo.tests import TransactionCase
 
@@ -86,6 +88,21 @@ class TestPrazoFatura(TransactionCase):
             self.mov_model.search_count([('employee_id', '=', self.employee.id)]),
             'O hook não pode criar movimentação para quem não comprou a prazo',
         )
+
+    def test_falha_ao_gravar_a_fatura_nao_derruba_o_faturamento(self):
+        """O número da fatura é informativo: uma exceção ao gravá-lo não pode
+        propagar — neste ponto a fatura do core já foi criada e postada."""
+        order = criar_pedido(self, 100.0, self.later_pm, partner=self.funcionaria)
+
+        with mock.patch.object(
+            type(self.env['pos.order']),
+            '_set_prazo_fatura_name',
+            side_effect=Exception('falha simulada'),
+        ):
+            order.with_context(generate_pdf=False)._generate_pos_order_invoice()
+
+        self.assertTrue(order.account_move, 'A fatura deve ter sido criada')
+        self.assertEqual(order.account_move.state, 'posted')
 
     # ── Cupom igual em outro parceiro (DEC-006) ──────────────────────────────
     def _outro_parceiro(self):

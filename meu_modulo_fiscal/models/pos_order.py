@@ -252,7 +252,17 @@ class PosOrder(models.Model):
         e o faturamento manual (``action_pos_order_invoice``).
         """
         action = super()._generate_pos_order_invoice()
-        self._set_prazo_fatura_name()
+        try:
+            self._set_prazo_fatura_name()
+        except Exception:
+            # O número da fatura é informativo e a fatura do core já foi criada
+            # e postada neste ponto: uma falha aqui NUNCA pode derrubar o
+            # faturamento/sync do PDV (o caller em _process_saved_order não
+            # tem try/except). Fica como pendência visível no log.
+            _logger.exception(
+                '[PRAZO] Falha ao gravar a fatura nas movimentações | Pedidos: %s',
+                self.ids
+            )
         return action
 
     def _set_prazo_fatura_name(self):
