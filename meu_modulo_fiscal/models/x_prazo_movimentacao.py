@@ -60,6 +60,7 @@ class XPrazoMovimentacao(models.Model):
 
         faturas = {}
         for order in orders:
+            # DEC-007: fatura cancelada mantém o número (rastreio contábil).
             fatura = order.account_move.name
             if fatura and fatura != '/':
                 faturas[order.pos_reference or order.name] = fatura
