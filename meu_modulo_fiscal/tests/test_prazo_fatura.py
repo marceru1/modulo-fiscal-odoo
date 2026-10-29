@@ -34,7 +34,10 @@ class TestPrazoFatura(TransactionCase):
         return order.pos_reference or order.name
 
     def _movs(self, order):
-        return self.mov_model.search([('pos_reference', '=', self._ref(order))])
+        return self.mov_model.search([
+            ('pos_reference', '=', self._ref(order)),
+            ('partner_id', '=', order.partner_id.id),
+        ])
 
     # ── Campo + lista ────────────────────────────────────────────────────────
     def test_movimentacao_tem_campo_fatura(self):
@@ -82,6 +85,52 @@ class TestPrazoFatura(TransactionCase):
         self.assertFalse(
             self.mov_model.search_count([('employee_id', '=', self.employee.id)]),
             'O hook não pode criar movimentação para quem não comprou a prazo',
+        )
+
+    # ── Cupom igual em outro parceiro (DEC-006) ──────────────────────────────
+    def _outro_parceiro(self):
+        return self.env['res.partner'].create({'name': 'Outra Parceira'})
+
+    def test_hook_ignora_mov_de_outro_parceiro(self):
+        """Cupom repetido em outra parceira não recebe a fatura deste pedido:
+        a busca é por cupom + parceiro (DEC-006)."""
+        order = criar_pedido(self, 100.0, self.later_pm, partner=self.funcionaria)
+        intrusa = self.mov_model.create({
+            'employee_id': self.employee.id,
+            'partner_id': self._outro_parceiro().id,
+            'valor': 10.0,
+            'tipo': 'compra',
+            'pos_reference': self._ref(order),
+        })
+
+        order.with_context(generate_pdf=False)._generate_pos_order_invoice()
+
+        propria = self._movs(order)
+        self.assertEqual(len(propria), 1)
+        self.assertEqual(propria.fatura_name, order.account_move.name)
+        self.assertFalse(
+            intrusa.fatura_name,
+            'A mov de outra parceira não pode receber a fatura deste pedido',
+        )
+
+    def test_dedupe_considera_o_parceiro(self):
+        """Cupom repetido em outra parceira não bloqueia o registro do pedido
+        (o dedupe passou a casar cupom + parceiro)."""
+        order = criar_pedido(self, 100.0, self.later_pm, partner=self.funcionaria)
+        self._movs(order).unlink()  # limpa a mov criada no create
+        self.mov_model.create({
+            'employee_id': self.employee.id,
+            'partner_id': self._outro_parceiro().id,
+            'valor': 10.0,
+            'tipo': 'compra',
+            'pos_reference': self._ref(order),
+        })
+
+        order._register_prazo_movimentacoes()
+
+        self.assertEqual(
+            len(self._movs(order)), 1,
+            'A mov do parceiro do pedido deveria ser criada normalmente',
         )
 
     # ── Recebimento pelo PDV ─────────────────────────────────────────────────
