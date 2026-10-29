@@ -10,6 +10,7 @@ Seams testados:
 
 from unittest import mock
 
+from lxml import etree
 from odoo import fields
 from odoo.tests import TransactionCase
 
@@ -47,13 +48,20 @@ class TestPrazoFatura(TransactionCase):
         self.assertIn('fatura_name', self.mov_model._fields)
 
     def test_lista_mostra_fatura_antes_do_cupom(self):
-        """A lista de movimentações exibe Fatura ANTES de Cupom (DEC-005)."""
+        """A lista de movimentações exibe Fatura ANTES de Cupom (DEC-005).
+
+        Teste de LAYOUT: compara a ordem dos nós ``<field>`` do arch (não o
+        texto bruto), então reformatação ou atributos novos não quebram — só
+        quebra se a ordem das colunas mudar.
+        """
         arch = self.env.ref(
             'meu_modulo_fiscal.view_x_prazo_movimentacao_list'
         ).arch
-        self.assertIn('fatura_name', arch)
+        campos = [no.get('name') for no in etree.fromstring(arch).iter('field')]
+        self.assertIn('fatura_name', campos)
+        self.assertIn('pos_reference', campos)
         self.assertLess(
-            arch.index('fatura_name'), arch.index('pos_reference'),
+            campos.index('fatura_name'), campos.index('pos_reference'),
             'A coluna Fatura deve vir antes da coluna Cupom',
         )
 
@@ -73,20 +81,41 @@ class TestPrazoFatura(TransactionCase):
         self.assertEqual(mov.fatura_name, order.account_move.name)
         self.assertNotEqual(mov.fatura_name, '/', 'Fatura postada tem número')
 
-    def test_pedido_sem_pay_later_nao_cria_mov(self):
-        """Pedido sem pay_later → nenhuma movimentação e nenhum erro (no-op)."""
+    def test_venda_sem_pay_later_nao_cria_mov(self):
+        """A parceira do pedido É a funcionária; a ausência de movimentação
+        vem do tipo de pagamento (cartão, não pay_later), não do parceiro."""
         order = criar_pedido(self, 50.0, self.bank_pm, partner=self.funcionaria)
+
+        # Pré-condições: o parceiro do pedido está vinculado à funcionária e
+        # não há pay_later no pedido.
+        self.assertEqual(order.partner_id, self.funcionaria)
+        self.assertEqual(
+            self.env['pos.order']._find_employee_for_partner(order.partner_id.id),
+            self.employee,
+            'O parceiro do pedido deveria ser reconhecido como funcionária',
+        )
+        self.assertNotIn(
+            'pay_later',
+            order.payment_ids.mapped('payment_method_id.type'),
+            'O pedido de controle não pode ter pagamento a prazo',
+        )
         self.assertFalse(
-            self.mov_model.search_count([('employee_id', '=', self.employee.id)]),
-            'Pagamento em cartão não gera movimentação a prazo',
+            self.mov_model.search_count([
+                ('employee_id', '=', self.employee.id),
+                ('partner_id', '=', self.funcionaria.id),
+            ]),
+            'Venda em cartão não abre conta a prazo, mesmo para funcionária',
         )
 
         order.with_context(generate_pdf=False)._generate_pos_order_invoice()
 
         self.assertTrue(order.account_move, 'A fatura é gerada normalmente')
         self.assertFalse(
-            self.mov_model.search_count([('employee_id', '=', self.employee.id)]),
-            'O hook não pode criar movimentação para quem não comprou a prazo',
+            self.mov_model.search_count([
+                ('employee_id', '=', self.employee.id),
+                ('partner_id', '=', self.funcionaria.id),
+            ]),
+            'O hook não pode criar movimentação sem pay_later',
         )
 
     def test_falha_ao_gravar_a_fatura_nao_derruba_o_faturamento(self):
