@@ -1,5 +1,6 @@
 from . import test_recebimento
 from . import test_prazo_fatura
+from . import test_prazo_pagamento_wizard
 from . import test_fechamento_simplificado
 from . import test_fechamento_offline_snapshot
 from . import test_fechamento_offline_parity
