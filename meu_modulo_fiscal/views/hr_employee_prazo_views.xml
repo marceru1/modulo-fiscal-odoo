@@ -31,6 +31,9 @@
                 <field name="data"/>
                 <field name="tipo"/>
                 <field name="valor"/>
+                <!-- DEC-005: Fatura antes do Cupom — o número que a gerência
+                     cobra primeiro; o cupom fica como rastreio da origem. -->
+                <field name="fatura_name"/>
                 <field name="pos_reference"/>
                 <field name="employee_id"/>
                 <field name="partner_id"/>

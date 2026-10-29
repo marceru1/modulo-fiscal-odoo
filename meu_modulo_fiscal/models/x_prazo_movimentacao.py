@@ -15,5 +15,9 @@ class XPrazoMovimentacao(models.Model):
         ('pagamento', 'Pagamento'),
         ('baixa', 'Baixa Manual'),
     ], string='Tipo', required=True)
+    # Número da fatura (account.move) ligada à movimentação. Campo próprio —
+    # pos_reference é a chave de dedupe de _register_prazo_movimentacoes e não
+    # pode ser reaproveitado (DEC-001).
+    fatura_name = fields.Char(string='Fatura')
     pos_reference = fields.Char(string='Cupom')
     session_id = fields.Many2one('pos.session', string='Sessão')
