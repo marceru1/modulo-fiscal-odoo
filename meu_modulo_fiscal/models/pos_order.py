@@ -80,9 +80,8 @@ class PosOrder(models.Model):
     def _find_employee_for_partner(self, partner_id):
         """Devolve o hr.employee vinculado ao partner_id, ou recordset vazio.
 
-        Busca pelo contato de trabalho (work_contact_id) ou pelo partner
-        do usuário (user_id.partner_id). Usado por _register_prazo_movimentacoes
-        e create_recebimento para evitar a duplicação da busca.
+        Delega a busca única de hr.employee (``_find_by_partner``). Usado por
+        _register_prazo_movimentacoes e create_recebimento.
 
         Args:
             partner_id (int): ID do res.partner.
@@ -90,13 +89,7 @@ class PosOrder(models.Model):
         Returns:
             hr.employee recordset (limit=1): vazio se não houver vínculo.
         """
-        if not partner_id:
-            return self.env['hr.employee']
-        return self.env['hr.employee'].search([
-            '|',
-            ('work_contact_id', '=', partner_id),
-            ('user_id.partner_id', '=', partner_id),
-        ], limit=1)
+        return self.env['hr.employee']._find_by_partner(partner_id)
 
     # ==========================================================
     # DADOS CAPTURADOS DO CONSUMIDOR NA TELA DO CAIXA
@@ -590,8 +583,8 @@ class PosSession(models.Model):
     def _find_employee_for_partner(self, partner_id):
         """Devolve o hr.employee vinculado ao partner_id, ou recordset vazio.
 
-        Busca pelo contato de trabalho (work_contact_id) ou pelo partner
-        do usuário (user_id.partner_id). Usado por create_recebimento.
+        Delega a busca única de hr.employee (``_find_by_partner``). Usado por
+        create_recebimento.
 
         Args:
             partner_id (int): ID do res.partner.
@@ -599,13 +592,7 @@ class PosSession(models.Model):
         Returns:
             hr.employee recordset (limit=1): vazio se não houver vínculo.
         """
-        if not partner_id:
-            return self.env['hr.employee']
-        return self.env['hr.employee'].search([
-            '|',
-            ('work_contact_id', '=', partner_id),
-            ('user_id.partner_id', '=', partner_id),
-        ], limit=1)
+        return self.env['hr.employee']._find_by_partner(partner_id)
 
     def _loader_params_pos_order(self):
         params = super()._loader_params_pos_order()
@@ -1054,7 +1041,8 @@ class PosSession(models.Model):
 
         Fonte unica da verdade do popup de Recebimento: o JS exibe o que
         o backend devolve e nao soma nada client-side — a conta do total
-        vive aqui (e é a MESMA soma que o Odoo vê no cadastro do cliente).
+        vive no helper do parceiro (e é a MESMA lista que o wizard do cadastro
+        lê, DEC-003).
 
         Args:
             partner_id (int): ID do res.partner.
@@ -1066,31 +1054,18 @@ class PosSession(models.Model):
             payment_state}...], 'total_residual': float} — faturas ordenadas
             por vencimento (a mesma ordem que o popup ja mostrava).
         """
-        domain = [
-            ('partner_id', '=', partner_id),
-            ('move_type', '=', 'out_invoice'),
-            ('payment_state', 'in', ['not_paid', 'partial']),
-            ('state', '=', 'posted'),
-        ]
-        faturas = self.env['account.move'].search_read(
-            domain,
-            ['name', 'invoice_date_due', 'amount_residual', 'payment_state'],
-            limit=limit,
-            order='invoice_date_due',
-        )
-        # `date` cru não sobe por JSON (TypeError no serializador): normaliza
-        # para string 'YYYY-MM-DD' — o JS já fatia ano-mês-dia no label.
-        for f in faturas:
-            f['invoice_date_due'] = str(f['invoice_date_due'] or '')
-        # Soma no Python: os registros já vieram lidos; uma segunda query de
-        # aggregate (read_group) gastaria um round-trip e duplicaria o domínio.
-        total = sum((f['amount_residual'] for f in faturas), 0.0)
-        return {'faturas': faturas, 'total_residual': total}
+        return self.env['res.partner'].browse(
+            partner_id
+        )._prazo_faturas_abertas(limit=limit)
 
     def create_recebimento(self, invoice_id, amount=None, payment_method_name='', payment_method_id=None):
         """Cria um recebimento (account.payment inbound) para uma fatura
         especifica, reconciliando automaticamente o pagamento com a fatura.
         Usado pelo botao Recebimento no PDV.
+
+        O trabalho de pagar/reconciliar/movimentar é o núcleo compartilhado
+        (``account.move._prazo_registrar_recebimento``, DEC-002); aqui ficam só
+        os enfeites de caixa: a sessão que recebe e o comprovante térmico.
 
         Args:
             invoice_id: int - ID da fatura (account.move) a ser quitada
@@ -1112,125 +1087,30 @@ class PosSession(models.Model):
             numero_pdv e operador.
         """
         invoice = self.env['account.move'].browse(invoice_id)
-        if not invoice.exists():
-            return {'success': False, 'message': 'Fatura nao encontrada'}
-
-        if invoice.state != 'posted':
-            return {'success': False, 'message': 'Fatura nao esta confirmada (state=%s)' % invoice.state}
-
-        if invoice.payment_state not in ('not_paid', 'partial'):
-            return {'success': False, 'message': 'Fatura ja foi quitada (payment_state=%s)' % invoice.payment_state}
-
-        # Se amount nao foi passado, usa o residual (compatibilidade retrograda)
-        if amount is None:
-            amount = invoice.amount_residual
-
-        # Valida o amount
-        if amount <= 0:
-            return {'success': False, 'message': 'Valor invalido (%.2f). O valor deve ser maior que zero.' % amount}
-
-        if amount < 1.0:
-            return {'success': False, 'message': 'Valor minimo de R$ 1,00'}
-
-        if amount > invoice.amount_residual + 0.001:
-            return {
-                'success': False,
-                'message': 'Valor superior ao saldo da fatura (R$ %.2f)' % invoice.amount_residual,
-            }
-
-        # DEC-001: resolve o metodo de pagamento. payment_method_id (int) tem
-        # prioridade; payment_method_name (str) e o fallback legado. Um id
-        # inexistente cai no fallback sem quebrar o recebimento.
-        # Nota: se o frontend passar ambos (payment_method_name + id invalido),
-        # o nome legado vence silenciosamente — intencional, coberto por
-        # test_payment_method_id_invalido.
-        payment_method = self.env['pos.payment.method'].browse(payment_method_id) if payment_method_id else self.env['pos.payment.method']
-        if payment_method.exists():
-            payment_method_name = payment_method.name
-
-        partner = invoice.partner_id
-        partner_id = partner.id
-
-        # Monta o memo: diferenciado para pagamento parcial
-        is_partial = amount < invoice.amount_residual - 0.001
-        if is_partial:
-            memo = 'Recebimento PDV - Fatura %s - Parcial R$ %.2f' % (invoice.name, amount)
-        else:
-            memo = 'Recebimento PDV - Fatura %s' % invoice.name
-
-        # Cria o pagamento de entrada (inbound) pelo valor informado
-        payment = self.env['account.payment'].create({
-            'payment_type': 'inbound',
-            'partner_type': 'customer',
-            'partner_id': partner_id,
-            'amount': amount,
-            'date': fields.Date.context_today(self),
-            'memo': memo,
-            'pos_session_id': self.id,
-            'x_payment_method_id': payment_method.id if payment_method.exists() else False,
-        })
-        payment.action_post()
-
-        _logger.info(
-            '[RECEBIMENTO-PDV] Pagamento criado | Fatura: %s | Parceiro: %s (ID=%d) | Valor: %.2f | Payment ID=%d',
-            invoice.name, partner.name, partner_id, amount, payment.id
+        resultado = invoice._prazo_registrar_recebimento(
+            amount=amount,
+            payment_method_name=payment_method_name,
+            payment_method_id=payment_method_id,
+            pos_session=self,
+            memo_prefix='Recebimento PDV',
         )
+        if not resultado['success']:
+            return resultado
 
-        # Reconcilia o pagamento com a fatura via linhas a receber
-        # No Odoo 18, as linhas contábeis do pagamento ficam em payment.move_id.line_ids
-        payment_move = payment.move_id
-        payment_line = payment_move.line_ids.filtered(
-            lambda l: l.account_id.account_type == 'asset_receivable'
-        )
-        invoice_line = invoice.line_ids.filtered(
-            lambda l: l.account_id.account_type == 'asset_receivable' and not l.reconciled
-        )
-        if payment_line and invoice_line:
-            (payment_line + invoice_line).reconcile()
-            _logger.info(
-                '[RECEBIMENTO-PDV] Reconciliacao realizada | Fatura: %s | Payment ID=%d',
-                invoice.name, payment.id
-            )
-        else:
-            _logger.warning(
-                '[RECEBIMENTO-PDV] Nao foi possivel reconciliar | Fatura: %s | '
-                'payment_line=%s | invoice_line=%s',
-                invoice.name, bool(payment_line), bool(invoice_line)
-            )
-
-        # Le o saldo residual APOS reconciliacao (DEC-003)
-        residual_pos = invoice.amount_residual
-
-        # Registra movimentacao se o parceiro for funcionario (I10: helper extraído)
-        # Usa o saldo residual pos-reconciliacao (DEC-003)
-        employee = self._find_employee_for_partner(partner_id)
-        if employee:
-            self.env['x.prazo.movimentacao'].create({
-                'employee_id': employee.id,
-                'partner_id': partner_id,
-                'data': fields.Datetime.now(),
-                'valor': residual_pos,
-                'tipo': 'pagamento',
-                # DEC-003: a fatura recebida já está em mãos aqui — sem lookback
-                'fatura_name': invoice.name,
-            })
-            _logger.info(
-                '[RECEBIMENTO-PDV] Movimentacao registrada | Funcionario: %s | Valor residual: %.2f',
-                employee.name, residual_pos
-            )
-
+        payment = resultado['payment']
         # DEC-004: dados do comprovante de pagamento p/ impressao termica.
         # Nao inclui saldo restante (fora do escopo da feature).
         return {
             'success': True,
-            'message': 'Recebido R$ %.2f | Saldo restante: R$ %.2f | Fatura %s' % (
-                amount, residual_pos, invoice.name
-            ),
+            'message': resultado['message'],
             'comprovante': {
                 'fatura': invoice.name,
-                'cliente': partner.name or '',
-                'valor_pago': amount,
-                'forma_pagamento': payment_method_name,
+                'cliente': invoice.partner_id.name or '',
+                'valor_pago': payment.amount,
+                'forma_pagamento': (
+                    payment.x_payment_method_id.name
+                    if payment.x_payment_method_id else payment_method_name
+                ),
                 'data_hora': self._fmt_manaus(fields.Datetime.now()),
                 'numero_pdv': self.config_id.id,
                 'operador': self.user_id.name,
