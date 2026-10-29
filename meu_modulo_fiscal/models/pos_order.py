@@ -212,11 +212,14 @@ class PosOrder(models.Model):
                 if amount == 0:
                     continue
 
-                # Evita duplicatas: verifica se já existe movimentação para este pedido
+                # Evita duplicatas: verifica se já existe movimentação para este
+                # pedido. DEC-006: a chave é cupom + parceiro — o cupom sozinho
+                # não é único entre parceiros (e o modelo não tem company_id).
                 ref = order.pos_reference or order.name
-                existing = self.env['x.prazo.movimentacao'].search(
-                    [('pos_reference', '=', ref)], limit=1
-                )
+                existing = self.env['x.prazo.movimentacao'].search([
+                    ('pos_reference', '=', ref),
+                    ('partner_id', '=', partner.id),
+                ], limit=1)
                 if existing:
                     continue
 
@@ -255,19 +258,21 @@ class PosOrder(models.Model):
     def _set_prazo_fatura_name(self):
         """Preenche ``fatura_name`` nas movs de compra a prazo do pedido.
 
-        Idempotente: só toca movs ainda sem fatura e usa ``pos_reference``
-        (a mesma chave do dedupe de ``_register_prazo_movimentacoes``).
-        Pedido sem movimentação de compra → no-op.
+        Idempotente: só toca movs ainda sem fatura e usa o mesmo par do dedupe
+        de ``_register_prazo_movimentacoes`` — cupom + parceiro (DEC-006: o
+        cupom sozinho não é único entre parceiros). Pedido sem movimentação
+        de compra → no-op.
         """
         for order in self:
             fatura = order.account_move.name
             if not fatura or fatura == '/':
                 continue
             ref = order.pos_reference or order.name
-            if not ref:
+            if not ref or not order.partner_id:
                 continue
             movs = self.env['x.prazo.movimentacao'].search([
                 ('pos_reference', '=', ref),
+                ('partner_id', '=', order.partner_id.id),
                 ('tipo', '=', 'compra'),
                 ('fatura_name', '=', False),
             ])
