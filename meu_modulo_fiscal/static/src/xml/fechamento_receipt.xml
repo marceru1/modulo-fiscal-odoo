@@ -109,10 +109,11 @@
                             <span><t t-esc="rec.data"/></span>
                         </div>
                         <!-- Forma de pagamento (DEC-001: preenchida pelo backend via ticket 01).
-                             t-out para padronizar com o template server-side FechamentoReport
-                             (t-esc é deprecated no QWeb server-side). Seguro: escapa por default. -->
+                             Este template roda no CLIENTE (POS). A regra do módulo é
+                             t-esc para dado de usuário: t-out não escapa por padrão
+                             no QWeb do cliente (vetor XSS se o nome do método mudar). -->
                         <div class="fechamento-linha" style="font-size: 10px; color: #555;">
-                            <span>FORMA: <t t-out="rec.forma_pagamento or '—'"/></span>
+                            <span>FORMA: <t t-esc="rec.forma_pagamento or '—'"/></span>
                         </div>
                     </t>
                 </div>
@@ -203,6 +204,12 @@
                 <div class="assinatura-linha">
                     ASSINATURA
                 </div>
+            </div>
+
+            <!-- fechamento-offline-fila: marca discreta de relatório gerado
+                 sem rede (DEC-009). O replay NÃO reimprime. -->
+            <div t-if="offline" style="text-align: center; font-size: 10px; margin-top: 6px;">
+                Gerado offline
             </div>
 
         </div>

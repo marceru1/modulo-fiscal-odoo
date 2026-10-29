@@ -1,0 +1,491 @@
+{
+  "_doc": [
+    "Fixtures compartilhadas de paridade do fechamento offline (spec fechamento-offline-fila, seam 4).",
+    "Cada cenário traz: `snapshot` = saída de pos.session.get_fechamento_offline_snapshot()",
+    "no instante T; `eventos` = o que aconteceu depois (pedidos pagos locais e",
+    "sangrias/suprimentos locais); `esperado` = o mesmo snapshot no instante T+delta.",
+    "O teste Node (tests/test_fechamento_offline_core.js) calcula snapshot+eventos e",
+    "compara o resultado com `esperado`. O teste Python (tests/test_fechamento_offline_parity.py)",
+    "monta o estado real no ORM, tira o snapshot do servidor e compara com o mesmo",
+    "`esperado`. A comparação usa o subconjunto definido em `_paridade` (números",
+    "arredondados em 2 casas; ids, datas e nomes de movimento do servidor ficam de fora)."
+  ],
+  "_paridade": {
+    "closing": ["orders_details.quantity", "orders_details.amount", "default_cash_details.name", "default_cash_details.amount", "default_cash_details.opening", "default_cash_details.payment_amount", "default_cash_details.moves (soma dos amount)", "non_cash_payment_methods (name, amount, number, type)"],
+    "fechamento": ["metodos_pagamento", "total_vendas", "vendas_prazo (cliente, valor)", "total_vendas_prazo", "sangrias", "total_sangrias", "suprimentos", "total_suprimentos", "total_recebimentos", "dinheiro_liquido", "saldo_movimentacao", "movimentacao_total", "saldo_detalhado (nome, calculado)", "identificacao.qtd_vendas", "identificacao.qtd_cupons"]
+  },
+  "cenarios": [
+    {
+      "nome": "sessao_vazia",
+      "snapshot": {
+        "closing": {
+          "orders_details": { "quantity": 0, "amount": 0.0 },
+          "opening_notes": "",
+          "default_cash_details": {
+            "name": "Dinheiro",
+            "amount": 0.0,
+            "opening": 0.0,
+            "payment_amount": 0.0,
+            "moves": [],
+            "id": 1
+          },
+          "non_cash_payment_methods": [
+            { "name": "Cartão", "amount": 0.0, "number": 0, "id": 2, "type": "bank" },
+            { "name": "A Prazo", "amount": 0.0, "number": 0, "id": 3, "type": "pay_later" }
+          ],
+          "is_manager": false,
+          "amount_authorized_diff": null
+        },
+        "fechamento": {
+          "empresa": { "nome": "EMPRESA TESTE", "cnpj": "", "ie": "", "endereco_linha1": "", "endereco_linha2": "", "telefone": "" },
+          "identificacao": { "usuario": "Operador", "data_abertura": "", "data_fechamento": "", "fundo_caixa": 0.0, "qtd_vendas": 0, "qtd_cupons": 0 },
+          "metodos_pagamento": [
+            { "nome": "Dinheiro", "valor": 0.0 },
+            { "nome": "Cartão", "valor": 0.0 },
+            { "nome": "A Prazo", "valor": 0.0 }
+          ],
+          "total_vendas": 0.0,
+          "vendas_prazo": [],
+          "total_vendas_prazo": 0.0,
+          "sangrias": [],
+          "total_sangrias": 0.0,
+          "suprimentos": [],
+          "total_suprimentos": 0.0,
+          "recebimentos": [],
+          "total_recebimentos": 0.0,
+          "dinheiro_liquido": 0.0,
+          "saldo_movimentacao": { "entradas": 0.0, "saidas": 0.0, "saldo": 0.0 },
+          "movimentacao_total": { "entradas": 0.0, "saidas": 0.0, "saldo": 0.0 },
+          "saldo_detalhado": [
+            { "nome": "Dinheiro", "calculado": 0.0, "informado": 0.0, "diferenca": 0.0 },
+            { "nome": "Cartão", "calculado": 0.0, "informado": 0.0, "diferenca": 0.0 },
+            { "nome": "A Prazo", "calculado": 0.0, "informado": 0.0, "diferenca": 0.0 }
+          ]
+        },
+        "order_ids": []
+      },
+      "eventos": {
+        "pedidos": [],
+        "movimentos": [],
+        "agora": "27/10/2026 18:00:00"
+      },
+      "esperado": {
+        "closing": {
+          "orders_details": { "quantity": 0, "amount": 0.0 },
+          "default_cash_details": { "name": "Dinheiro", "amount": 0.0, "opening": 0.0, "payment_amount": 0.0, "moves": [] },
+          "non_cash_payment_methods": [
+            { "name": "Cartão", "amount": 0.0, "number": 0, "type": "bank" },
+            { "name": "A Prazo", "amount": 0.0, "number": 0, "type": "pay_later" }
+          ]
+        },
+        "fechamento": {
+          "identificacao": { "qtd_vendas": 0, "qtd_cupons": 0 },
+          "metodos_pagamento": [
+            { "nome": "Dinheiro", "valor": 0.0 },
+            { "nome": "Cartão", "valor": 0.0 },
+            { "nome": "A Prazo", "valor": 0.0 }
+          ],
+          "total_vendas": 0.0,
+          "vendas_prazo": [],
+          "total_vendas_prazo": 0.0,
+          "sangrias": [],
+          "total_sangrias": 0.0,
+          "suprimentos": [],
+          "total_suprimentos": 0.0,
+          "total_recebimentos": 0.0,
+          "dinheiro_liquido": 0.0,
+          "saldo_movimentacao": { "entradas": 0.0, "saidas": 0.0, "saldo": 0.0 },
+          "movimentacao_total": { "entradas": 0.0, "saidas": 0.0, "saldo": 0.0 },
+          "saldo_detalhado": [
+            { "nome": "Dinheiro", "calculado": 0.0 },
+            { "nome": "Cartão", "calculado": 0.0 },
+            { "nome": "A Prazo", "calculado": 0.0 }
+          ]
+        }
+      }
+    },
+    {
+      "nome": "venda_dinheiro",
+      "snapshot": {
+        "closing": {
+          "orders_details": { "quantity": 0, "amount": 0.0 },
+          "opening_notes": "",
+          "default_cash_details": {
+            "name": "Dinheiro",
+            "amount": 0.0,
+            "opening": 0.0,
+            "payment_amount": 0.0,
+            "moves": [],
+            "id": 1
+          },
+          "non_cash_payment_methods": [
+            { "name": "Cartão", "amount": 0.0, "number": 0, "id": 2, "type": "bank" },
+            { "name": "A Prazo", "amount": 0.0, "number": 0, "id": 3, "type": "pay_later" }
+          ],
+          "is_manager": false,
+          "amount_authorized_diff": null
+        },
+        "fechamento": {
+          "empresa": { "nome": "EMPRESA TESTE", "cnpj": "", "ie": "", "endereco_linha1": "", "endereco_linha2": "", "telefone": "" },
+          "identificacao": { "usuario": "Operador", "data_abertura": "", "data_fechamento": "", "fundo_caixa": 0.0, "qtd_vendas": 0, "qtd_cupons": 0 },
+          "metodos_pagamento": [
+            { "nome": "Dinheiro", "valor": 0.0 },
+            { "nome": "Cartão", "valor": 0.0 },
+            { "nome": "A Prazo", "valor": 0.0 }
+          ],
+          "total_vendas": 0.0,
+          "vendas_prazo": [],
+          "total_vendas_prazo": 0.0,
+          "sangrias": [],
+          "total_sangrias": 0.0,
+          "suprimentos": [],
+          "total_suprimentos": 0.0,
+          "recebimentos": [],
+          "total_recebimentos": 0.0,
+          "dinheiro_liquido": 0.0,
+          "saldo_movimentacao": { "entradas": 0.0, "saidas": 0.0, "saldo": 0.0 },
+          "movimentacao_total": { "entradas": 0.0, "saidas": 0.0, "saldo": 0.0 },
+          "saldo_detalhado": [
+            { "nome": "Dinheiro", "calculado": 0.0, "informado": 0.0, "diferenca": 0.0 },
+            { "nome": "Cartão", "calculado": 0.0, "informado": 0.0, "diferenca": 0.0 },
+            { "nome": "A Prazo", "calculado": 0.0, "informado": 0.0, "diferenca": 0.0 }
+          ]
+        },
+        "order_ids": []
+      },
+      "eventos": {
+        "pedidos": [
+          {
+            "id": 201,
+            "amount_total": 60.0,
+            "cliente": "CONSUMIDOR",
+            "data": "27/10/2026 15:00",
+            "payments": [{ "method_id": 1, "method_name": "Dinheiro", "type": "cash", "amount": 60.0 }]
+          }
+        ],
+        "movimentos": [],
+        "agora": "27/10/2026 18:00:00"
+      },
+      "esperado": {
+        "closing": {
+          "orders_details": { "quantity": 1, "amount": 60.0 },
+          "default_cash_details": { "name": "Dinheiro", "amount": 60.0, "opening": 0.0, "payment_amount": 60.0, "moves": [] },
+          "non_cash_payment_methods": [
+            { "name": "Cartão", "amount": 0.0, "number": 0, "type": "bank" },
+            { "name": "A Prazo", "amount": 0.0, "number": 0, "type": "pay_later" }
+          ]
+        },
+        "fechamento": {
+          "identificacao": { "qtd_vendas": 1, "qtd_cupons": 1 },
+          "metodos_pagamento": [
+            { "nome": "Dinheiro", "valor": 60.0 },
+            { "nome": "Cartão", "valor": 0.0 },
+            { "nome": "A Prazo", "valor": 0.0 }
+          ],
+          "total_vendas": 60.0,
+          "vendas_prazo": [],
+          "total_vendas_prazo": 0.0,
+          "sangrias": [],
+          "total_sangrias": 0.0,
+          "suprimentos": [],
+          "total_suprimentos": 0.0,
+          "total_recebimentos": 0.0,
+          "dinheiro_liquido": 60.0,
+          "saldo_movimentacao": { "entradas": 60.0, "saidas": 0.0, "saldo": 60.0 },
+          "movimentacao_total": { "entradas": 60.0, "saidas": 0.0, "saldo": 60.0 },
+          "saldo_detalhado": [
+            { "nome": "Dinheiro", "calculado": 60.0 },
+            { "nome": "Cartão", "calculado": 0.0 },
+            { "nome": "A Prazo", "calculado": 0.0 }
+          ]
+        }
+      }
+    },
+    {
+      "nome": "venda_prazo",
+      "snapshot": {
+        "closing": {
+          "orders_details": { "quantity": 0, "amount": 0.0 },
+          "opening_notes": "",
+          "default_cash_details": {
+            "name": "Dinheiro",
+            "amount": 0.0,
+            "opening": 0.0,
+            "payment_amount": 0.0,
+            "moves": [],
+            "id": 1
+          },
+          "non_cash_payment_methods": [
+            { "name": "Cartão", "amount": 0.0, "number": 0, "id": 2, "type": "bank" },
+            { "name": "A Prazo", "amount": 0.0, "number": 0, "id": 3, "type": "pay_later" }
+          ],
+          "is_manager": false,
+          "amount_authorized_diff": null
+        },
+        "fechamento": {
+          "empresa": { "nome": "EMPRESA TESTE", "cnpj": "", "ie": "", "endereco_linha1": "", "endereco_linha2": "", "telefone": "" },
+          "identificacao": { "usuario": "Operador", "data_abertura": "", "data_fechamento": "", "fundo_caixa": 0.0, "qtd_vendas": 0, "qtd_cupons": 0 },
+          "metodos_pagamento": [
+            { "nome": "Dinheiro", "valor": 0.0 },
+            { "nome": "Cartão", "valor": 0.0 },
+            { "nome": "A Prazo", "valor": 0.0 }
+          ],
+          "total_vendas": 0.0,
+          "vendas_prazo": [],
+          "total_vendas_prazo": 0.0,
+          "sangrias": [],
+          "total_sangrias": 0.0,
+          "suprimentos": [],
+          "total_suprimentos": 0.0,
+          "recebimentos": [],
+          "total_recebimentos": 0.0,
+          "dinheiro_liquido": 0.0,
+          "saldo_movimentacao": { "entradas": 0.0, "saidas": 0.0, "saldo": 0.0 },
+          "movimentacao_total": { "entradas": 0.0, "saidas": 0.0, "saldo": 0.0 },
+          "saldo_detalhado": [
+            { "nome": "Dinheiro", "calculado": 0.0, "informado": 0.0, "diferenca": 0.0 },
+            { "nome": "Cartão", "calculado": 0.0, "informado": 0.0, "diferenca": 0.0 },
+            { "nome": "A Prazo", "calculado": 0.0, "informado": 0.0, "diferenca": 0.0 }
+          ]
+        },
+        "order_ids": []
+      },
+      "eventos": {
+        "pedidos": [
+          {
+            "id": 202,
+            "amount_total": 40.0,
+            "cliente": "Cliente Teste",
+            "data": "27/10/2026 15:30",
+            "payments": [{ "method_id": 3, "method_name": "A Prazo", "type": "pay_later", "amount": 40.0 }]
+          }
+        ],
+        "movimentos": [],
+        "agora": "27/10/2026 18:00:00"
+      },
+      "esperado": {
+        "closing": {
+          "orders_details": { "quantity": 1, "amount": 40.0 },
+          "default_cash_details": { "name": "Dinheiro", "amount": 0.0, "opening": 0.0, "payment_amount": 0.0, "moves": [] },
+          "non_cash_payment_methods": [
+            { "name": "Cartão", "amount": 0.0, "number": 0, "type": "bank" },
+            { "name": "A Prazo", "amount": 40.0, "number": 1, "type": "pay_later" }
+          ]
+        },
+        "fechamento": {
+          "identificacao": { "qtd_vendas": 1, "qtd_cupons": 1 },
+          "metodos_pagamento": [
+            { "nome": "Dinheiro", "valor": 0.0 },
+            { "nome": "Cartão", "valor": 0.0 },
+            { "nome": "A Prazo", "valor": 40.0 }
+          ],
+          "total_vendas": 40.0,
+          "vendas_prazo": [{ "cliente": "Cliente Teste", "valor": 40.0 }],
+          "total_vendas_prazo": 40.0,
+          "sangrias": [],
+          "total_sangrias": 0.0,
+          "suprimentos": [],
+          "total_suprimentos": 0.0,
+          "total_recebimentos": 0.0,
+          "dinheiro_liquido": 0.0,
+          "saldo_movimentacao": { "entradas": 0.0, "saidas": 0.0, "saldo": 0.0 },
+          "movimentacao_total": { "entradas": 40.0, "saidas": 0.0, "saldo": 40.0 },
+          "saldo_detalhado": [
+            { "nome": "Dinheiro", "calculado": 0.0 },
+            { "nome": "Cartão", "calculado": 0.0 },
+            { "nome": "A Prazo", "calculado": 40.0 }
+          ]
+        }
+      }
+    },
+    {
+      "nome": "reembolso",
+      "snapshot": {
+        "closing": {
+          "orders_details": { "quantity": 0, "amount": 0.0 },
+          "opening_notes": "",
+          "default_cash_details": {
+            "name": "Dinheiro",
+            "amount": 0.0,
+            "opening": 0.0,
+            "payment_amount": 0.0,
+            "moves": [],
+            "id": 1
+          },
+          "non_cash_payment_methods": [
+            { "name": "Cartão", "amount": 0.0, "number": 0, "id": 2, "type": "bank" },
+            { "name": "A Prazo", "amount": 0.0, "number": 0, "id": 3, "type": "pay_later" }
+          ],
+          "is_manager": false,
+          "amount_authorized_diff": null
+        },
+        "fechamento": {
+          "empresa": { "nome": "EMPRESA TESTE", "cnpj": "", "ie": "", "endereco_linha1": "", "endereco_linha2": "", "telefone": "" },
+          "identificacao": { "usuario": "Operador", "data_abertura": "", "data_fechamento": "", "fundo_caixa": 0.0, "qtd_vendas": 0, "qtd_cupons": 0 },
+          "metodos_pagamento": [
+            { "nome": "Dinheiro", "valor": 0.0 },
+            { "nome": "Cartão", "valor": 0.0 },
+            { "nome": "A Prazo", "valor": 0.0 }
+          ],
+          "total_vendas": 0.0,
+          "vendas_prazo": [],
+          "total_vendas_prazo": 0.0,
+          "sangrias": [],
+          "total_sangrias": 0.0,
+          "suprimentos": [],
+          "total_suprimentos": 0.0,
+          "recebimentos": [],
+          "total_recebimentos": 0.0,
+          "dinheiro_liquido": 0.0,
+          "saldo_movimentacao": { "entradas": 0.0, "saidas": 0.0, "saldo": 0.0 },
+          "movimentacao_total": { "entradas": 0.0, "saidas": 0.0, "saldo": 0.0 },
+          "saldo_detalhado": [
+            { "nome": "Dinheiro", "calculado": 0.0, "informado": 0.0, "diferenca": 0.0 },
+            { "nome": "Cartão", "calculado": 0.0, "informado": 0.0, "diferenca": 0.0 },
+            { "nome": "A Prazo", "calculado": 0.0, "informado": 0.0, "diferenca": 0.0 }
+          ]
+        },
+        "order_ids": []
+      },
+      "eventos": {
+        "pedidos": [
+          {
+            "id": 203,
+            "amount_total": -25.0,
+            "cliente": "CONSUMIDOR",
+            "data": "27/10/2026 16:00",
+            "payments": [{ "method_id": 1, "method_name": "Dinheiro", "type": "cash", "amount": -25.0 }]
+          }
+        ],
+        "movimentos": [],
+        "agora": "27/10/2026 18:00:00"
+      },
+      "esperado": {
+        "closing": {
+          "orders_details": { "quantity": 1, "amount": -25.0 },
+          "default_cash_details": { "name": "Dinheiro", "amount": -25.0, "opening": 0.0, "payment_amount": -25.0, "moves": [] },
+          "non_cash_payment_methods": [
+            { "name": "Cartão", "amount": 0.0, "number": 0, "type": "bank" },
+            { "name": "A Prazo", "amount": 0.0, "number": 0, "type": "pay_later" }
+          ]
+        },
+        "fechamento": {
+          "identificacao": { "qtd_vendas": 1, "qtd_cupons": 1 },
+          "metodos_pagamento": [
+            { "nome": "Dinheiro", "valor": -25.0 },
+            { "nome": "Cartão", "valor": 0.0 },
+            { "nome": "A Prazo", "valor": 0.0 }
+          ],
+          "total_vendas": -25.0,
+          "vendas_prazo": [],
+          "total_vendas_prazo": 0.0,
+          "sangrias": [],
+          "total_sangrias": 0.0,
+          "suprimentos": [],
+          "total_suprimentos": 0.0,
+          "total_recebimentos": 0.0,
+          "dinheiro_liquido": -25.0,
+          "saldo_movimentacao": { "entradas": -25.0, "saidas": 0.0, "saldo": -25.0 },
+          "movimentacao_total": { "entradas": -25.0, "saidas": 0.0, "saldo": -25.0 },
+          "saldo_detalhado": [
+            { "nome": "Dinheiro", "calculado": -25.0 },
+            { "nome": "Cartão", "calculado": 0.0 },
+            { "nome": "A Prazo", "calculado": 0.0 }
+          ]
+        }
+      }
+    },
+    {
+      "nome": "sangria_suprimento",
+      "snapshot": {
+        "closing": {
+          "orders_details": { "quantity": 0, "amount": 0.0 },
+          "opening_notes": "",
+          "default_cash_details": {
+            "name": "Dinheiro",
+            "amount": 0.0,
+            "opening": 0.0,
+            "payment_amount": 0.0,
+            "moves": [],
+            "id": 1
+          },
+          "non_cash_payment_methods": [
+            { "name": "Cartão", "amount": 0.0, "number": 0, "id": 2, "type": "bank" },
+            { "name": "A Prazo", "amount": 0.0, "number": 0, "id": 3, "type": "pay_later" }
+          ],
+          "is_manager": false,
+          "amount_authorized_diff": null
+        },
+        "fechamento": {
+          "empresa": { "nome": "EMPRESA TESTE", "cnpj": "", "ie": "", "endereco_linha1": "", "endereco_linha2": "", "telefone": "" },
+          "identificacao": { "usuario": "Operador", "data_abertura": "", "data_fechamento": "", "fundo_caixa": 0.0, "qtd_vendas": 0, "qtd_cupons": 0 },
+          "metodos_pagamento": [
+            { "nome": "Dinheiro", "valor": 0.0 },
+            { "nome": "Cartão", "valor": 0.0 },
+            { "nome": "A Prazo", "valor": 0.0 }
+          ],
+          "total_vendas": 0.0,
+          "vendas_prazo": [],
+          "total_vendas_prazo": 0.0,
+          "sangrias": [],
+          "total_sangrias": 0.0,
+          "suprimentos": [],
+          "total_suprimentos": 0.0,
+          "recebimentos": [],
+          "total_recebimentos": 0.0,
+          "dinheiro_liquido": 0.0,
+          "saldo_movimentacao": { "entradas": 0.0, "saidas": 0.0, "saldo": 0.0 },
+          "movimentacao_total": { "entradas": 0.0, "saidas": 0.0, "saldo": 0.0 },
+          "saldo_detalhado": [
+            { "nome": "Dinheiro", "calculado": 0.0, "informado": 0.0, "diferenca": 0.0 },
+            { "nome": "Cartão", "calculado": 0.0, "informado": 0.0, "diferenca": 0.0 },
+            { "nome": "A Prazo", "calculado": 0.0, "informado": 0.0, "diferenca": 0.0 }
+          ]
+        },
+        "order_ids": []
+      },
+      "eventos": {
+        "pedidos": [],
+        "movimentos": [
+          { "tipo": "out", "valor": 30.0, "motivo": "Sangria", "quando": "27/10/2026 17:00" },
+          { "tipo": "in", "valor": 20.0, "motivo": "Suprimento", "quando": "27/10/2026 17:10" }
+        ],
+        "agora": "27/10/2026 18:00:00"
+      },
+      "esperado": {
+        "closing": {
+          "orders_details": { "quantity": 0, "amount": 0.0 },
+          "default_cash_details": { "name": "Dinheiro", "amount": -10.0, "opening": 0.0, "payment_amount": 0.0, "moves": [{ "amount": -30.0 }, { "amount": 20.0 }] },
+          "non_cash_payment_methods": [
+            { "name": "Cartão", "amount": 0.0, "number": 0, "type": "bank" },
+            { "name": "A Prazo", "amount": 0.0, "number": 0, "type": "pay_later" }
+          ]
+        },
+        "fechamento": {
+          "identificacao": { "qtd_vendas": 0, "qtd_cupons": 0 },
+          "metodos_pagamento": [
+            { "nome": "Dinheiro", "valor": 0.0 },
+            { "nome": "Cartão", "valor": 0.0 },
+            { "nome": "A Prazo", "valor": 0.0 }
+          ],
+          "total_vendas": 0.0,
+          "vendas_prazo": [],
+          "total_vendas_prazo": 0.0,
+          "sangrias": [{ "motivo": "Sangria", "valor": 30.0 }],
+          "total_sangrias": 30.0,
+          "suprimentos": [{ "motivo": "Suprimento", "valor": 20.0 }],
+          "total_suprimentos": 20.0,
+          "total_recebimentos": 0.0,
+          "dinheiro_liquido": -30.0,
+          "saldo_movimentacao": { "entradas": 20.0, "saidas": 30.0, "saldo": -10.0 },
+          "movimentacao_total": { "entradas": 20.0, "saidas": 30.0, "saldo": -10.0 },
+          "saldo_detalhado": [
+            { "nome": "Dinheiro", "calculado": -30.0 },
+            { "nome": "Cartão", "calculado": 0.0 },
+            { "nome": "A Prazo", "calculado": 0.0 }
+          ]
+        }
+      }
+    }
+  ]
+}

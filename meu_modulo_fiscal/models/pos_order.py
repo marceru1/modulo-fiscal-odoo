@@ -1,7 +1,8 @@
 import json
 import requests
 import pytz
-from odoo import models, api, fields
+from odoo import models, api, fields, _
+from odoo.exceptions import AccessError
 import logging
 import os
 
@@ -601,7 +602,40 @@ class PosSession(models.Model):
 
         return result
 
-    def get_fechamento_data(self):
+    def get_fechamento_offline_snapshot(self):
+        """Snapshot único do fechamento, usado pelo PDV para fechar offline.
+
+        Devolve, numa só chamada de leitura, os dados que o popup nativo
+        (``get_closing_control_data``) e o relatório (``get_fechamento_data``)
+        usariam, mais a lista de ids dos pedidos que já estão contados neles.
+        O cliente soma a partir daí o delta local (pedidos pagos e
+        sangrias/suprimentos posteriores ao snapshot) — DEC-003 da spec.
+
+        O ``get_closing_control_data`` é chamado UMA vez e repassado ao
+        ``get_fechamento_data``: sem recálculo e sem consulta duplicada.
+        As regras de acesso são as mesmas do método do core (grupo POS).
+
+        Returns:
+            dict: ``{closing, fechamento, order_ids}`` — ``closing`` no shape
+            do popup, ``fechamento`` no shape do relatório e ``order_ids`` os
+            ids de ``_get_closed_orders`` (os mesmos que os dois cálculos
+            contam, para a dedupe do delta ser exata).
+        """
+        if not self.env.user.has_group('point_of_sale.group_pos_user'):
+            raise AccessError(
+                _("You don't have the access rights to get the point of sale closing control data.")
+            )
+        self.ensure_one()
+        orders = self._get_closed_orders()
+        closing = self.get_closing_control_data()
+        fechamento = self.get_fechamento_data(closing_data=closing)
+        return {
+            'closing': closing,
+            'fechamento': fechamento,
+            'order_ids': orders.ids,
+        }
+
+    def get_fechamento_data(self, closing_data=None):
         """
         Coleta todos os dados necessários para o relatório de fechamento
         de caixa impresso na impressora térmica do PDV.
@@ -615,14 +649,20 @@ class PosSession(models.Model):
         - Saldo de movimentação (entradas - saídas)
         - Saldo detalhado por método (calculado, informado=0, diferença)
 
+        Args:
+            closing_data (dict|None): saída de ``get_closing_control_data``
+                já calculada (usado pelo snapshot offline para não recalcular).
+                Quando omitido, o método calcula.
+
         Returns:
             dict: Estrutura completa para renderizar o template FechamentoReceipt.
         """
         self.ensure_one()
         company = self.config_id.company_id
 
-        # Reaproveita os dados que o core já calcula
-        closing_data = self.get_closing_control_data()
+        # Reaproveita os dados que o core já calcula (ou usa o já calculado)
+        if closing_data is None:
+            closing_data = self.get_closing_control_data()
 
         # === EMPRESA ===
         empresa = {
