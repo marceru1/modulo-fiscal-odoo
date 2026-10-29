@@ -26,6 +26,9 @@
         'views/res_company_views.xml',
         'views/res_config_settings_views.xml',
         'views/hr_employee_prazo_views.xml',
+        # prazo-fatura-na-aba: retroativo one-shot da fatura no histórico
+        # A Prazo (idempotente — roda a cada upgrade sem efeito colateral).
+        'data/prazo_fatura_backfill.xml',
         'views/account_move_hide_outstanding.xml',
         'views/pos_session_fechamento_views.xml',
         'views/web_login_cleanup.xml',
