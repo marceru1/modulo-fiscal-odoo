@@ -1,17 +1,17 @@
 <?xml version="1.0" encoding="utf-8"?>
 <odoo>
 
-    <!-- Wizard 'Registrar Pagamento' da aba Conta A Prazo (DEC-001).
-         partner_id fica invisível mas presente: o domain de fatura_id usa a
-         fonte única do vínculo (employee._prazo_partner). -->
+    <!-- Wizard 'Registrar Pagamento' da conta a prazo do contato
+         (DEC-A/DEC-B da spec prazo-por-contato). O contato é o campo de
+         entrada obrigatório: o domain de fatura_id e o núcleo de recebimento
+         leem dele. -->
     <record id="view_prazo_pagamento_wizard_form" model="ir.ui.view">
         <field name="name">x.prazo.pagamento.wizard.form</field>
         <field name="model">x.prazo.pagamento.wizard</field>
         <field name="arch" type="xml">
             <form string="Registrar Pagamento">
-                <field name="partner_id" invisible="1"/>
                 <group>
-                    <field name="employee_id" readonly="1"/>
+                    <field name="partner_id" options="{'no_create': True}"/>
                     <field name="fatura_id" options="{'no_create': True, 'no_open': True}"/>
                     <field name="valor"/>
                     <field name="journal_id" options="{'no_create': True, 'no_open': True}"/>

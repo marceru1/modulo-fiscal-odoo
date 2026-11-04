@@ -3,29 +3,25 @@ from odoo.exceptions import UserError
 
 
 class XPrazoPagamentoWizard(models.TransientModel):
-    """Wizard 'Registrar Pagamento' da aba Conta A Prazo do funcionário.
+    """Wizard 'Registrar Pagamento' da conta a prazo do CONTATO.
 
-    DEC-001 da spec prazo-pagar-no-cadastro: fatura (dropdown das faturas em
-    aberto do parceiro), valor editável (default = residual; parcial é caso
-    real) e diário contábil editável. Confirmar dispara o núcleo compartilhado
-    de recebimento (``account.move._prazo_registrar_recebimento``).
+    DEC-A/DEC-B da spec prazo-por-contato: a conta a prazo vive no
+    ``res.partner``. O wizard recebe o contato (fatura em aberto, valor
+    editável — default = residual — e diário contábil editável). Confirmar
+    dispara o núcleo compartilhado de recebimento
+    (``account.move._prazo_registrar_recebimento``).
     """
 
     _name = 'x.prazo.pagamento.wizard'
     _description = 'Registrar Pagamento de Fatura A Prazo'
 
-    employee_id = fields.Many2one(
-        'hr.employee',
-        string='Funcionário',
-        required=True,
-        ondelete='cascade',
-    )
     partner_id = fields.Many2one(
         'res.partner',
-        string='Parceiro',
-        compute='_compute_partner_id',
-        help='Parceiro do funcionário no controle A Prazo (fonte única do '
-             'vínculo — o mesmo usado pelo saldo da aba).',
+        string='Contato',
+        required=True,
+        ondelete='cascade',
+        help='Contato dono da fatura a prazo. É a fonte única do vínculo — '
+             'o mesmo contato usado pelo saldo e pelo histórico.',
     )
     fatura_id = fields.Many2one(
         'account.move',
@@ -50,25 +46,16 @@ class XPrazoPagamentoWizard(models.TransientModel):
         domain="[('type', 'in', ['bank', 'cash'])]",
     )
 
-    @api.depends('employee_id')
-    def _compute_partner_id(self):
-        for wizard in self:
-            wizard.partner_id = (
-                wizard.employee_id._prazo_partner() if wizard.employee_id
-                else self.env['res.partner']
-            )
-
     @api.model
     def _journal_padrao(self):
-        """Diário default do pagamento: o do método de pagamento do cliente,
+        """Diário default do pagamento: o do método de pagamento do contato,
         senão o primeiro banco/caixa da empresa — a MESMA regra que o core
         (account.payment._compute_journal_id) aplicaria sozinho."""
-        employee_id = self.env.context.get('default_employee_id')
-        employee = (
-            self.env['hr.employee'].browse(employee_id) if employee_id
-            else self.env['hr.employee']
+        partner_id = self.env.context.get('default_partner_id')
+        partner = (
+            self.env['res.partner'].browse(partner_id) if partner_id
+            else self.env['res.partner']
         )
-        partner = employee._prazo_partner() if employee else self.env['res.partner']
         journal = (
             partner.with_company(self.env.company)
             .property_inbound_payment_method_line_id.journal_id
@@ -93,10 +80,7 @@ class XPrazoPagamentoWizard(models.TransientModel):
 
         partner = self.partner_id
         if not partner:
-            raise UserError(
-                'O funcionário não tem parceiro vinculado. Defina o contato '
-                'de trabalho (ou o usuário) antes de registrar o pagamento.'
-            )
+            raise UserError('Selecione o contato antes de registrar o pagamento.')
 
         if self.fatura_id.partner_id != partner:
             raise UserError(
@@ -112,8 +96,8 @@ class XPrazoPagamentoWizard(models.TransientModel):
         if not resultado['success']:
             raise UserError(resultado['message'])
 
-        # soft_reload: a ficha do funcionário recarrega e mostra a mov nova e
-        # o saldo atualizado (o saldo é computado do partner.credit).
+        # soft_reload: a ficha do contato recarrega e mostra a mov nova e o
+        # saldo atualizado (o saldo é o partner.credit nativo).
         return {
             'type': 'ir.actions.client',
             'tag': 'display_notification',

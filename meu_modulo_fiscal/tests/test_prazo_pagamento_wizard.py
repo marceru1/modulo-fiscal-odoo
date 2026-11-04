@@ -52,9 +52,9 @@ class TestPrazoPagamentoWizard(TransactionCase):
             fatura.action_post()
         return fatura
 
-    def _wizard(self, fatura, valor=None, journal=None, employee=None):
+    def _wizard(self, fatura, valor=None, journal=None, partner=None):
         vals = {
-            'employee_id': (employee or self.employee).id,
+            'partner_id': (partner or self.funcionaria).id,
             'fatura_id': fatura.id,
             # default real do formulário é o onchange; aqui o helper já resolve
             'valor': fatura.amount_residual if valor is None else valor,
@@ -65,7 +65,7 @@ class TestPrazoPagamentoWizard(TransactionCase):
 
     def _movs_pagamento(self):
         return self.mov_model.search([
-            ('employee_id', '=', self.employee.id),
+            ('partner_id', '=', self.funcionaria.id),
             ('tipo', '=', 'pagamento'),
         ])
 
@@ -74,7 +74,7 @@ class TestPrazoPagamentoWizard(TransactionCase):
         """Escolher a fatura preenche o valor com o saldo dela (onchange)."""
         fatura = self._fatura(100.0)
         wizard = self.wizard_model.new({
-            'employee_id': self.employee.id,
+            'partner_id': self.funcionaria.id,
             'fatura_id': fatura.id,
         })
 
@@ -86,7 +86,7 @@ class TestPrazoPagamentoWizard(TransactionCase):
         """Valor default = residual → fatura quitada, mov 'pagamento' com a
         fatura e saldo da aba zerado."""
         fatura = self._fatura(100.0)
-        self.assertAlmostEqual(self.employee.x_saldo_prazo, 100.0, places=2)
+        self.assertAlmostEqual(self.funcionaria.credit, 100.0, places=2)
 
         self._wizard(fatura).action_confirmar()
 
@@ -101,12 +101,12 @@ class TestPrazoPagamentoWizard(TransactionCase):
         # do create_recebimento) — quitada, residual 0.
         self.assertAlmostEqual(movs.valor, 0.0, places=2)
 
-        # O saldo (computed, não armazenado) é recalculado quando a ficha é
+        # O saldo (partner.credit nativo) é recalculado quando a ficha é
         # recarregada — no teste, força o descarte do cache do env.
         self.env.invalidate_all()
         self.assertAlmostEqual(
-            self.employee.x_saldo_prazo, 0.0, places=2,
-            msg='O saldo da aba (partner.credit) deve cair sozinho',
+            self.funcionaria.credit, 0.0, places=2,
+            msg='O saldo do contato (partner.credit) deve cair sozinho',
         )
 
     # ── Parcial ──────────────────────────────────────────────────────────────
@@ -125,7 +125,7 @@ class TestPrazoPagamentoWizard(TransactionCase):
         self.assertEqual(movs.fatura_name, fatura.name)
         self.assertAlmostEqual(movs.valor, 70.0, places=2)
         self.env.invalidate_all()
-        self.assertAlmostEqual(self.employee.x_saldo_prazo, 70.0, places=2)
+        self.assertAlmostEqual(self.funcionaria.credit, 70.0, places=2)
 
     # ── Validações do wizard ─────────────────────────────────────────────────
     def test_valor_acima_do_residual_rejeitado(self):
@@ -236,19 +236,19 @@ class TestPrazoPagamentoWizard(TransactionCase):
         self._wizard(pelo_backend, valor=30.0).action_confirmar()
 
         mov_pdv = self.mov_model.search([
-            ('employee_id', '=', self.employee.id),
+            ('partner_id', '=', self.funcionaria.id),
             ('tipo', '=', 'pagamento'),
             ('fatura_name', '=', pelo_pdv.name),
         ])
         mov_backend = self.mov_model.search([
-            ('employee_id', '=', self.employee.id),
+            ('partner_id', '=', self.funcionaria.id),
             ('tipo', '=', 'pagamento'),
             ('fatura_name', '=', pelo_backend.name),
         ])
         self.assertEqual(len(mov_pdv), 1, 'O PDV deveria registrar a mov')
         self.assertEqual(len(mov_backend), 1, 'O backend deveria registrar a mov')
 
-        for campo in ('employee_id', 'partner_id', 'tipo', 'valor'):
+        for campo in ('partner_id', 'tipo', 'valor'):
             self.assertEqual(
                 mov_pdv[campo], mov_backend[campo],
                 'Paridade quebrada no campo %s' % campo,
@@ -289,9 +289,16 @@ class TestPrazoPagamentoWizard(TransactionCase):
         )
         self.assertEqual(len(botoes), 1, 'Falta o botão Registrar Pagamento na aba')
 
-    def test_wizard_restrito_ao_grupo_da_aba(self):
-        """A regra de acesso do wizard usa o mesmo grupo da aba (DEC-004)."""
+    def test_wizard_liberado_para_usuario_interno(self):
+        """A ACL do wizard é base.group_user (DEC-D); a restrição efetiva da UI
+        vem do grupo nativo da aba Faturamento (DEC-H)."""
         regra = self.env.ref(
             'meu_modulo_fiscal.access_x_prazo_pagamento_wizard'
         )
-        self.assertEqual(regra.group_id, self.env.ref('hr.group_hr_user'))
+        self.assertEqual(regra.group_id, self.env.ref('base.group_user'))
+
+    def test_ponte_da_aba_do_funcionario_passa_o_contato(self):
+        """Enquanto a aba do funcionário existir (até o ticket 05), o botão
+        dela abre o wizard já com o contato do funcionário no contexto."""
+        acao = self.employee.action_registrar_pagamento_prazo()
+        self.assertEqual(acao['context']['default_partner_id'], self.funcionaria.id)
