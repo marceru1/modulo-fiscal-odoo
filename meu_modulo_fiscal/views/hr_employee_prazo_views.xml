@@ -24,8 +24,6 @@
                             <field name="x_saldo_prazo" readonly="1"/>
                         </group>
                     </group>
-                    <separator string="Histórico de Movimentações"/>
-                    <field name="x_historico_prazo_ids" nolabel="1"/>
                 </page>
             </xpath>
         </field>

@@ -73,25 +73,6 @@ class PosOrder(models.Model):
             return 5
 
     # ==========================================================
-    # HELPER DE FUNCIONÁRIO (I10)
-    # Busca o hr.employee vinculado a um res.partner.
-    # ==========================================================
-    @api.model
-    def _find_employee_for_partner(self, partner_id):
-        """Devolve o hr.employee vinculado ao partner_id, ou recordset vazio.
-
-        Delega a busca única de hr.employee (``_find_by_partner``). Usado por
-        _register_prazo_movimentacoes e create_recebimento.
-
-        Args:
-            partner_id (int): ID do res.partner.
-
-        Returns:
-            hr.employee recordset (limit=1): vazio se não houver vínculo.
-        """
-        return self.env['hr.employee']._find_by_partner(partner_id)
-
-    # ==========================================================
     # DADOS CAPTURADOS DO CONSUMIDOR NA TELA DO CAIXA
     # ==========================================================
     x_cpf_nota = fields.Char(string="CPF na nota", help="CPF informado pelo cliente para a via do consumidor.")
@@ -177,25 +158,20 @@ class PosOrder(models.Model):
 
     def _register_prazo_movimentacoes(self):
         """
-        Para cada pedido do recordset, verifica se há pagamentos pay_later
-        vinculados a um funcionário (hr.employee) e registra a movimentação
-        correspondente em x.prazo.movimentacao.
+        Para cada pedido do recordset, verifica se há pagamentos pay_later e
+        registra a movimentação correspondente em x.prazo.movimentacao.
 
-        - Valor positivo → tipo='compra'  (funcionário comprou a prazo)
-        - Valor negativo → tipo='pagamento' (recebimento: funcionário pagou no PDV)
+        - Valor positivo → tipo='compra'  (contato comprou a prazo)
+        - Valor negativo → tipo='pagamento' (recebimento: contato pagou no PDV)
 
-        Clientes que não são funcionários são ignorados silenciosamente.
-        Duplicatas são evitadas verificando pos_reference antes de inserir.
+        DEC-E da spec prazo-por-contato: a conta a prazo é do CONTATO — qualquer
+        parceiro do pedido entra, sem vínculo de funcionário. Duplicatas são
+        evitadas verificando pos_reference + parceiro antes de inserir.
         """
         for order in self:
             partner = order.partner_id
             if not partner:
                 continue
-
-            # Encontra o funcionário vinculado ao parceiro (I10: helper extraído)
-            employee = self._find_employee_for_partner(partner.id)
-            if not employee:
-                continue  # Não é funcionário — ignora
 
             for payment in order.payment_ids:
                 if payment.payment_method_id.type != 'pay_later':
@@ -218,7 +194,6 @@ class PosOrder(models.Model):
 
                 tipo = 'compra' if amount > 0 else 'pagamento'
                 self.env['x.prazo.movimentacao'].create({
-                    'employee_id': employee.id,
                     'partner_id': partner.id,
                     'data': order.date_order or fields.Datetime.now(),
                     'valor': abs(amount),
@@ -227,8 +202,8 @@ class PosOrder(models.Model):
                     'session_id': order.session_id.id if order.session_id else False,
                 })
                 _logger.info(
-                    '[PRAZO] Movimentação %s registrada | Funcionário: %s | Valor: %.2f | Pedido: %s',
-                    tipo, employee.name, abs(amount), ref
+                    '[PRAZO] Movimentação %s registrada | Parceiro: %s | Valor: %.2f | Pedido: %s',
+                    tipo, partner.name, abs(amount), ref
                 )
 
     # ==========================================================
@@ -295,8 +270,8 @@ class PosOrder(models.Model):
         no pos.config correspondente. Garante que o seed nunca fique atrás
         do último número realmente emitido, mesmo se o localStorage for limpo.
 
-        Também registra movimentações A Prazo para pagamentos pay_later
-        vinculados a funcionários (Task 9).
+        Também registra movimentações A Prazo para pagamentos pay_later do
+        parceiro do pedido (Task 9).
 
         DEC-011 | ERROR-010
         """
@@ -575,25 +550,8 @@ class PosSession(models.Model):
         return dt.astimezone(pytz.timezone(self.FUSO_CAIXA)).strftime(formato)
 
     # ==========================================================
-    # HELPER DE FUNCIONÁRIO (I10)
-    # Espelha o helper de PosOrder para que create_recebimento possa
-    # buscar hr.employee por partner sem duplicar a busca.
+    # HELPERS DO RECEBIMENTO
     # ==========================================================
-    @api.model
-    def _find_employee_for_partner(self, partner_id):
-        """Devolve o hr.employee vinculado ao partner_id, ou recordset vazio.
-
-        Delega a busca única de hr.employee (``_find_by_partner``). Usado por
-        create_recebimento.
-
-        Args:
-            partner_id (int): ID do res.partner.
-
-        Returns:
-            hr.employee recordset (limit=1): vazio se não houver vínculo.
-        """
-        return self.env['hr.employee']._find_by_partner(partner_id)
-
     def _loader_params_pos_order(self):
         params = super()._loader_params_pos_order()
         params['search_params']['fields'].extend([

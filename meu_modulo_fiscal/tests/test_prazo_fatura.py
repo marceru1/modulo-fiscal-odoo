@@ -24,12 +24,8 @@ class TestPrazoFatura(TransactionCase):
         # Ambiente de POS (journals, métodos Dinheiro/Cartão/A Prazo, sessão)
         # reaproveitado dos testes de fechamento offline.
         montar_pos_offline(self)
-        self.funcionaria = self.env['res.partner'].create({
-            'name': 'Funcionária Teste',
-        })
-        self.employee = self.env['hr.employee'].create({
-            'name': 'Funcionária Teste',
-            'work_contact_id': self.funcionaria.id,
+        self.cliente = self.env['res.partner'].create({
+            'name': 'Cliente Teste',
         })
 
     # ── Helper ───────────────────────────────────────────────────────────────
@@ -69,7 +65,7 @@ class TestPrazoFatura(TransactionCase):
     def test_compra_recebe_fatura_ao_gerar_invoice(self):
         """Venda a prazo → mov 'compra' nasce sem fatura e a recebe após o
         core gerar+postar o account.move (DEC-002)."""
-        order = criar_pedido(self, 100.0, self.later_pm, partner=self.funcionaria)
+        order = criar_pedido(self, 100.0, self.later_pm, partner=self.cliente)
         mov = self._movs(order)
         self.assertEqual(len(mov), 1, 'A venda a prazo deveria gerar 1 movimentação')
         self.assertEqual(mov.tipo, 'compra')
@@ -82,18 +78,11 @@ class TestPrazoFatura(TransactionCase):
         self.assertNotEqual(mov.fatura_name, '/', 'Fatura postada tem número')
 
     def test_venda_sem_pay_later_nao_cria_mov(self):
-        """A parceira do pedido É a funcionária; a ausência de movimentação
-        vem do tipo de pagamento (cartão, não pay_later), não do parceiro."""
-        order = criar_pedido(self, 50.0, self.bank_pm, partner=self.funcionaria)
+        """A ausência de movimentação vem do tipo de pagamento (cartão, não
+        pay_later), não do parceiro."""
+        order = criar_pedido(self, 50.0, self.bank_pm, partner=self.cliente)
 
-        # Pré-condições: o parceiro do pedido está vinculado à funcionária e
-        # não há pay_later no pedido.
-        self.assertEqual(order.partner_id, self.funcionaria)
-        self.assertEqual(
-            self.env['pos.order']._find_employee_for_partner(order.partner_id.id),
-            self.employee,
-            'O parceiro do pedido deveria ser reconhecido como funcionária',
-        )
+        self.assertEqual(order.partner_id, self.cliente)
         self.assertNotIn(
             'pay_later',
             order.payment_ids.mapped('payment_method_id.type'),
@@ -101,10 +90,9 @@ class TestPrazoFatura(TransactionCase):
         )
         self.assertFalse(
             self.mov_model.search_count([
-                ('employee_id', '=', self.employee.id),
-                ('partner_id', '=', self.funcionaria.id),
+                ('partner_id', '=', self.cliente.id),
             ]),
-            'Venda em cartão não abre conta a prazo, mesmo para funcionária',
+            'Venda em cartão não abre conta a prazo',
         )
 
         order.with_context(generate_pdf=False)._generate_pos_order_invoice()
@@ -112,16 +100,28 @@ class TestPrazoFatura(TransactionCase):
         self.assertTrue(order.account_move, 'A fatura é gerada normalmente')
         self.assertFalse(
             self.mov_model.search_count([
-                ('employee_id', '=', self.employee.id),
-                ('partner_id', '=', self.funcionaria.id),
+                ('partner_id', '=', self.cliente.id),
             ]),
             'O hook não pode criar movimentação sem pay_later',
         )
 
+    def test_contato_sem_vinculo_de_funcionario_compra_a_prazo(self):
+        """DEC-E: qualquer contato compra a prazo — sem vínculo de funcionário."""
+        cliente = self.env['res.partner'].create({'name': 'Cliente Sem Funcionário'})
+
+        order = criar_pedido(self, 100.0, self.later_pm, partner=cliente)
+
+        movs = self.mov_model.search([
+            ('partner_id', '=', cliente.id),
+            ('tipo', '=', 'compra'),
+        ])
+        self.assertEqual(len(movs), 1, 'O contato sem funcionário deve ter a mov de compra')
+        self.assertEqual(movs.pos_reference, self._ref(order))
+
     def test_falha_ao_gravar_a_fatura_nao_derruba_o_faturamento(self):
         """O número da fatura é informativo: uma exceção ao gravá-lo não pode
         propagar — neste ponto a fatura do core já foi criada e postada."""
-        order = criar_pedido(self, 100.0, self.later_pm, partner=self.funcionaria)
+        order = criar_pedido(self, 100.0, self.later_pm, partner=self.cliente)
 
         with mock.patch.object(
             type(self.env['pos.order']),
@@ -140,9 +140,8 @@ class TestPrazoFatura(TransactionCase):
     def test_hook_ignora_mov_de_outro_parceiro(self):
         """Cupom repetido em outra parceira não recebe a fatura deste pedido:
         a busca é por cupom + parceiro (DEC-006)."""
-        order = criar_pedido(self, 100.0, self.later_pm, partner=self.funcionaria)
+        order = criar_pedido(self, 100.0, self.later_pm, partner=self.cliente)
         intrusa = self.mov_model.create({
-            'employee_id': self.employee.id,
             'partner_id': self._outro_parceiro().id,
             'valor': 10.0,
             'tipo': 'compra',
@@ -162,10 +161,9 @@ class TestPrazoFatura(TransactionCase):
     def test_dedupe_considera_o_parceiro(self):
         """Cupom repetido em outra parceira não bloqueia o registro do pedido
         (o dedupe passou a casar cupom + parceiro)."""
-        order = criar_pedido(self, 100.0, self.later_pm, partner=self.funcionaria)
+        order = criar_pedido(self, 100.0, self.later_pm, partner=self.cliente)
         self._movs(order).unlink()  # limpa a mov criada no create
         self.mov_model.create({
-            'employee_id': self.employee.id,
             'partner_id': self._outro_parceiro().id,
             'valor': 10.0,
             'tipo': 'compra',
@@ -185,7 +183,7 @@ class TestPrazoFatura(TransactionCase):
         (DEC-003: o invoice.name já está em mãos no método)."""
         invoice = self.env['account.move'].create({
             'move_type': 'out_invoice',
-            'partner_id': self.funcionaria.id,
+            'partner_id': self.cliente.id,
             'invoice_date': fields.Date.today(),
             'invoice_line_ids': [(0, 0, {
                 'name': 'Compra a prazo',
@@ -199,7 +197,7 @@ class TestPrazoFatura(TransactionCase):
         self.assertTrue(result['success'], result.get('message'))
 
         mov = self.mov_model.search([
-            ('employee_id', '=', self.employee.id),
+            ('partner_id', '=', self.cliente.id),
             ('tipo', '=', 'pagamento'),
         ])
         self.assertEqual(len(mov), 1, 'O recebimento deveria gerar 1 movimentação')
@@ -208,7 +206,7 @@ class TestPrazoFatura(TransactionCase):
     # ── Retroativo (DEC-004) ─────────────────────────────────────────────────
     def _order_faturado(self):
         """Pedido a prazo com fatura, devolvendo (order, mov de compra)."""
-        order = criar_pedido(self, 100.0, self.later_pm, partner=self.funcionaria)
+        order = criar_pedido(self, 100.0, self.later_pm, partner=self.cliente)
         order.with_context(generate_pdf=False)._generate_pos_order_invoice()
         return order, self._movs(order)
 
@@ -220,16 +218,14 @@ class TestPrazoFatura(TransactionCase):
 
         # Compra órfã: cupom que não existe em pos.order → não pode ser casada.
         orfa = self.mov_model.create({
-            'employee_id': self.employee.id,
-            'partner_id': self.funcionaria.id,
+            'partner_id': self.cliente.id,
             'valor': 30.0,
             'tipo': 'compra',
             'pos_reference': 'CUPOM-SEM-PEDIDO',
         })
         # Recebimento antigo (sem cupom) → fora do escopo do retroativo.
         recebimento_antigo = self.mov_model.create({
-            'employee_id': self.employee.id,
-            'partner_id': self.funcionaria.id,
+            'partner_id': self.cliente.id,
             'valor': 20.0,
             'tipo': 'pagamento',
         })
@@ -260,7 +256,7 @@ class TestPrazoFatura(TransactionCase):
     def test_dedupe_intacto_em_resync(self):
         """Re-executar _register_prazo_movimentacoes no mesmo pedido não duplica
         e não apaga a fatura já gravada (pos_reference segue chave de dedupe)."""
-        order = criar_pedido(self, 100.0, self.later_pm, partner=self.funcionaria)
+        order = criar_pedido(self, 100.0, self.later_pm, partner=self.cliente)
         order.with_context(generate_pdf=False)._generate_pos_order_invoice()
 
         order._register_prazo_movimentacoes()

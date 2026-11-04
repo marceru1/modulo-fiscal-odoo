@@ -18,12 +18,6 @@ class HrEmployee(models.Model):
         store=False,
     )
 
-    x_historico_prazo_ids = fields.One2many(
-        'x.prazo.movimentacao',
-        'employee_id',
-        string='Histórico A Prazo',
-    )
-
     def _prazo_partner(self):
         """Parceiro (res.partner) do funcionário no controle A Prazo.
 
