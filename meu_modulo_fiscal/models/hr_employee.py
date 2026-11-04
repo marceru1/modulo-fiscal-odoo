@@ -72,5 +72,5 @@ class HrEmployee(models.Model):
                 'meu_modulo_fiscal.view_prazo_pagamento_wizard_form'
             ).id,
             'target': 'new',
-            'context': {'default_employee_id': self.id},
+            'context': {'default_partner_id': self._prazo_partner().id},
         }
