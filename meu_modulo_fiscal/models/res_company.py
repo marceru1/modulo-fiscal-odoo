@@ -82,6 +82,26 @@ class ResCompany(models.Model):
     )
 
     @api.model
+    def _prazo_habilitar_limite_credito(self):
+        """Liga ``account_use_credit_limit`` nas empresas que estiverem com ele
+        falso (spec prazo-por-contato, ticket 08).
+
+        O grupo nativo "Credit Limits" da aba Faturamento do contato só é
+        renderizado quando essa flag da empresa está ligada
+        (addons/account/views/partner_view.xml:273-275, via
+        ``show_credit_limit`` — addons/account/models/partner.py:718-720).
+        Ligar aqui evita que o admin precise caçar a configuração do core para
+        ver limite, saldo, histórico e o botão Registrar Pagamento.
+
+        Idempotente: só escreve nas empresas com a flag falsa; nunca
+        sobrescreve uma empresa que já está com ela ligada (roda no
+        install/upgrade pelo ``<function>`` em ``data/prazo_credito_config.xml``).
+        """
+        empresas = self.sudo().search([('account_use_credit_limit', '=', False)])
+        if empresas:
+            empresas.write({'account_use_credit_limit': True})
+
+    @api.model
     def _load_pos_data_fields(self, config_id):
         """
         [Odoo 18] Estende a lista de campos da Empresa que devem ser 

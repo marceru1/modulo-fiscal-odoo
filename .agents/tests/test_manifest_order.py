@@ -28,6 +28,9 @@ ATUALIZAR = "meu_modulo_fiscal/static/src/xml/atualizar_button.xml"
 PARTNER_PRAZO_VIEW = "views/res_partner_prazo_views.xml"
 HR_PRAZO_VIEW = "views/hr_employee_prazo_views.xml"
 HR_MODEL_FILE = "meu_modulo_fiscal/models/hr_employee.py"
+# ticket 08: o data file liga account_use_credit_limit nas empresas para o
+# grupo nativo "Credit Limits" aparecer na aba Faturamento do contato.
+CREDITO_CONFIG_DATA = "data/prazo_credito_config.xml"
 
 
 def main():
@@ -75,6 +78,12 @@ def main():
         f"{HR_MODEL_FILE} não pode existir: sem extensão de hr.employee (DEC-F)"
     )
     print("✓ sem dependência de `hr`, sem view/modelo de funcionário")
+
+    assert CREDITO_CONFIG_DATA in data, (
+        f"{CREDITO_CONFIG_DATA} não está na lista `data` do manifest — sem ele "
+        "a flag de limite de crédito não é ligada no upgrade"
+    )
+    print(f"✓ {CREDITO_CONFIG_DATA} está na lista `data`")
 
     print("✓ Ordem load-bearing do manifest validada")
 

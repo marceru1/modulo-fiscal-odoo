@@ -3,6 +3,7 @@ from . import test_prazo_fatura
 from . import test_prazo_contato
 from . import test_prazo_limite_pdv
 from . import test_prazo_pagamento_wizard
+from . import test_prazo_credito_config
 from . import test_fechamento_simplificado
 from . import test_fechamento_offline_snapshot
 from . import test_fechamento_offline_parity
