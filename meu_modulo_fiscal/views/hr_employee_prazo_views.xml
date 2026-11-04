@@ -31,25 +31,6 @@
         </field>
     </record>
 
-    <!-- Standalone list view for x.prazo.movimentacao -->
-    <record id="view_x_prazo_movimentacao_list" model="ir.ui.view">
-        <field name="name">x.prazo.movimentacao.list</field>
-        <field name="model">x.prazo.movimentacao</field>
-        <field name="arch" type="xml">
-            <list>
-                <field name="data"/>
-                <field name="tipo"/>
-                <field name="valor"/>
-                <!-- DEC-005: Fatura antes do Cupom — o número que a gerência
-                     cobra primeiro; o cupom fica como rastreio da origem. -->
-                <field name="fatura_name"/>
-                <field name="pos_reference"/>
-                <field name="employee_id"/>
-                <field name="partner_id"/>
-            </list>
-        </field>
-    </record>
-
     <!-- Search view for employee A Prazo -->
     <record id="view_employee_search_prazo" model="ir.ui.view">
         <field name="name">hr.employee.search.prazo</field>

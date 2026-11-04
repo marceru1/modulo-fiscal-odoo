@@ -1,0 +1,48 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+
+    <!-- Conta a prazo na ficha do CONTATO (spec prazo-por-contato, DEC-B).
+         A herança entra DENTRO do grupo nativo "Credit Limits" da aba
+         Faturamento: assim herda de graga as condicoes de visibilidade do
+         core (grupo de contabilidade, account_use_credit_limit da empresa e
+         contato filho de empresa). Nenhuma aba e nenhum menu novos. -->
+    <record id="view_partner_form_prazo" model="ir.ui.view">
+        <field name="name">res.partner.form.prazo</field>
+        <field name="model">res.partner</field>
+        <field name="inherit_id" ref="base.view_partner_form"/>
+        <field name="arch" type="xml">
+            <xpath expr="//group[@name='credit_limits']" position="inside">
+                <!-- DEC-J: o botao so aparece com fatura a prazo em aberto. -->
+                <field name="x_prazo_tem_fatura_aberta" invisible="1"/>
+                <button name="action_registrar_pagamento_prazo"
+                        type="object"
+                        string="Registrar Pagamento"
+                        class="btn-primary"
+                        invisible="not x_prazo_tem_fatura_aberta"/>
+                <separator string="Histórico A Prazo"/>
+                <field name="x_historico_prazo_ids" nolabel="1" readonly="1"/>
+            </xpath>
+        </field>
+    </record>
+
+    <!-- Lista standalone das movimentacoes (somente leitura). Vive aqui, e
+         nao mais na view do funcionario, porque o historico agora e do
+         contato. O xmlid e preservado para os testes e a aba antiga. -->
+    <record id="view_x_prazo_movimentacao_list" model="ir.ui.view">
+        <field name="name">x.prazo.movimentacao.list</field>
+        <field name="model">x.prazo.movimentacao</field>
+        <field name="arch" type="xml">
+            <list>
+                <field name="data"/>
+                <field name="tipo"/>
+                <field name="valor"/>
+                <!-- DEC-005: Fatura antes do Cupom — o numero que a gerencia
+                     cobra primeiro; o cupom fica como rastreio da origem. -->
+                <field name="fatura_name"/>
+                <field name="pos_reference"/>
+                <field name="partner_id"/>
+            </list>
+        </field>
+    </record>
+
+</odoo>

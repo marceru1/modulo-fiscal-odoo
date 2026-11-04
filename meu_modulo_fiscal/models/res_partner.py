@@ -1,4 +1,4 @@
-from odoo import models
+from odoo import api, fields, models
 
 
 def prazo_faturas_abertas_domain(partner_id):
@@ -18,6 +18,24 @@ def prazo_faturas_abertas_domain(partner_id):
 
 class ResPartner(models.Model):
     _inherit = 'res.partner'
+
+    # DEC-A/DEC-B da spec prazo-por-contato: a conta a prazo vive no contato.
+    # O limite e o saldo são os campos nativos (credit_limit / credit) da aba
+    # Faturamento; aqui ficam só o histórico e o gatilho do wizard.
+    x_historico_prazo_ids = fields.One2many(
+        'x.prazo.movimentacao',
+        'partner_id',
+        string='Histórico A Prazo',
+        readonly=True,
+    )
+
+    x_prazo_tem_fatura_aberta = fields.Boolean(
+        string='Tem Fatura A Prazo em Aberto',
+        compute='_compute_prazo_tem_fatura_aberta',
+        store=False,
+        help='Controla a visibilidade do botão Registrar Pagamento na ficha '
+             '(DEC-J: botão só com saldo a prazo em aberto).',
+    )
 
     def _prazo_faturas_abertas(self, limit=50):
         """Faturas em aberto do parceiro + o TOTAL residual, tudo no backend.
@@ -46,3 +64,26 @@ class ResPartner(models.Model):
         # aggregate (read_group) gastaria um round-trip e duplicaria o domínio.
         total = sum((f['amount_residual'] for f in faturas), 0.0)
         return {'faturas': faturas, 'total_residual': total}
+
+    def _compute_prazo_tem_fatura_aberta(self):
+        for partner in self:
+            partner.x_prazo_tem_fatura_aberta = bool(
+                self.env['account.move'].search_count(
+                    prazo_faturas_abertas_domain(partner.id)
+                )
+            )
+
+    def action_registrar_pagamento_prazo(self):
+        """Abre o wizard de pagamento da conta a prazo do contato (DEC-B)."""
+        self.ensure_one()
+        return {
+            'type': 'ir.actions.act_window',
+            'name': 'Registrar Pagamento',
+            'res_model': 'x.prazo.pagamento.wizard',
+            'view_mode': 'form',
+            'view_id': self.env.ref(
+                'meu_modulo_fiscal.view_prazo_pagamento_wizard_form'
+            ).id,
+            'target': 'new',
+            'context': {'default_partner_id': self.id},
+        }
