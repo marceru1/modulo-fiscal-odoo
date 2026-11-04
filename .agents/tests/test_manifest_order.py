@@ -22,6 +22,12 @@ BUNDLE = "point_of_sale._assets_pos"
 RECEBIMENTO = "meu_modulo_fiscal/static/src/xml/recebimento_button.xml"
 ATUALIZAR = "meu_modulo_fiscal/static/src/xml/atualizar_button.xml"
 
+# prazo-por-contato: a ficha do contato carrega o historico + o botao da conta
+# a prazo. A view precisa estar na lista `data` do manifest (sem ela a UI da
+# feature nao existe); a ordem relativa as demais views nao e load-bearing.
+PARTNER_PRAZO_VIEW = "views/res_partner_prazo_views.xml"
+HR_PRAZO_VIEW = "views/hr_employee_prazo_views.xml"
+
 
 def main():
     assert os.path.exists(MANIFEST_PATH), f"Manifest não encontrado: {MANIFEST_PATH}"
@@ -46,6 +52,13 @@ def main():
     )
 
     print(f"✓ {RECEBIMENTO} (idx={idx_recebimento}) vem antes de {ATUALIZAR} (idx={idx_atualizar})")
+
+    data = manifest.get("data", [])
+    assert PARTNER_PRAZO_VIEW in data, (
+        f"{PARTNER_PRAZO_VIEW} não está na lista `data` do manifest — "
+        "a ficha do contato não teria histórico nem botão da conta a prazo"
+    )
+    print(f"✓ {PARTNER_PRAZO_VIEW} está na lista `data`")
     print("✓ Ordem load-bearing do manifest validada")
 
 
