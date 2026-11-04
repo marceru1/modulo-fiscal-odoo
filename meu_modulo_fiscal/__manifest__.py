@@ -8,7 +8,6 @@
     'depends': [
         'product',
         'point_of_sale',
-        'hr',
         'stock',
     ],
     'data': [
@@ -29,7 +28,6 @@
         # Faturamento nativa do contato (grupo Credit Limits) e a lista de
         # movimentacoes que antes vivia na view do funcionario.
         'views/res_partner_prazo_views.xml',
-        'views/hr_employee_prazo_views.xml',
         # prazo-pagar-no-cadastro: wizard do botão "Registrar Pagamento" da aba.
         # A aba resolve a view pelo método do botão (xmlid em runtime), então
         # a ordem entre as duas views não é load-bearing.
