@@ -1,16 +1,17 @@
 /**
- * Teste unitário (Node puro, sem Odoo) do seam modal-limite-prazo da feature
- * limite-prazo: travar venda a prazo que excede o limite de crédito do cliente.
+ * Teste unitário (Node puro, sem Odoo) do seam de limite a prazo do PDV
+ * (spec prazo-por-contato): o limite vive no CONTATO, lido por UMA chamada
+ * ORM com sudo (_prazo_limite_credito).
  *
- * O Odoo não roda localmente, então este teste:
+ * O teste:
  *   1. Lê static/src/js/auto_invoice_pay_later.js.
  *   2. Testa a helper pura _checkLimitePrazo (seam de regra: 190 + 11 > 200).
  *   3. Extrai o objeto passado a patch(PaymentScreen.prototype, {...}) e o
  *      executa sobre um mock de PaymentScreen.prototype com super.validateOrder()
  *      e um `this` mockado (pos, dialog, env.services.orm, notification).
- *   4. Verifica os 3 comportamentos decididos pelo Marcelo:
+ *   4. Verifica os comportamentos decididos:
  *        - excedido      → HARD BLOCK (super NÃO chamado)
- *        - sem_limite    → mantém "Prosseguir mesmo assim" (super só se confirmar)
+ *        - sem_limite    → HARD BLOCK também (DEC-C; botão único "Entendi")
  *        - ok            → super chamado + set_to_invoice(true)
  *        - ORM/offline   → HARD BLOCK com pay_later (super NÃO chamado)
  *
@@ -125,13 +126,12 @@ function makeThis({ order, ormThrows = false } = {}) {
                         if (ormThrows) {
                             return Promise.reject(new Error("network down"));
                         }
-                        return Promise.resolve([{ credit: 190, credit_limit: 200 }]);
+                        return Promise.resolve({ credit: 190, credit_limit: 200 });
                     },
                     searchRead: () => {
-                        if (ormThrows) {
-                            return Promise.reject(new Error("network down"));
-                        }
-                        return Promise.resolve([]);
+                        throw new Error(
+                            "searchRead não deve ser chamado: o limite vem do seam único"
+                        );
                     },
                 },
                 notification: { add: () => {} },
@@ -155,7 +155,7 @@ async function main() {
     // A1: excedido quando credit + total > limite
     {
         const partner = { name: "Cliente Teste" };
-        const result = _checkLimitePrazo(partner, 11, [{ credit: 190, credit_limit: 200 }], []);
+        const result = _checkLimitePrazo(partner, 11, { credit: 190, credit_limit: 200 });
         assert.strictEqual(result.ok, false, "deve detectar excedido");
         assert.strictEqual(result.tipo, "excedido", "tipo deve ser 'excedido'");
         assert(/200\.00/.test(result.msg), "msg deve citar o limite");
@@ -165,29 +165,28 @@ async function main() {
     // A2: sem_limite quando limite <= 0
     {
         const partner = { name: "Cliente Teste" };
-        const result = _checkLimitePrazo(partner, 10, [{ credit: 0, credit_limit: 0 }], []);
+        const result = _checkLimitePrazo(partner, 10, { credit: 0, credit_limit: 0 });
         assert.strictEqual(result.ok, false, "deve detectar sem_limite");
         assert.strictEqual(result.tipo, "sem_limite", "tipo deve ser 'sem_limite'");
+        assert(/ficha do contato/.test(result.msg), "msg orienta cadastrar no contato");
         console.log("✓ A2: _checkLimitePrazo detecta sem_limite");
     }
 
     // A3: ok quando credit + total <= limite
     {
         const partner = { name: "Cliente Teste" };
-        const result = _checkLimitePrazo(partner, 10, [{ credit: 190, credit_limit: 200 }], []);
+        const result = _checkLimitePrazo(partner, 10, { credit: 190, credit_limit: 200 });
         assert.strictEqual(result.ok, true, "deve permitir ok");
         assert.strictEqual(result.tipo, undefined, "ok não tem tipo");
         console.log("✓ A3: _checkLimitePrazo permite ok quando cabe no limite");
     }
 
-    // A4: limite vem de hr.employee quando vinculado
+    // A4: limite vem EXCLUSIVAMENTE do credit_limit do contato (sem funcionário)
     {
         const partner = { name: "Cliente Teste" };
-        const result = _checkLimitePrazo(partner, 201, [{ credit: 0, credit_limit: 999 }], [
-            { x_limite_prazo: 200 },
-        ]);
-        assert.strictEqual(result.tipo, "excedido", "deve usar x_limite_prazo do employee");
-        console.log("✓ A4: _checkLimitePrazo usa x_limite_prazo do hr.employee");
+        const result = _checkLimitePrazo(partner, 201, { credit: 0, credit_limit: 200 });
+        assert.strictEqual(result.tipo, "excedido", "deve usar o credit_limit do contato");
+        console.log("✓ A4: _checkLimitePrazo usa o credit_limit do contato");
     }
 
     // ── Grupo B: validateOrder — excedido → HARD BLOCK ────────────────────────
@@ -221,38 +220,39 @@ async function main() {
         console.log("✓ B2: excedido não avança mesmo se operador clicar 'Entendi'");
     }
 
-    // ── Grupo C: validateOrder — sem_limite mantém "Prosseguir mesmo assim" ───
+    // ── Grupo C: validateOrder — sem_limite é HARD BLOCK (DEC-C) ─────────────
 
-    // C1: sem_limite com confirmação → avança
+    // C1: sem_limite → não avança mesmo com ask resolvendo true
     {
         askResult = true;
         const order = makeOrder({ hasPayLater: true, total: 10, partner: { id: 2, name: "B" } });
         const ctx = makeThis({ order });
         // força limite zero
-        ctx.env.services.orm.call = () => Promise.resolve([{ credit: 0, credit_limit: 0 }]);
+        ctx.env.services.orm.call = () => Promise.resolve({ credit: 0, credit_limit: 0 });
         await runValidate(ctx);
-        assert.strictEqual(ctx.__superCalled, true, "sem_limite confirmado deve chamar super.validateOrder()");
-        assert.strictEqual(order.__setToInvoice, true, "sem_limite confirmado marca to_invoice=true");
+        assert.strictEqual(ctx.__superCalled, false, "sem_limite deve BLOQUEAR super.validateOrder()");
+        assert.strictEqual(order.__setToInvoice, false, "sem_limite não marca to_invoice");
         assert(lastAskProps, "deve abrir modal");
         assert.strictEqual(
-            lastAskProps.confirmLabel,
-            "Prosseguir mesmo assim",
-            "sem_limite mantém botão de prosseguir"
+            lastAskProps.title,
+            "⚠️ Cliente Sem Limite a Prazo",
+            "título do modal sem_limite"
         );
-        assert.strictEqual(lastAskProps.cancelLabel, "Cancelar", "sem_limite mantém botão cancelar");
-        console.log("✓ C1: sem_limite confirmado → avança + to_invoice=true");
+        assert.strictEqual(lastAskProps.confirmLabel, "Entendi", "sem_limite: único botão 'Entendi'");
+        assert.strictEqual(lastAskProps.cancelLabel, undefined, "sem_limite: sem botão de prosseguir");
+        console.log("✓ C1: sem_limite → HARD BLOCK (botão só 'Entendi')");
     }
 
-    // C2: sem_limite cancelado → BLOQUEIA
+    // C2: sem_limite não avança mesmo se o operador clicar "Entendi"
     {
         askResult = false;
         const order = makeOrder({ hasPayLater: true, total: 10, partner: { id: 2, name: "B" } });
         const ctx = makeThis({ order });
-        ctx.env.services.orm.call = () => Promise.resolve([{ credit: 0, credit_limit: 0 }]);
+        ctx.env.services.orm.call = () => Promise.resolve({ credit: 0, credit_limit: 0 });
         await runValidate(ctx);
-        assert.strictEqual(ctx.__superCalled, false, "sem_limite cancelado deve bloquear");
-        assert.strictEqual(order.__setToInvoice, false, "sem_limite cancelado não marca to_invoice");
-        console.log("✓ C2: sem_limite cancelado → HARD BLOCK");
+        assert.strictEqual(ctx.__superCalled, false, "sem_limite bloqueia independente do ask");
+        assert.strictEqual(order.__setToInvoice, false, "sem_limite não marca to_invoice");
+        console.log("✓ C2: sem_limite não avança nem clicando 'Entendi'");
     }
 
     // ── Grupo D: validateOrder — ok → avança + to_invoice=true ──────────────
@@ -319,17 +319,24 @@ async function main() {
         console.log("✓ E1: falha ORM/rede com pay_later → HARD BLOCK + modal informativo");
     }
 
-    // E2: falha em searchRead do employee → também bloqueia
+    // E2: o fluxo faz UMA chamada e NÃO usa searchRead (limite vem do contato)
     {
         askResult = true;
+        const chamadas = [];
         const order = makeOrder({ hasPayLater: true, total: 10, partner: { id: 6, name: "F" } });
         const ctx = makeThis({ order });
-        ctx.env.services.orm.call = () => Promise.resolve([{ credit: 0, credit_limit: 200 }]);
-        ctx.env.services.orm.searchRead = () => Promise.reject(new Error("searchRead falhou"));
+        ctx.env.services.orm.call = (model, method, args) => {
+            chamadas.push([model, method, args]);
+            return Promise.resolve({ credit: 0, credit_limit: 200 });
+        };
         await runValidate(ctx);
-        assert.strictEqual(ctx.__superCalled, false, "falha em searchRead com pay_later deve BLOQUEAR");
-        assert.strictEqual(order.__setToInvoice, false, "falha em searchRead não marca to_invoice");
-        console.log("✓ E2: falha em searchRead com pay_later → HARD BLOCK");
+        assert.deepStrictEqual(
+            chamadas,
+            [["res.partner", "_prazo_limite_credito", [6]]],
+            "deve ser UMA chamada ao seam do contato"
+        );
+        assert.strictEqual(ctx.__superCalled, true, "ok com limite do contato avança");
+        console.log("✓ E2: uma única chamada ao seam do contato, sem searchRead");
     }
 
     // ── Grupo F: contrato do manifest ────────────────────────────────────────
@@ -348,7 +355,15 @@ async function main() {
             !manifest.includes("tests/test_auto_invoice_pay_later.js"),
             "teste Node não vai no manifest"
         );
-        console.log("✓ F1: JS no bundle POS; teste fora do manifest");
+        assert(
+            !source.includes("hr.employee") && !source.includes("x_limite_prazo"),
+            "o PDV não pode mais ler limite de funcionário"
+        );
+        assert(
+            source.includes("_prazo_limite_credito"),
+            "o PDV deve ler o limite pelo seam do contato"
+        );
+        console.log("✓ F1: JS no bundle POS; teste fora do manifest; sem hr.employee");
     }
 
     console.log("\nTodos os testes passaram ✓");

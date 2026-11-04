@@ -8,34 +8,29 @@ import { ask } from "@point_of_sale/app/store/make_awaitable_dialog";
  *
  * Função pura (sem side effects, sem ORM, sem dialog) — recebe os dados já
  * carregados do ORM e retorna `{ ok, msg, tipo }`. Seam de teste da spec
- * modal-limite-prazo: testável em isolamento com dados mockados, sem Odoo.
+ * prazo-por-contato: a conta a prazo vive no contato, então o limite vem só
+ * do `credit_limit` dele (sem funcionário).
  *
  * @param {object} partner - res.partner do pedido (usa .name)
  * @param {number} orderTotal - total da compra com imposto
- * @param {Array} partnerData - resultado de orm.read("res.partner", ...) → [{ credit, credit_limit }]
- * @param {Array} employees - resultado de orm.searchRead("hr.employee", ...) → [{ x_limite_prazo }]
+ * @param {object} limiteData - retorno de _prazo_limite_credito → { credit, credit_limit }
  * @returns {{ok: boolean, msg?: string, tipo?: string}}
  *   - { ok: true } quando credit + orderTotal <= limite
  *   - { ok: false, tipo: 'excedido', msg } quando limite excedido
- *   - { ok: false, tipo: 'sem_limite', msg } quando limite === 0 ou null/undefined
+ *   - { ok: false, tipo: 'sem_limite', msg } quando limite === 0 ou null/undefined (DEC-C: hard block)
  */
-export function _checkLimitePrazo(partner, orderTotal, partnerData, employees) {
-    const credit = partnerData && partnerData[0] ? partnerData[0].credit || 0 : 0;
-
-    // Limite vem do hr.employee vinculado (x_limite_prazo); sem vínculo,
-    // cai no credit_limit do res.partner.
-    let limite = 0;
-    if (employees && employees.length > 0) {
-        limite = employees[0].x_limite_prazo || 0;
-    } else {
-        limite = partnerData && partnerData[0] ? partnerData[0].credit_limit || 0 : 0;
-    }
+export function _checkLimitePrazo(partner, orderTotal, limiteData) {
+    const credit = (limiteData && limiteData.credit) || 0;
+    const limite = (limiteData && limiteData.credit_limit) || 0;
 
     if (limite <= 0) {
         return {
             ok: false,
             tipo: "sem_limite",
-            msg: `⚠️ Cliente não está apto a comprar a prazo. Nenhum limite configurado para ${partner.name}.`,
+            msg:
+                `⚠️ ${partner.name} não tem limite a prazo cadastrado. ` +
+                "Peça ao responsável para cadastrar o limite na ficha do contato " +
+                "(aba Faturamento > Credit Limits).",
         };
     }
 
@@ -83,57 +78,37 @@ patch(PaymentScreen.prototype, {
                             ? order.get_total_with_tax()
                             : order.amount_total || 0;
 
-                    // 1. Read current outstanding credit from the partner
-                    const partnerData = await this.env.services.orm.call(
+                    // 1. UMA chamada ao seam com sudo: o caixa não tem os
+                    //    grupos de contabilidade, e o método devolve só
+                    //    {credit, credit_limit} do contato (DEC-G).
+                    const limiteData = await this.env.services.orm.call(
                         "res.partner",
-                        "read",
-                        [[partner.id], ["credit", "credit_limit"]]
+                        "_prazo_limite_credito",
+                        [partner.id]
                     );
 
-                    // 2. Look for a linked hr.employee to get x_limite_prazo
-                    const employees = await this.env.services.orm.searchRead(
-                        "hr.employee",
-                        [
-                            "|",
-                            ["work_contact_id", "=", partner.id],
-                            ["user_id.partner_id", "=", partner.id],
-                        ],
-                        ["x_limite_prazo"]
-                    );
-
-                    // 3. Pure helper: avalia limite e monta a mensagem
+                    // 2. Pure helper: avalia limite e monta a mensagem
                     const result = _checkLimitePrazo(
                         partner,
                         orderTotal,
-                        partnerData,
-                        employees
+                        limiteData
                     );
 
-                    // 4. Modal ANTES de super.validateOrder().
-                    //    "excedido" é HARD BLOCK: informativo, único botão "Entendi",
-                    //    e a venda a prazo NÃO valida.
-                    //    "sem_limite" mantém o comportamento vigente: permite prosseguir.
-                    if (result.tipo === "excedido") {
+                    // 3. Modal ANTES de super.validateOrder().
+                    //    "excedido" e "sem_limite" são HARD BLOCK (DEC-C):
+                    //    informativo, único botão "Entendi", e a venda a prazo
+                    //    NÃO valida. O operador troca de método ou de cliente.
+                    if (result.tipo === "excedido" || result.tipo === "sem_limite") {
                         await ask(this.dialog, {
-                            title: "⚠️ Limite a Prazo Excedido",
+                            title:
+                                result.tipo === "excedido"
+                                    ? "⚠️ Limite a Prazo Excedido"
+                                    : "⚠️ Cliente Sem Limite a Prazo",
                             body: result.msg,
                             confirmLabel: "Entendi",
                         });
-                        // Sempre aborta — não passa nem um real acima do limite.
+                        // Sempre aborta — não passa sem cobertura do limite.
                         return;
-                    }
-
-                    if (result.tipo === "sem_limite") {
-                        const confirmed = await ask(this.dialog, {
-                            title: "⚠️ Cliente Sem Limite a Prazo",
-                            body: result.msg,
-                            confirmLabel: "Prosseguir mesmo assim",
-                            cancelLabel: "Cancelar",
-                        });
-                        if (!confirmed) {
-                            // Operador cancelou — aborta a validação
-                            return;
-                        }
                     }
                 } catch (err) {
                     // Offline/ORM failure com pay_later no pedido → HARD BLOCK.

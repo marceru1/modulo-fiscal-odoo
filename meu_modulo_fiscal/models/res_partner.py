@@ -87,3 +87,31 @@ class ResPartner(models.Model):
             'target': 'new',
             'context': {'default_partner_id': self.id},
         }
+
+    @api.model
+    def _prazo_limite_credito(self, partner_id):
+        """Leitura mínima de crédito para o PDV (DEC-G da spec).
+
+        ``credit`` e ``credit_limit`` são restritos aos grupos de contabilidade
+        do core; o caixa não os tem. Este é o ÚNICO seam que o PDV usa: roda
+        com ``sudo()`` e devolve SÓ esses dois números — nenhum outro campo do
+        contato é exposto. O limite é lido no contexto da empresa do usuário
+        (``credit_limit`` é company_dependent).
+
+        Args:
+            partner_id (int|False): contato do pedido.
+
+        Returns:
+            dict: ``{'credit': float, 'credit_limit': float}``; zeros quando o
+            contato não existe (o cliente trata como sem limite).
+        """
+        partner = (
+            self.sudo().browse(partner_id).exists() if partner_id
+            else self.sudo().browse()
+        )
+        if not partner:
+            return {'credit': 0.0, 'credit_limit': 0.0}
+        return {
+            'credit': partner.credit or 0.0,
+            'credit_limit': partner.credit_limit or 0.0,
+        }
