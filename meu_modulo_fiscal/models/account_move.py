@@ -16,8 +16,8 @@ class AccountMove(models.Model):
 
         Valida a fatura, cria o ``account.payment`` inbound, posta, reconcilia
         com a linha a receber e registra a movimentação 'pagamento' em
-        ``x.prazo.movimentacao`` (com ``fatura_name``) quando o parceiro é
-        funcionário. Serve os dois caminhos:
+        ``x.prazo.movimentacao`` (com ``fatura_name``) para o CONTATO da
+        fatura. Serve os dois caminhos:
 
         - PDV: ``pos.session.create_recebimento`` delega e acrescenta só os
           enfeites de caixa (sessão, comprovante térmico, operador);
@@ -138,23 +138,21 @@ class AccountMove(models.Model):
         # Le o saldo residual APOS reconciliacao (DEC-003)
         residual_pos = self.amount_residual
 
-        # Registra movimentacao se o parceiro for funcionario (I10: helper extraído)
+        # Registra a movimentação para QUALQUER contato (DEC-E da spec
+        # prazo-por-contato): a conta a prazo é do parceiro, não de funcionário.
         # Usa o saldo residual pos-reconciliacao (DEC-003)
-        employee = self.env['hr.employee']._find_by_partner(partner.id)
-        if employee:
-            self.env['x.prazo.movimentacao'].create({
-                'employee_id': employee.id,
-                'partner_id': partner.id,
-                'data': fields.Datetime.now(),
-                'valor': residual_pos,
-                'tipo': 'pagamento',
-                # DEC-003: a fatura recebida já está em mãos aqui — sem lookback
-                'fatura_name': self.name,
-            })
-            _logger.info(
-                '[RECEBIMENTO] Movimentacao registrada | Funcionario: %s | Valor residual: %.2f',
-                employee.name, residual_pos
-            )
+        self.env['x.prazo.movimentacao'].create({
+            'partner_id': partner.id,
+            'data': fields.Datetime.now(),
+            'valor': residual_pos,
+            'tipo': 'pagamento',
+            # DEC-003: a fatura recebida já está em mãos aqui — sem lookback
+            'fatura_name': self.name,
+        })
+        _logger.info(
+            '[RECEBIMENTO] Movimentacao registrada | Parceiro: %s | Valor residual: %.2f',
+            partner.name, residual_pos
+        )
 
         return {
             'success': True,

@@ -10,7 +10,9 @@ class XPrazoMovimentacao(models.Model):
     _description = 'Movimentação A Prazo'
     _order = 'data desc'
 
-    employee_id = fields.Many2one('hr.employee', string='Funcionário', ondelete='cascade')
+    # DEC-E da spec prazo-por-contato: a conta a prazo é do CONTATO. O
+    # partner_id já era gravado em todas as movs; a coluna de funcionário
+    # saiu sem backfill.
     partner_id = fields.Many2one('res.partner', string='Parceiro')
     data = fields.Datetime(string='Data', default=fields.Datetime.now)
     valor = fields.Float(string='Valor', digits=(16, 2))
