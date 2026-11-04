@@ -32,6 +32,10 @@
         # A aba resolve a view pelo método do botão (xmlid em runtime), então
         # a ordem entre as duas views não é load-bearing.
         'views/prazo_pagamento_wizard_views.xml',
+        # prazo-por-contato (ticket 08): liga account_use_credit_limit nas
+        # empresas para o grupo nativo Credit Limits aparecer na ficha do
+        # contato (idempotente — só empresas com a flag falsa).
+        'data/prazo_credito_config.xml',
         # prazo-fatura-na-aba: retroativo one-shot da fatura no histórico
         # A Prazo (idempotente — roda a cada upgrade sem efeito colateral).
         'data/prazo_fatura_backfill.xml',

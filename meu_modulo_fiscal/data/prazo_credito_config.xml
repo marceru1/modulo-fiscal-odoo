@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <!-- Visibilidade da conta a prazo na ficha do contato (ticket 08).
+         O grupo nativo "Credit Limits" da aba Faturamento só aparece com
+         account_use_credit_limit ligado na empresa; a função liga a flag onde
+         estiver falsa (idempotente). Não cria grupo nem aba próprios: a
+         visibilidade por contato continua nativa (DEC-B/DEC-H).
+         Mecanismo: <function> roda no load dos data files em install e update
+         (odoo/tools/convert.py:169-188, 257-261). -->
+    <function model="res.company" name="_prazo_habilitar_limite_credito"/>
+</odoo>
