@@ -45,6 +45,36 @@ Odoo 18 (POS) ──webhook──▶ Middleware NFC-e (Laravel 12) ──▶ Foc
 O módulo cuida do lado Odoo (dados fiscais, fluxo de venda, contingência, impressão).
 Assinatura, transmissão e eventos fiscais rodam no middleware — que também é open source.
 
+## Por que um middleware entre o Odoo e a SEFAZ?
+
+- **O caixa não pode esperar a SEFAZ.** Transmissão é lenta e instável, e o
+  operador precisa de resposta na hora. A fila do middleware desacopla: a venda
+  fecha no PDV e a nota busca sua vez, com retorno reconciliável e idempotente.
+- **Contingência offline.** Internet caiu, operação continua: a gestão da
+  numeração e do estado offline fica entre o JS do POS e o middleware, não no
+  caminho crítico da SEFAZ.
+- **Certificado A1 isolado.** Assinatura, certificado e senha vivem só no
+  middleware — nunca chegam ao navegador nem ficam expostos na instância do Odoo.
+- **Emissor substituível.** O provedor (hoje Focus NFe) é detalhe de
+  implementação: trocar de provedor ou abrir um motor próprio não mexe no Odoo.
+- **Contrato, não acoplamento.** O webhook autenticado do middleware é o ponto
+  de extensão: hoje a fonte é o POS do Odoo, amanhã pode ser qualquer sistema.
+- **Odoo segue sendo Odoo.** Sem lógica de transmissão espalhada pelo core:
+  as diferenças por estado e de homologação ficam num único lugar.
+
+## De onde veio e quem pode usar
+
+O módulo nasceu num caso real: uma loja física com múltiplos caixas rodando o
+POS como frente de venda. Os layouts de etiqueta (Bijuteria 34,9×20,1 mm e
+Confecção 105×60 mm) refletem as linhas de produto desse caso — estão aqui como
+exemplo funcional e como prova de que o mecanismo funciona em produção.
+
+O núcleo, no entanto, é genérico: NCM/CFOP/PIS/COFINS nos produtos, NFC-e no
+PDV, contingência, crédito A Prazo, fechamento. **Quem roda Odoo 18 com POS no
+Brasil e quer NFC-e pode usar e adaptar** — os templates de etiqueta se
+duplicam e se ajustam à sua realidade em minutos.
+
+
 ## Instalação
 
 ```bash
@@ -57,6 +87,9 @@ A tabela NCM carrega a partir de `meu_modulo_fiscal/data/br.ncm.csv`. Para
 desenvolvimento/servidor, há `Dockerfile`, `odoo.conf.docker` e `start.sh` no repositório.
 
 ## Testes
+
+O desenvolvimento segue pipeline documentado no próprio repositório (`AGENTS.md`):
+spec → tasks → código → revisão, com suíte de regressões HTTP e de layout.
 
 ```bash
 # login de teste em bases já populadas:
