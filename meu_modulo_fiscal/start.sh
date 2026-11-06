@@ -10,7 +10,7 @@ set -e
 #
 # Uso no Dokploy:
 #   - Container Testes: DB_NAME=testes
-#   - Container Prod:   DB_NAME=grupo20mais
+#   - Container Prod:   DB_NAME=base_do_produto
 # ==============================================================================
 
 if [ -n "$DB_NAME" ]; then
