@@ -1,6 +1,6 @@
 """Seam de leitura do limite a prazo pelo PDV (spec: prazo-por-contato, DEC-G).
 
-``res.partner._prazo_limite_credito`` é o ÚNICO ponto que o caixa usa para ler
+``res.partner.prazo_limite_credito`` é o ÚNICO ponto que o caixa usa para ler
 ``credit``/``credit_limit`` — campos restritos aos grupos de contabilidade do
 core. O teste prova que o seam funciona para um usuário de caixa SEM esses
 grupos, que ele devolve somente os dois números e que parceiro inexistente
@@ -42,7 +42,7 @@ class TestPrazoLimitePdv(TransactionCase):
     def test_caixa_sem_contabilidade_le_pelo_seam(self):
         dados = self.env['res.partner'].with_user(
             self.caixa
-        )._prazo_limite_credito(self.partner.id)
+        ).prazo_limite_credito(self.partner.id)
 
         self.assertEqual(set(dados), {'credit', 'credit_limit'},
                          'O seam não pode expor outros campos do contato')
@@ -59,7 +59,7 @@ class TestPrazoLimitePdv(TransactionCase):
 
     def test_parceiro_inexistente_devolve_zeros(self):
         for partner_id in (99999999, False, None):
-            dados = self.env['res.partner']._prazo_limite_credito(partner_id)
+            dados = self.env['res.partner'].prazo_limite_credito(partner_id)
             self.assertEqual(
                 dados, {'credit': 0.0, 'credit_limit': 0.0},
                 'Parceiro inexistente/vazio não pode levantar (trata como sem limite)',

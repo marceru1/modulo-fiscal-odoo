@@ -89,7 +89,7 @@ class ResPartner(models.Model):
         }
 
     @api.model
-    def _prazo_limite_credito(self, partner_id):
+    def prazo_limite_credito(self, partner_id):
         """Leitura mínima de crédito para o PDV (DEC-G da spec).
 
         ``credit`` e ``credit_limit`` são restritos aos grupos de contabilidade
@@ -97,6 +97,11 @@ class ResPartner(models.Model):
         com ``sudo()`` e devolve SÓ esses dois números — nenhum outro campo do
         contato é exposto. O limite é lido no contexto da empresa do usuário
         (``credit_limit`` é company_dependent).
+
+        O nome É público por necessidade: ``odoo/service/model.py``
+        (``get_public_method``) rejeita métodos prefixados por ``_`` em qualquer
+        chamada RPC (``/web/dataset/call_kw`` incluso) — a versão ``_prazo_`` do
+        seam nunca chegava ao servidor e travava a venda a prazo com RPC_ERROR.
 
         Args:
             partner_id (int|False): contato do pedido.

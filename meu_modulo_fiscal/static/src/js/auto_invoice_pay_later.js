@@ -13,7 +13,7 @@ import { ask } from "@point_of_sale/app/store/make_awaitable_dialog";
  *
  * @param {object} partner - res.partner do pedido (usa .name)
  * @param {number} orderTotal - total da compra com imposto
- * @param {object} limiteData - retorno de _prazo_limite_credito → { credit, credit_limit }
+ * @param {object} limiteData - retorno de prazo_limite_credito → { credit, credit_limit }
  * @returns {{ok: boolean, msg?: string, tipo?: string}}
  *   - { ok: true } quando credit + orderTotal <= limite
  *   - { ok: false, tipo: 'excedido', msg } quando limite excedido
@@ -80,10 +80,13 @@ patch(PaymentScreen.prototype, {
 
                     // 1. UMA chamada ao seam com sudo: o caixa não tem os
                     //    grupos de contabilidade, e o método devolve só
-                    //    {credit, credit_limit} do contato (DEC-G).
+                    //    {credit, credit_limit} do contato (DEC-G). O nome é
+                    //    público: RPC rejeita métodos iniciados por "_" e a
+                    //    versão antiga travava com RPC_ERROR (odoo/service/
+                    //    model.py get_public_method).
                     const limiteData = await this.env.services.orm.call(
                         "res.partner",
-                        "_prazo_limite_credito",
+                        "prazo_limite_credito",
                         [partner.id]
                     );
 
