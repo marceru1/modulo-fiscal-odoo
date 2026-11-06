@@ -7,6 +7,17 @@ Controle tributário completo no Odoo 18 (NCM, CFOP, PIS/COFINS) e emissão de
 NFC-e direto no PDV, integrado a um [middleware Laravel](https://github.com/marceru1/middleware_nfce)
 com a API da Focus NFe.
 
+## Pra quê: o POS como frente de venda de um ERP
+
+A arquitetura foi desenhada com um objetivo: adaptar o PDV do Odoo para servir
+de ponto de venda de um ERP — o operador de caixa **finaliza a venda sem sair
+do PDV**, e tudo que a operação pede acontece dentro do fluxo de fechamento do
+pedido: dados fiscais do item, emissão de NFC-e, contingência offline, crédito
+A Prazo e impressão de cupom. O resto do ERP (estoque, financeiro, cadastros)
+fica atrás do balcão, no próprio Odoo.
+
+**Em operação hoje:** 4 caixas em produção.
+
 ## O que o módulo faz
 
 - **Tributação nos produtos** — NCM (tabela completa carregada por CSV), CFOP
@@ -55,8 +66,8 @@ odoo-bin -d sua_base --test-enable --stop-after-init -u meu_modulo_fiscal
 
 ## Estado
 
-Em desenvolvimento ativo, em uso em operação real de PDV. Próximos passos:
-NF-e modelo 55 e mais cobertura nos eventos fiscais.
+Em desenvolvimento ativo, com **4 caixas em produção** rodando em loja física.
+Próximos passos: NF-e modelo 55 e mais cobertura nos eventos fiscais.
 
 ## Licença
 
