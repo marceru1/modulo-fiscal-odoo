@@ -36,10 +36,14 @@ fica atrás do balcão, no próprio Odoo.
 
 ## Arquitetura
 
-```
-Odoo 18 (POS) ──webhook──▶ Middleware NFC-e (Laravel 12) ──▶ Focus NFe ──▶ SEFAZ
-     ▲                                                            │
-     └──────────── status, eventos e contingência ◀───────────────┘
+```mermaid
+flowchart LR
+    A["Odoo 18<br/>POS"] -->|"1 · webhook<br/>(venda fechada)"| B["Middleware NFC-e<br/>Laravel 12"]
+    B -->|"2 · payload fiscal"| C["Focus NFe"]
+    C -->|"3 · transmissão"| D[SEFAZ]
+    D -->|"4 · autorização"| C
+    C -->|"5 · resultado"| B
+    B -->|"6 · status, eventos<br/>e contingência"| A
 ```
 
 O módulo cuida do lado Odoo (dados fiscais, fluxo de venda, contingência, impressão).
