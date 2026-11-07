@@ -28,10 +28,10 @@
         # Faturamento nativa do contato (grupo Credit Limits) e a lista de
         # movimentacoes que antes vivia na view do funcionario.
         'views/res_partner_prazo_views.xml',
-        # prazo-pagar-no-cadastro: wizard do botão "Registrar Pagamento" da aba.
-        # A aba resolve a view pelo método do botão (xmlid em runtime), então
-        # a ordem entre as duas views não é load-bearing.
-        'views/prazo_pagamento_wizard_views.xml',
+        # DESATIVADO 07/11 (pagamento a prazo: so Recebimento do PDV ou
+        # fatura nativa do Odoo): wizard do botao "Registrar Pagamento" do
+        # cadastro ficou dormente (import/ACL/action/testes comentados).
+        # 'views/prazo_pagamento_wizard_views.xml',
         # prazo-por-contato (ticket 08): liga account_use_credit_limit nas
         # empresas para o grupo nativo Credit Limits aparecer na ficha do
         # contato (idempotente — só empresas com a flag falsa).
@@ -39,7 +39,10 @@
         # prazo-fatura-na-aba: retroativo one-shot da fatura no histórico
         # A Prazo (idempotente — roda a cada upgrade sem efeito colateral).
         'data/prazo_fatura_backfill.xml',
-        'views/account_move_hide_outstanding.xml',
+        # DESATIVADO 07/11: o widget nativo "pagamento/outstanding" da fatura
+        # do Odoo VOLTOU — é um dos caminhos válidos de recebimento (PDV ou
+        # fatura nativa). Reverter o hide junto com o wizard.
+        # 'views/account_move_hide_outstanding.xml',
         'views/pos_session_fechamento_views.xml',
         'views/web_login_cleanup.xml',
         'views/pos_order_report_analise_views.xml',

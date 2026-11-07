@@ -2,11 +2,13 @@
 
 Seams testados:
 - ``res.partner.x_historico_prazo_ids`` — histórico filtrado pelo contato;
-- ``res.partner.x_prazo_tem_fatura_aberta`` — visibilidade do botão (DEC-J);
-- ``res.partner.action_registrar_pagamento_prazo`` — abre o wizard com o contato;
+- ``res.partner.x_prazo_tem_fatura_aberta`` — compute do campo do botão
+  (DEC-J). Botão + wizard de pagamento da ficha ficaram DORMENTES em 07/11
+  (pagamento a prazo só pelo Recebimento do PDV ou pela fatura nativa do
+  Odoo) — o compute segue coberto enquanto o campo existir no modelo;
 - ``res.partner`` — a view herdada de ``base.view_partner_form`` abre a aba
-  dedicada ``prazo`` (DEC-B v2, aplicada direta em 07/11) com limite/saldo
-  nativos, botão e histórico. A versão anterior (DEC-B) injetava no grupo
+  dedicada ``prazo`` (DEC-B v2) com limite/saldo nativos e histórico, SEM o
+  botão e o wizard do cadastro. A versão anterior (DEC-B) injetava no grupo
   nativo ``credit_limits`` e escondia o limite atrás do checkbox nativo.
 """
 
@@ -86,11 +88,13 @@ class TestPrazoContato(TransactionCase):
 
         self.assertFalse(self.partner.x_prazo_tem_fatura_aberta)
 
-    def test_botao_abre_o_wizard_com_o_contato(self):
-        acao = self.partner.action_registrar_pagamento_prazo()
-
-        self.assertEqual(acao['res_model'], 'x.prazo.pagamento.wizard')
-        self.assertEqual(acao['context']['default_partner_id'], self.partner.id)
+    # Dormant since 07/11 — wizard of the tab is offline (payment by PDV ticket
+    # or by native Odoo invoice). Tests return with the reactivation.
+    # def test_botao_abre_o_wizard_com_o_contato(self):
+    #     acao = self.partner.action_registrar_pagamento_prazo()
+    #
+    #     self.assertEqual(acao['res_model'], 'x.prazo.pagamento.wizard')
+    #     self.assertEqual(acao['context']['default_partner_id'], self.partner.id)
 
     # ── View: aba dedicada DEC-B v2 ──────────────────────────────────────────
     def test_view_tem_aba_propria_conta_a_prazo(self):
@@ -109,15 +113,21 @@ class TestPrazoContato(TransactionCase):
             'A aba Conta A Prazo deveria existir uma única vez no notebook',
         )
         aba = abas[0]
-        self.assertEqual(
-            len(aba.xpath(".//button[@name='action_registrar_pagamento_prazo']")),
-            1,
-            'Falta o botão Registrar Pagamento na aba Conta A Prazo',
+        # Wizard "Registrar Pagamento" DORMANT 07/11: the button (and its
+        # visibility field) does not have to be present in the tab — payment
+        # on credit only via PDV Receipt or via native Odoo invoice.
+        self.assertFalse(
+            aba.xpath(".//button[@name='action_registrar_pagamento_prazo']"),
+            'There cannot be a Registrar Pagamento button: wizard disabled on 07/11',
+        )
+        self.assertFalse(
+            aba.xpath(".//field[@name='x_prazo_tem_fatura_aberta']"),
+            'The button visibility field also does not appear in the tab',
         )
         self.assertEqual(
             len(aba.xpath(".//field[@name='x_historico_prazo_ids']")),
             1,
-            'Falta o histórico na aba Conta A Prazo',
+            'Missing the history in the Conta A Prazo tab',
         )
         # Limite e saldo NATIVOS, editáveis direto (DEC-B v2) — sem o campo
         # checkbox nativo use_partner_credit_limit na aba.

@@ -20,13 +20,15 @@
                 <page string="Conta A Prazo" name="prazo"
                       groups="account.group_account_invoice,account.group_account_readonly">
                     <field name="currency_id" invisible="1"/>
-                    <field name="x_prazo_tem_fatura_aberta" invisible="1"/>
-                    <!-- DEC-J: o botao so aparece com fatura a prazo em aberto. -->
-                    <button name="action_registrar_pagamento_prazo"
-                            type="object"
-                            string="Registrar Pagamento"
-                            class="btn-primary"
-                            invisible="not x_prazo_tem_fatura_aberta"/>
+                    <!-- DEC-J DESATIVADO 07/11: pagamento a prazo acontece SO
+                         pelo Recebimento do PDV ou pelo botao nativo da fatura
+                         do Odoo. O widget nativo de pagamento voltou (o view
+                         account_move_hide_outstanding.xml saiu do manifest) e
+                         o wizard x.prazo.pagamento.wizard ficou dormente:
+                         action em res_partner.py, view+ACL+import e testes
+                         proprios, todos comentados (reversivel pelo historico).
+                         O nucleo account_move._prazo_registrar_recebimento
+                         segue VIVO para o Recebimento do PDV. -->
                     <group>
                         <group string="Limite e Saldo">
                             <!-- Limite direto, sem dependência do checkbox

@@ -73,20 +73,24 @@ class ResPartner(models.Model):
                 )
             )
 
-    def action_registrar_pagamento_prazo(self):
-        """Abre o wizard de pagamento da conta a prazo do contato (DEC-B)."""
-        self.ensure_one()
-        return {
-            'type': 'ir.actions.act_window',
-            'name': 'Registrar Pagamento',
-            'res_model': 'x.prazo.pagamento.wizard',
-            'view_mode': 'form',
-            'view_id': self.env.ref(
-                'meu_modulo_fiscal.view_prazo_pagamento_wizard_form'
-            ).id,
-            'target': 'new',
-            'context': {'default_partner_id': self.id},
-        }
+    # Desativado em 07/11: pagamento a prazo so pelo Recebimento do PDV ou
+    # pelo botao nativo da fatura (outstanding voltou ao manifest). O wizard
+    # x.prazo.pagamento.wizard ficou dormente (import/ACL/view comentados).
+    # Reativar: reverter o commit da data.
+    # def action_registrar_pagamento_prazo(self):
+    #     """Abre o wizard de pagamento da conta a prazo do contato (DEC-B)."""
+    #     self.ensure_one()
+    #     return {
+    #         'type': 'ir.actions.act_window',
+    #         'name': 'Registrar Pagamento',
+    #         'res_model': 'x.prazo.pagamento.wizard',
+    #         'view_mode': 'form',
+    #         'view_id': self.env.ref(
+    #             'meu_modulo_fiscal.view_prazo_pagamento_wizard_form'
+    #         ).id,
+    #         'target': 'new',
+    #         'context': {'default_partner_id': self.id},
+    #     }
 
     @api.model
     def prazo_limite_credito(self, partner_id):
