@@ -332,8 +332,8 @@ async function main() {
         await runValidate(ctx);
         assert.deepStrictEqual(
             chamadas,
-            [["res.partner", "_prazo_limite_credito", [6]]],
-            "deve ser UMA chamada ao seam do contato"
+            [["res.partner", "prazo_limite_credito", [6]]],
+            "deve ser UMA chamada ao seam do contato (nome público)"
         );
         assert.strictEqual(ctx.__superCalled, true, "ok com limite do contato avança");
         console.log("✓ E2: uma única chamada ao seam do contato, sem searchRead");
@@ -360,8 +360,12 @@ async function main() {
             "o PDV não pode mais ler limite de funcionário"
         );
         assert(
-            source.includes("_prazo_limite_credito"),
-            "o PDV deve ler o limite pelo seam do contato"
+            source.includes('"prazo_limite_credito"'),
+            "o PDV deve ler o limite pelo seam do contato (nome público)"
+        );
+        assert(
+            !source.includes('"_prazo_limite_credito"'),
+            "método com _ é rejeitado pelo RPC (get_public_method) — não pode voltar"
         );
         console.log("✓ F1: JS no bundle POS; teste fora do manifest; sem hr.employee");
     }
