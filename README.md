@@ -4,7 +4,7 @@
 ![Ponto de venda](https://img.shields.io/badge/foco-Point%20of%20Sale-teal)
 
 Controle tributário completo no Odoo 18 (NCM, CFOP, PIS/COFINS) e emissão de
-NFC-e direto no PDV, integrado a um [middleware Laravel](https://github.com/marceru1/middleware_nfce)
+NFC-e direto no PDV, integrado a um [middleware Laravel](https://github.com/marceru1/emissor-nfce)
 com a API da Focus NFe.
 
 ## Pra quê: o POS como frente de venda de um ERP
