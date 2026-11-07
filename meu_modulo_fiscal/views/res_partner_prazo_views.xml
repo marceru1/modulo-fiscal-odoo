@@ -1,26 +1,62 @@
 <?xml version="1.0" encoding="utf-8"?>
 <odoo>
 
-    <!-- Conta a prazo na ficha do CONTATO (spec prazo-por-contato, DEC-B).
-         A herança entra DENTRO do grupo nativo "Credit Limits" da aba
-         Faturamento: assim herda de graça as condições de visibilidade do
-         core (grupo de contabilidade, account_use_credit_limit da empresa e
-         contato filho de empresa). Nenhuma aba e nenhum menu novos. -->
+    <!-- Conta a prazo na ficha do CONTATO — DEC-B v2 (07/11): aba dedicada no
+         notebook (revoga a injeção no grupo Credit Limits da aba Faturamento,
+         cuja UX escondia o campo de limite atrás do checkbox nativo
+         use_partner_credit_limit). Os campos continuam sendo os NATIVOS
+         credit_limit / credit — a mudança é só de apresentação. Mesmos grupos
+         de contabilidade do core: quem hoje enxerga limites continua
+         enxergando; nenhuma autorização nova. O grupo Credit Limits do core
+         segue intocado na aba Faturamento (o limite é o MESMO campo em ambos
+         os lugares). O checkbox nativo não é renderizado aqui: sem write
+         path, ele não consegue restaurar o fallback da empresa. -->
     <record id="view_partner_form_prazo" model="ir.ui.view">
         <field name="name">res.partner.form.prazo</field>
         <field name="model">res.partner</field>
         <field name="inherit_id" ref="base.view_partner_form"/>
         <field name="arch" type="xml">
-            <xpath expr="//group[@name='credit_limits']" position="inside">
-                <!-- DEC-J: o botao so aparece com fatura a prazo em aberto. -->
-                <field name="x_prazo_tem_fatura_aberta" invisible="1"/>
-                <button name="action_registrar_pagamento_prazo"
-                        type="object"
-                        string="Registrar Pagamento"
-                        class="btn-primary"
-                        invisible="not x_prazo_tem_fatura_aberta"/>
-                <separator string="Histórico A Prazo"/>
-                <field name="x_historico_prazo_ids" nolabel="1" readonly="1"/>
+            <xpath expr="//notebook" position="inside">
+                <page string="Conta A Prazo" name="prazo"
+                      groups="account.group_account_invoice,account.group_account_readonly">
+                    <field name="currency_id" invisible="1"/>
+                    <field name="x_prazo_tem_fatura_aberta" invisible="1"/>
+                    <!-- DEC-J: o botao so aparece com fatura a prazo em aberto. -->
+                    <button name="action_registrar_pagamento_prazo"
+                            type="object"
+                            string="Registrar Pagamento"
+                            class="btn-primary"
+                            invisible="not x_prazo_tem_fatura_aberta"/>
+                    <group>
+                        <group string="Limite e Saldo">
+                            <!-- Limite direto, sem dependência do checkbox
+                                 nativo. Company-dependent: valor por empresa. -->
+                            <field name="credit_limit"
+                                   string="Limite A Prazo"
+                                   widget="monetary"
+                                   options="{'currency_field': 'currency_id'}"
+                                   help="Limite de crédito do contato (campo nativo, por empresa). Zerado = bloqueia a venda a prazo no PDV (DEC-C)."/>
+                            <field name="credit"
+                                   string="Saldo em Aberto"
+                                   help="Total contábil a receber do contato nesta empresa — inclui faturas fora do crediário (origem: partner.credit do core)."/>
+                        </group>
+                    </group>
+                    <separator string="Histórico A Prazo"/>
+                    <field name="x_historico_prazo_ids" nolabel="1" readonly="1">
+                        <list>
+                            <field name="data"/>
+                            <field name="tipo"/>
+                            <!-- DEC-C/DEC-003: compras = parcela a prazo do
+                                 cupom; pagamentos = saldo residual APÓS o
+                                 pago. Não é extrato bancário — ver tooltip. -->
+                            <field name="valor"
+                                   string="Valor"
+                                   help="Compras: parcela a prazo do cupom. Pagamentos: saldo da fatura APÓS o pagamento registrado (não é o valor pago)."/>
+                            <field name="fatura_name"/>
+                            <field name="pos_reference"/>
+                        </list>
+                    </field>
+                </page>
             </xpath>
         </field>
     </record>

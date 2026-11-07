@@ -4,8 +4,10 @@ Seams testados:
 - ``res.partner.x_historico_prazo_ids`` — histórico filtrado pelo contato;
 - ``res.partner.x_prazo_tem_fatura_aberta`` — visibilidade do botão (DEC-J);
 - ``res.partner.action_registrar_pagamento_prazo`` — abre o wizard com o contato;
-- view herdada de ``base.view_partner_form`` — tudo DENTRO do grupo nativo
-  ``credit_limits``, sem aba/menu novos (DEC-B).
+- ``res.partner`` — a view herdada de ``base.view_partner_form`` abre a aba
+  dedicada ``prazo`` (DEC-B v2, aplicada direta em 07/11) com limite/saldo
+  nativos, botão e histórico. A versão anterior (DEC-B) injetava no grupo
+  nativo ``credit_limits`` e escondia o limite atrás do checkbox nativo.
 """
 
 from lxml import etree
@@ -90,30 +92,58 @@ class TestPrazoContato(TransactionCase):
         self.assertEqual(acao['res_model'], 'x.prazo.pagamento.wizard')
         self.assertEqual(acao['context']['default_partner_id'], self.partner.id)
 
-    # ── View nativa ──────────────────────────────────────────────────────────
-    def test_view_entra_no_grupo_nativo_sem_aba_nova(self):
-        """A herança injeta histórico/botão DENTRO do grupo Credit Limits da
-        aba Faturamento — herdando as condições de visibilidade do core."""
+    # ── View: aba dedicada DEC-B v2 ──────────────────────────────────────────
+    def test_view_tem_aba_propria_conta_a_prazo(self):
+        """A herança abre a aba dedicada 'prazo' no notebook do contato
+        (DEC-B v2): limite/saldo nativos, botão e histórico reunidos. O mesmo
+        conteúdo NÃO pode estar mais no grupo nativo Credit Limits."""
         arvore = etree.fromstring(
             self.env['res.partner'].get_view(
                 self.env.ref('base.view_partner_form').id, 'form'
             )['arch']
         )
 
+        abas = arvore.xpath("//page[@name='prazo']")
+        self.assertEqual(
+            len(abas), 1,
+            'A aba Conta A Prazo deveria existir uma única vez no notebook',
+        )
+        aba = abas[0]
+        self.assertEqual(
+            len(aba.xpath(".//button[@name='action_registrar_pagamento_prazo']")),
+            1,
+            'Falta o botão Registrar Pagamento na aba Conta A Prazo',
+        )
+        self.assertEqual(
+            len(aba.xpath(".//field[@name='x_historico_prazo_ids']")),
+            1,
+            'Falta o histórico na aba Conta A Prazo',
+        )
+        # Limite e saldo NATIVOS, editáveis direto (DEC-B v2) — sem o campo
+        # checkbox nativo use_partner_credit_limit na aba.
+        self.assertEqual(
+            len(aba.xpath(".//field[@name='credit_limit']")),
+            1,
+            'Falta o campo nativo do limite na aba Conta A Prazo',
+        )
+        self.assertEqual(
+            len(aba.xpath(".//field[@name='credit']")),
+            1,
+            'Falta o campo nativo do saldo na aba Conta A Prazo',
+        )
+        self.assertFalse(
+            aba.xpath(".//field[@name='use_partner_credit_limit']"),
+            'O checkbox nativo não pode aparecer: ele esconde o limite e pode '
+            'restaurar o fallback da empresa',
+        )
+
+        # O grupo nativo Credit Limits segue intocado e sem o conteúdo nosso.
         grupos = arvore.xpath("//group[@name='credit_limits']")
         self.assertEqual(len(grupos), 1, 'O grupo nativo Credit Limits deveria existir')
         grupo = grupos[0]
-        self.assertEqual(
-            len(grupo.xpath(".//button[@name='action_registrar_pagamento_prazo']")),
-            1,
-            'Falta o botão Registrar Pagamento dentro do grupo nativo',
-        )
-        self.assertEqual(
-            len(grupo.xpath(".//field[@name='x_historico_prazo_ids']")),
-            1,
-            'Falta o histórico dentro do grupo nativo',
-        )
         self.assertFalse(
-            arvore.xpath("//page[@name='conta_prazo']"),
-            'Não pode existir aba nova no contato (DEC-B)',
+            grupo.xpath(".//button[@name='action_registrar_pagamento_prazo']")
+            or grupo.xpath(".//field[@name='x_historico_prazo_ids']"),
+            'O conteúdo da conta a prazo não pode ficar duplicado no grupo '
+            'nativo Credit Limits (DEC-B v2: só a aba própria)',
         )
