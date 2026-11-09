@@ -39,7 +39,7 @@
                                    options="{'currency_field': 'currency_id'}"
                                    help="Limite de crédito do contato (campo nativo, por empresa). Zerado = bloqueia a venda a prazo no PDV (DEC-C)."/>
                             <field name="credit"
-                                   string="Saldo em Aberto"
+                                   string="Saldo Utilizado"
                                    help="Total contábil a receber do contato nesta empresa — inclui faturas fora do crediário (origem: partner.credit do core)."/>
                         </group>
                     </group>
