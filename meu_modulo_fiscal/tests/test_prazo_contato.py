@@ -7,8 +7,9 @@ Seams testados:
   (pagamento a prazo só pelo Recebimento do PDV ou pela fatura nativa do
   Odoo) — o compute segue coberto enquanto o campo existir no modelo;
 - ``res.partner`` — a view herdada de ``base.view_partner_form`` abre a aba
-  dedicada ``prazo`` (DEC-B v2) com limite/saldo nativos e histórico, SEM o
-  botão e o wizard do cadastro. A versão anterior (DEC-B) injetava no grupo
+  dedicada ``prazo`` (DEC-B v2) com limite/saldo nativos — SEM botão/do wizard
+  do cadastro E SEM o histórico desde 07/11 (dormente na view; o O2M segue
+  no modelo e testado). A versão anterior (DEC-B) injetava no grupo
   nativo ``credit_limits`` e escondia o limite atrás do checkbox nativo.
 """
 
@@ -99,8 +100,9 @@ class TestPrazoContato(TransactionCase):
     # ── View: aba dedicada DEC-B v2 ──────────────────────────────────────────
     def test_view_tem_aba_propria_conta_a_prazo(self):
         """A herança abre a aba dedicada 'prazo' no notebook do contato
-        (DEC-B v2): limite/saldo nativos, botão e histórico reunidos. O mesmo
-        conteúdo NÃO pode estar mais no grupo nativo Credit Limits."""
+        (DEC-B v2): limite/saldo nativos, sem botão (wizard desativado 07/11)
+        e sem histórico (fora da aba 07/11). O mesmo conteúdo NÃO pode estar
+        mais no grupo nativo Credit Limits."""
         arvore = etree.fromstring(
             self.env['res.partner'].get_view(
                 self.env.ref('base.view_partner_form').id, 'form'
@@ -113,21 +115,21 @@ class TestPrazoContato(TransactionCase):
             'A aba Conta A Prazo deveria existir uma única vez no notebook',
         )
         aba = abas[0]
-        # Wizard "Registrar Pagamento" DORMANT 07/11: the button (and its
-        # visibility field) does not have to be present in the tab — payment
-        # on credit only via PDV Receipt or via native Odoo invoice.
+        # Dormentes desde 07/11: botão/wizard do cadastro e histórico fora da
+        # aba — Limite e Saldo nativos são o único conteúdo.
         self.assertFalse(
             aba.xpath(".//button[@name='action_registrar_pagamento_prazo']"),
-            'There cannot be a Registrar Pagamento button: wizard disabled on 07/11',
+            'Não pode existir botão Registrar Pagamento: wizard desativado '
+            'em 07/11 (pagamento por PDV ou fatura nativa)',
         )
         self.assertFalse(
             aba.xpath(".//field[@name='x_prazo_tem_fatura_aberta']"),
-            'The button visibility field also does not appear in the tab',
+            'O campo de visibilidade do botão (dormente) não aparece na aba',
         )
-        self.assertEqual(
-            len(aba.xpath(".//field[@name='x_historico_prazo_ids']")),
-            1,
-            'Missing the history in the Conta A Prazo tab',
+        self.assertFalse(
+            aba.xpath(".//field[@name='x_historico_prazo_ids']"),
+            'Histórico FORA da aba desde 07/11 — a aba fica só com Limite e '
+            'Saldo (o O2M segue vivo no modelo)',
         )
         # Limite e saldo NATIVOS, editáveis direto (DEC-B v2) — sem o campo
         # checkbox nativo use_partner_credit_limit na aba.
