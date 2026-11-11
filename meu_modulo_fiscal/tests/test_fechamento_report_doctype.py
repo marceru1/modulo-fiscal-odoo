@@ -12,6 +12,7 @@ o DOCTYPE virava texto visível impresso no topo do cupom.
 Seam testado: a resposta HTTP bruta da rota (comportamento externo), não a
 implementação interna do controller.
 """
+import os
 import re
 
 from odoo.tests import HttpCase, tagged
@@ -23,11 +24,13 @@ class TestFechamentoReportDoctype(HttpCase):
 
     def setUp(self):
         super().setUp()
-        # Usa um usuário real da base: authenticate() resolve credenciais
-        # contra res.users, então 'admin'/'admin' (padrão em bases novas) não
-        # existe aqui — derrubaria o teste com KeyError, não com o bug real.
+        # Login de teste configurável via MFISCAL_TEST_LOGIN: authenticate()
+        # resolve credenciais contra res.users, e o 'admin' de bases padrão
+        # não existe em bases já populadas — exporte o login real ou caia no
+        # fallback base.user_admin.
+        test_login = os.environ.get('MFISCAL_TEST_LOGIN', 'admin')
         self.admin_user = self.env['res.users'].search(
-            [('login', '=', 'adm@base-producao.com.br')], limit=1
+            [('login', '=', test_login)], limit=1
         ) or self.env.ref('base.user_admin')
         self.journal = self.env['account.journal'].create({
             'name': 'Diário PDV Teste Doctype',
