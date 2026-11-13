@@ -1,12 +1,44 @@
 import json
 import requests
 import pytz
+from collections import defaultdict
+from datetime import datetime
 from odoo import models, api, fields, _
 from odoo.exceptions import AccessError
+from odoo.osv.expression import AND
 import logging
 import os
 
 _logger = logging.getLogger(__name__)
+
+# Ordenações aceitas por search_paid_order_ids. O valor vai para o ORDER BY do
+# search, então é whitelist fechada — nunca interpolar string vinda do cliente.
+# O default é o mesmo do core (addons/point_of_sale/models/pos_order.py:1335).
+ORDEM_PEDIDOS_PAGOS_PADRAO = 'create_date desc'
+ORDENS_PEDIDOS_PAGOS = frozenset({
+    'create_date asc',
+    'create_date desc',
+    'date_order asc',
+    'date_order desc',
+})
+
+
+def normalizar_ordem_pedidos_pagos(order):
+    """Normaliza/restringe o ``order`` vindo do POS.
+
+    Devolve sempre uma entrada da whitelist; qualquer valor fora dela cai no
+    default do core (chamada sem parâmetro continua idêntica ao core).
+    """
+    if not order:
+        return ORDEM_PEDIDOS_PAGOS_PADRAO
+    chave = ' '.join(str(order).split()).lower()
+    if chave not in ORDENS_PEDIDOS_PAGOS:
+        _logger.warning(
+            '[PAGO-VENDAS-DO-DIA] order inválido ignorado: %r — usando %r',
+            order, ORDEM_PEDIDOS_PAGOS_PADRAO,
+        )
+        return ORDEM_PEDIDOS_PAGOS_PADRAO
+    return chave
 
 BASE_URL = os.environ.get('MIDDLEWARE_URL', 'http://127.0.0.1:8000')
 API_LARAVEL_URL = f"{BASE_URL}/api/odoo/webhook"
@@ -155,6 +187,59 @@ class PosOrder(models.Model):
                 order.amount_total += order.x_amount_other_value
             if order.x_discount_value:
                 order.amount_total -= order.x_discount_value
+
+    # ==========================================================
+    # LISTA DE PEDIDOS PAGOS DO PDV (tab "Pago")
+    # ==========================================================
+    @api.model
+    def search_paid_order_ids(self, config_id, domain, limit, offset, order=None):
+        """Busca de pedidos pagos com ordenação opcional (spec pago-vendas-do-dia, DEC-002).
+
+        O core (``addons/point_of_sale/models/pos_order.py:1327-1355``) fixa
+        ``create_date desc`` — ordem decrescente de criação, que é o que a tela
+        mostra hoje. O tab "Pago" ganhou o toggle "Mais antigas", e paginar do
+        início do dia exige que o SERVIDOR devolva os registros em ordem
+        ascendente (offset/limit incidem sobre a ordem do banco).
+
+        A chamada sem ``order`` delega ao ``super`` — retrocompatibilidade
+        literal: mesma ordem, mesmo retorno. As demais ordens da whitelist
+        repetem o corpo do core trocando apenas o ``order`` do ``search``.
+        """
+        ordem = normalizar_ordem_pedidos_pagos(order)
+        if ordem == ORDEM_PEDIDOS_PAGOS_PADRAO:
+            return super().search_paid_order_ids(config_id, domain, limit, offset)
+
+        default_domain = [('state', '!=', 'draft'), ('state', '!=', 'cancel')]
+        if domain == []:
+            real_domain = AND([[['config_id', '=', config_id]], default_domain])
+        else:
+            real_domain = AND([domain, default_domain])
+        orders = self.search(real_domain, limit=limit, offset=offset, order=ordem)
+
+        # Mesmo pós-filtro do core: currency_id não é armazenado, então não dá
+        # para filtrar no domain. Aplicado DEPOIS do limit/offset, como no core.
+        pos_config = self.env['pos.config'].browse(config_id)
+        orders = orders.filtered(lambda o: o.currency_id == pos_config.currency_id)
+        orderlines = self.env['pos.order.line'].search([
+            '|',
+            ('refunded_orderline_id.order_id', 'in', orders.ids),
+            ('order_id', 'in', orders.ids),
+        ])
+
+        # ordersInfo: id → data da última modificação de uma linha (ou da linha
+        # estornada), igual ao core — o front usa para decidir o que reler.
+        orders_info = defaultdict(lambda: datetime.min)
+        for orderline in orderlines:
+            key_order = (
+                orderline.order_id.id
+                if orderline.order_id in orders
+                else orderline.refunded_orderline_id.order_id.id
+            )
+            if orders_info[key_order] < orderline.write_date:
+                orders_info[key_order] = orderline.write_date
+
+        totalCount = self.search_count(real_domain)
+        return {'ordersInfo': list(orders_info.items())[::-1], 'totalCount': totalCount}
 
     def _register_prazo_movimentacoes(self):
         """
