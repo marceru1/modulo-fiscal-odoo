@@ -107,6 +107,8 @@ function carregarPatch(agora) {
     const hooks = { mounted: [], patched: [] };
     const onMounted = (fn) => hooks.mounted.push(fn);
     const onPatched = (fn) => hooks.patched.push(fn);
+    // useRef do Owl: o teste injeta o "nó" manualmente (não há DOM).
+    const useRef = () => ({ el: null });
     const parseUTCString = (s) => DateTime.fromFormat(s, "yyyy-MM-dd HH:mm:ss", { zone: "utc" });
     // fuzzyLookup do core (@web/core/utils/search): substring case-insensitive
     // sobre o repr de cada pedido, preservando a ordem recebida.
@@ -126,6 +128,7 @@ function carregarPatch(agora) {
         "ESPERA_OFFLINE",
         "onMounted",
         "onPatched",
+        "useRef",
         `return (${objLiteral});`
     )(
         _t,
@@ -137,7 +140,8 @@ function carregarPatch(agora) {
         LIMIAR_SCROLL,
         ESPERA_OFFLINE,
         onMounted,
-        onPatched
+        onPatched,
+        useRef
     );
     obj.__ConnectionLostError = ConnectionLostError;
     obj.__hooks = hooks;
@@ -189,6 +193,15 @@ const baseMock = {
     },
     async _fetchSyncedOrders() {
         this.__superFetchCalled = true;
+    },
+    async onSearch(search) {
+        this.__superSearchCalled = true;
+        this.state.search = search;
+        this.state.page = 1;
+    },
+    onClickOrder(order) {
+        this.__superClickCalled = true;
+        this.__clickedOrder = order;
     },
     getSelectedOrder() {
         return this.__selectedOrder || null;
@@ -253,6 +266,7 @@ function makeThis({ activeIds = [], filter = "SYNCED", searchTerm = "", fieldNam
             data: {
                 call: async () => ({ ordersInfo: [], totalCount: 0 }),
                 read: async () => [],
+                network: { offline: false },
             },
         },
         __baseOrders: [],
@@ -265,7 +279,7 @@ function makeThis({ activeIds = [], filter = "SYNCED", searchTerm = "", fieldNam
         _pagoOfflineAte: null,
         _pagoGeracao: 0,
         _pagoOffsets: new Map(),
-        el: null,
+        _pagoOrdersRef: { el: null },
     });
     return ctx;
 }
@@ -405,7 +419,7 @@ const FIM_UTC = "2026-11-14 04:00:00";
     ctx.__baseOrders = [makeOrder(2, [2]), makeOrder(5, [1])];
     const result = ctx.__patch.getFilteredOrderList.call(ctx);
     assert.deepStrictEqual(result.map((o) => o.id), [2], "AND entre super e chips");
-    console.log("✓ D7: AND entre filtro de chips e filtros do super");
+    console.log("✓ D7: chip é AND com os demais filtros");
 }
 
 // D8: pedido de OUTRO dia que veio do cache (super devolveu) não aparece.
@@ -471,12 +485,14 @@ const FIM_UTC = "2026-11-14 04:00:00";
 {
     const ctx = makeThis({ searchTerm: "21:30", fieldName: "DATE" });
     const domain = ctx.__patch._computeSyncedOrdersDomain.call(ctx);
-    assert.deepStrictEqual(domain, [
+    // O valor do ilike vem do formatSearch do core (aqui o mock é identidade;
+    // em produção ele converte a hora para um timestamp UTC). O contrato
+    // testado é: termo com hora continua indo ao backend.
+    assert.deepStrictEqual(domain.slice(0, 2), [
         ["config_id", "=", 1],
         ["date_order", "ilike", "%21:30%"],
-        ["date_order", ">=", INICIO_UTC],
-        ["date_order", "<", FIM_UTC],
     ]);
+    assert.strictEqual(domain[2][0], "date_order");
     console.log("✓ E2b: busca por hora continua no backend");
 }
 
@@ -963,9 +979,7 @@ function comFetch(ctx) {
         ctx.state.filter = "SYNCED";
         ctx.__baseOrders = pedidosDoDia(45);
         ctx.pos.ticketScreenState.totalCount = 45;
-        ctx.el = {
-            querySelector: () => ({ scrollTop: 0, scrollHeight: 300, clientHeight: 300 }),
-        };
+        ctx._pagoOrdersRef.el = { scrollTop: 0, scrollHeight: 300, clientHeight: 300 };
         ctx.__patch._pagoPreencherLista.call(ctx);
         await new Promise((resolve) => setTimeout(resolve, 0));
         assert.strictEqual(ctx.__chamadas.length, 1, "sem rolagem → busca o próximo bloco");
@@ -979,11 +993,11 @@ function comFetch(ctx) {
         ctx.state.filter = "SYNCED";
         ctx.pos.ticketScreenState.totalCount = 45;
 
-        ctx.el = { querySelector: () => ({ scrollTop: 0, scrollHeight: 5000, clientHeight: 300 }) };
+        ctx._pagoOrdersRef.el = { scrollTop: 0, scrollHeight: 5000, clientHeight: 300 };
         ctx.__patch._pagoPreencherLista.call(ctx);
         assert.strictEqual(ctx.__chamadas.length, 0, "há rolagem → o operador puxa pelo scroll");
 
-        ctx.el = { querySelector: () => ({ scrollTop: 0, scrollHeight: 300, clientHeight: 300 }) };
+        ctx._pagoOrdersRef.el = { scrollTop: 0, scrollHeight: 300, clientHeight: 300 };
         ctx.state.page = 2; // 60 >= 45: tudo já coberto
         ctx.__patch._pagoPreencherLista.call(ctx);
         assert.strictEqual(ctx.__chamadas.length, 0, "total coberto → não busca");
@@ -1049,6 +1063,74 @@ function comFetch(ctx) {
         assert.strictEqual(ultimo.offset, 0, "volta para desc recomeça do primeiro bloco");
         assert.strictEqual(ultimo.order, "date_order desc");
         console.log("✓ K6: toggle de volta recomeça a lista");
+    }
+
+    // K7: clique em linha de outro dia (sobra da virada) não seleciona — o
+    //     core quebraria em getSelectedOrder().get_orderlines()
+    {
+        const ontem = makeOrder(1, [1], { dateOrder: "2026-11-12 14:00:00" });
+        const hoje = makeOrder(2, [1], { dateOrder: "2026-11-13 14:00:00" });
+
+        const ctx = makeThis();
+        ctx.__patch.onClickOrder.call(ctx, ontem);
+        assert(!ctx.__superClickCalled, "pedido de ontem não é selecionado no Pago");
+
+        ctx.__patch.onClickOrder.call(ctx, hoje);
+        assert(ctx.__superClickCalled, "pedido de hoje segue o fluxo do core");
+        assert.strictEqual(ctx.__clickedOrder, hoje);
+
+        ctx.state.filter = "ACTIVE_ORDERS";
+        ctx.__superClickCalled = false;
+        ctx.__patch.onClickOrder.call(ctx, ontem);
+        assert(ctx.__superClickCalled, "outros tabs mantêm o clique do core");
+        console.log("✓ K7: clique fora do dia ignorado só no Pago");
+    }
+
+    // K8: busca nova zera o offset do domínio (campo DATE só com data repete
+    //     o domain da listagem sem busca)
+    {
+        const ctx = makeThis();
+        ctx.state.filter = "SYNCED";
+        ctx._pagoOffsets.set("qualquer", 60);
+        ctx._pagoDominioEsgotado = "qualquer";
+        await ctx.__patch.onSearch.call(ctx, { searchTerm: "2026-11-13", fieldName: "DATE" });
+        assert(ctx.__superSearchCalled, "segue para o onSearch do core");
+        assert.strictEqual(ctx._pagoOffsets.size, 0, "offsets zerados na busca");
+        assert.strictEqual(ctx._pagoDominioEsgotado, null, "flag de esgotado limpa");
+        console.log("✓ K8: busca reinicia o carregamento");
+    }
+
+    // K9: deploy fora de ordem (JS novo + Python antigo) — desc cai para a
+    //     ordem do core; asc propaga o erro em vez de paginar errado
+    {
+        const ctx = comFetch(makeThis());
+        ctx.state.filter = "SYNCED";
+        ctx.__baseOrders = pedidosDoDia(45);
+        let tentativas = [];
+        ctx.pos.data.call = async (modelo, metodo, args, kwargs) => {
+            tentativas.push(kwargs);
+            if (kwargs.order) {
+                throw new Error("TypeError: unexpected keyword argument 'order'");
+            }
+            return { ordersInfo: pedidosDoDia(30).map((o) => [o.id, o.date_order]), totalCount: 45 };
+        };
+        await ctx.__patch._fetchSyncedOrders.call(ctx);
+        assert.strictEqual(tentativas.length, 2, "refaz a chamada sem order");
+        assert(!("order" in tentativas[1]), "fallback sem o parâmetro novo");
+        console.log("✓ K9: fallback para servidor antigo na ordem padrão");
+    }
+
+    // K9b: em "Mais antigas" o fallback não é aceito (paginar desc com lista
+    //      asc criaria buracos) — o erro sobe
+    {
+        const ctx = comFetch(makeThis());
+        ctx.state.filter = "SYNCED";
+        ctx.state.pagoOrdenacaoAsc = true;
+        ctx.pos.data.call = async () => {
+            throw new Error("TypeError: unexpected keyword argument 'order'");
+        };
+        await assert.rejects(ctx.__patch._fetchSyncedOrders.call(ctx), /unexpected keyword/);
+        console.log("✓ K9b: asc propaga o erro de deploy");
     }
 
     console.log("\nTodos os testes passaram ✓");

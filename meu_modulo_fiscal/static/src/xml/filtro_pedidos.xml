@@ -32,6 +32,9 @@
              a avisar quando o fim está próximo. O handler só age no SYNCED. -->
         <xpath expr="//div[hasclass('orders')]" position="attributes">
             <attribute name="t-on-scroll">onPagoScroll</attribute>
+            <!-- Owl 2 não expõe `this.el`: o JS acha o container rolável por
+                 esta ref (useRef, owl.js:6160) para o auto-preenchimento. -->
+            <attribute name="t-ref">pagoOrders</attribute>
         </xpath>
         <xpath expr="//div[hasclass('controls')]" position="after">
             <t t-if="state.filter === 'SYNCED'">

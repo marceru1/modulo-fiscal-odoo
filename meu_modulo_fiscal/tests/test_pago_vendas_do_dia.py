@@ -49,7 +49,10 @@ class TestPagoVendasDoDia(TransactionCase):
         return {info[0] for info in resultado['ordersInfo']}
 
     # ── Default idêntico ao core (retrocompatibilidade) ──────────────────────
-    def test_sem_order_bate_com_o_default_do_core(self):
+    def test_sem_order_equivale_ao_default_explicito(self):
+        """As duas formas caem no mesmo branch (delegação ao super): mesma
+        lista e mesmo totalCount. A paridade de ordem com o core é garantida
+        pela delegação, não por uma segunda implementação."""
         pedidos = [
             self._pedido('2026-11-13 08:00:00'),
             self._pedido('2026-11-13 12:00:00'),
@@ -153,6 +156,21 @@ class TestPagoVendasDoDia(TransactionCase):
             order='date_order asc',
             domain=[['config_id', '=', self.pos_config.id]],
         )
+
+        self.assertEqual(self._ids(resultado), {meu.id})
+        self.assertEqual(resultado['totalCount'], 1)
+
+    def test_order_nao_default_com_domain_vazio_filtra_a_loja(self):
+        """O branch não-default repete o core: com `domain=[]` o `config_id`
+        entra no domain. Sem isso, um chamador com order e sem domain veria
+        pedidos de todos os caixas."""
+        meu = self._pedido('2026-11-13 10:00:00')
+
+        _outro_config, outra_sessao = self._segundo_caixa()
+        de_outro = self._pedido('2026-11-13 11:00:00')
+        de_outro.write({'session_id': outra_sessao.id})
+
+        resultado = self._buscar(order='date_order asc')  # helper manda domain=[]
 
         self.assertEqual(self._ids(resultado), {meu.id})
         self.assertEqual(resultado['totalCount'], 1)

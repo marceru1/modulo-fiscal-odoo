@@ -202,7 +202,9 @@ function assertBalancedTags(source) {
     );
     assert(bloco, "deve registrar o scroll em div.orders");
     assert(/<attribute name="t-on-scroll">onPagoScroll<\/attribute>/.test(bloco[1]), "handler onPagoScroll");
-    console.log("✓ 13: scroll infinito registrado em div.orders");
+    // Owl 2 não tem `this.el`; o JS acha o container pelo useRef.
+    assert(/<attribute name="t-ref">pagoOrders<\/attribute>/.test(bloco[1]), "t-ref pagoOrders para o useRef");
+    console.log("✓ 13: scroll infinito registrado em div.orders (com t-ref)");
 }
 
 // ── 14: toggle de ordenação na fila dos chips (ticket 04, DEC-006/007) ────

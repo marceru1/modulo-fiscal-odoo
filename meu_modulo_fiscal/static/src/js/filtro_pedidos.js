@@ -35,7 +35,7 @@ import { _t } from "@web/core/l10n/translation";
 import { parseUTCString } from "@point_of_sale/utils";
 import { fuzzyLookup } from "@web/core/utils/search";
 import { ConnectionLostError } from "@web/core/network/rpc";
-import { onMounted, onPatched } from "@odoo/owl";
+import { onMounted, onPatched, useRef } from "@odoo/owl";
 
 const { DateTime } = luxon;
 
@@ -68,6 +68,10 @@ patch(TicketScreen.prototype, {
         // mapa vive na sessão do POS e vaza entre aberturas da tela (entrar de
         // novo com offset antigo pularia os primeiros blocos).
         this._pagoOffsets = new Map();
+        // Container rolável da lista. Em Owl 2 o componente NÃO tem `this.el`:
+        // a referência ao nó vem do `t-ref` (owl.js:6160 useRef). O atributo
+        // é injetado no div.orders do core pela herança do template.
+        this._pagoOrdersRef = useRef("pagoOrders");
         // Lista curta demais para rolar (filtro/chips escondendo linhas) não
         // emite scroll — depois de cada render completa até ter rolagem ou
         // esgotar o domínio.
@@ -245,6 +249,34 @@ patch(TicketScreen.prototype, {
     },
 
     /**
+     * Clique em pedido de outro dia (linha que sobrou de ontem na virada, antes
+     * do próximo render) não seleciona. Sem esta guarda o core quebraria:
+     * `onClickOrder` chama `getSelectedOrder().get_orderlines()`
+     * (ticket_screen.js:136) e o override de `getSelectedOrder` devolve null.
+     */
+    onClickOrder(clickedOrder) {
+        if (
+            this.state.filter === "SYNCED" &&
+            clickedOrder &&
+            !this._pagoDentroDoDia(clickedOrder)
+        ) {
+            return;
+        }
+        return super.onClickOrder(...arguments);
+    },
+
+    /**
+     * Busca nova recomeça a lista: o domain pode até repetir o mesmo texto (ex:
+     * campo DATE só com data, que é filtrado no cliente), mas o carregamento
+     * não pode continuar do offset antigo.
+     */
+    async onSearch(search) {
+        this._pagoOffsets.clear();
+        this._pagoDominioEsgotado = null;
+        return super.onSearch(...arguments);
+    },
+
+    /**
      * Ordena como o sortOrders do core (ticket_screen.js:364-385): date_order
      * e, no empate, o número do pedido em `name`. Ascendente quando o toggle
      * está em "Mais antigas" — a mesma direção que o servidor pagina.
@@ -312,6 +344,10 @@ patch(TicketScreen.prototype, {
         if (this._pagoOfflineAte && Date.now() < this._pagoOfflineAte) {
             return;
         }
+        // Browser já sabe que está sem rede (data_service.js:63-65): nem tenta.
+        if (this.pos.data.network && this.pos.data.network.offline) {
+            return;
+        }
         const alvo = event && event.target;
         if (!alvo) {
             return;
@@ -347,7 +383,7 @@ patch(TicketScreen.prototype, {
         if (!total || this.state.page * PAGINA >= total) {
             return;
         }
-        const el = this.el && this.el.querySelector(".orders");
+        const el = this._pagoOrdersRef && this._pagoOrdersRef.el;
         if (!el) {
             return;
         }
@@ -355,6 +391,36 @@ patch(TicketScreen.prototype, {
             return;
         }
         this.onPagoScroll({ target: el });
+    },
+
+    /**
+     * Chamada do fetch com tolerância à ordem do deploy: assets JS regeneram
+     * sozinhos, mas o Python só muda com restart. Se o browser pegar o JS novo
+     * antes do restart, o servidor rejeita o kwarg `order`. Na ordem padrão
+     * (desc) a chamada é refeita sem ele — a lista funciona com o default do
+     * core até reiniciar. Em "Mais antigas" o erro sobe: sem `order` o
+     * servidor paginaria na direção errada.
+     */
+    async _pagoBuscarPedidos(kwargs) {
+        try {
+            return await this.pos.data.call("pos.order", "search_paid_order_ids", [], kwargs);
+        } catch (error) {
+            if (
+                this.state.pagoOrdenacaoAsc ||
+                error instanceof ConnectionLostError ||
+                !kwargs.order
+            ) {
+                throw error;
+            }
+            const semOrdem = { ...kwargs };
+            delete semOrdem.order;
+            console.warn(
+                "[PAGO] servidor não aceitou o parâmetro order; usando a ordem do core " +
+                    "(reinicie o Odoo) —",
+                error
+            );
+            return await this.pos.data.call("pos.order", "search_paid_order_ids", [], semOrdem);
+        }
     },
 
     /**
@@ -392,12 +458,7 @@ patch(TicketScreen.prototype, {
 
         let resposta;
         try {
-            resposta = await this.pos.data.call(
-                "pos.order",
-                "search_paid_order_ids",
-                [],
-                kwargs
-            );
+            resposta = await this._pagoBuscarPedidos(kwargs);
         } catch (error) {
             if (error instanceof ConnectionLostError) {
                 // Offline: mantém o que já está carregado, sem erro e sem
@@ -442,7 +503,10 @@ patch(TicketScreen.prototype, {
         // totalCount continua no estado do core (getNbrPages do tab Pago fica
         // oculto, mas o valor é usado pelo auto-preenchimento acima).
         this.pos.ticketScreenState.totalCount = totalCount;
-        this.state.page = Math.max(1, Math.ceil(novoOffset / PAGINA));
+        // Nunca diminui a página visível: uma continuação que começa do zero
+        // (ex: volta de offline, todos os ids já em cache) não pode encolher
+        // a lista; busca e troca de ordenação resetam `page` explicitamente.
+        this.state.page = Math.max(this.state.page, Math.ceil(novoOffset / PAGINA));
         // Esgotado: alcançou o total do domínio ou o servidor não devolveu
         // nada novo — para de buscar até o domínio mudar (busca/dia/ordem).
         this._pagoDominioEsgotado =
