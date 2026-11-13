@@ -182,8 +182,9 @@ function assertBalancedTags(source) {
         /state\.filter === 'SYNCED'/.test(bloco[1]),
         "a ocultação de contador/botões vale só no tab Pago"
     );
-    // t-attf-class repete a string estática: o atributo dinâmico substitui o
-    // class do nó compilado (ir_qweb.py, addAttributes()).
+    // t-attf-class repete a string estática: no QWeb o atributo dinâmico
+    // substitui o class do nó compilado (ir_qweb.py, addAttributes()); no Owl
+    // as classes somam — repetir está correto nos dois motores.
     assert(
         /item d-flex align-items-center justify-content-end/.test(bloco[1]),
         "t-attf-class precisa repetir as classes originais do nó"
@@ -202,6 +203,32 @@ function assertBalancedTags(source) {
     assert(bloco, "deve registrar o scroll em div.orders");
     assert(/<attribute name="t-on-scroll">onPagoScroll<\/attribute>/.test(bloco[1]), "handler onPagoScroll");
     console.log("✓ 13: scroll infinito registrado em div.orders");
+}
+
+// ── 14: toggle de ordenação na fila dos chips (ticket 04, DEC-006/007) ────
+{
+    const blocoChips = xml.match(
+        /<div t-attf-class="payment-filter-chips[\s\S]*?<\/div>\s*<\/t>/
+    );
+    assert(blocoChips, "bloco dos chips não encontrado");
+    const chips = blocoChips[0];
+
+    const idxToggle = chips.indexOf("setPagoOrdenacao(false)");
+    const idxAntigas = chips.indexOf("setPagoOrdenacao(true)");
+    const idxForeach = chips.indexOf("t-foreach=\"getAvailablePaymentMethods()\"");
+    assert(idxToggle !== -1, "toggle deve chamar setPagoOrdenacao(false) (Mais próximas)");
+    assert(idxAntigas !== -1, "toggle deve chamar setPagoOrdenacao(true) (Mais antigas)");
+    assert(idxForeach !== -1 && idxForeach > idxToggle, "toggle vive na MESMA fila dos chips");
+    assert(/Mais próximas/.test(chips) && /Mais antigas/.test(chips), "os dois rótulos presentes");
+    assert(/aria-label="Ordenação por data"/.test(chips), "grupo acessível (aria-label)");
+    assert(
+        /t-attf-aria-pressed="#\{state\.pagoOrdenacaoAsc \? 'false' : 'true'\}"/.test(chips),
+        "estado do toggle exposto em aria-pressed"
+    );
+    // Atalhos no PDV são letras (A–E); o toggle não pode capturar tecla.
+    assert(!/t-on-keydown/.test(xml), "toggle sem atalho de teclado");
+    assert(!/position="replace"/.test(xml), "nunca replace");
+    console.log("✓ 14: toggle na fila dos chips, só no SYNCED, sem atalho");
 }
 
 console.log("\nTodos os testes passaram ✓");

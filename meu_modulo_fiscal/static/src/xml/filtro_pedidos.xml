@@ -21,8 +21,9 @@
         <!-- Tab "Pago": paginação do core oculta (contador "1/10" e ◀ ▶).
              Nunca replace: o nó continua no DOM (position="attributes"), só
              ganha a classe de ocultação. t-attf-class repete a string estática
-             porque o atributo dinâmico SUBSTITUI o class do nó (ir_qweb.py,
-             addAttributes()). Os demais tabs mantêm contador e botões. -->
+             para valer nos dois motores: no QWeb o atributo dinâmico
+             SUBSTITUI o class do nó (ir_qweb.py, addAttributes()); no Owl as
+             classes se somam. Os demais tabs mantêm contador e botões. -->
         <xpath expr="//div[hasclass('controls')]/div[hasclass('item')]" position="attributes">
             <attribute name="t-attf-class">item d-flex align-items-center justify-content-end #{state.filter === 'SYNCED' ? 'd-none' : ''}</attribute>
         </xpath>
@@ -40,6 +41,17 @@
                      No mobile a linha vira scroll horizontal (flex-nowrap +
                      overflow-x) para não empilhar muitos métodos. -->
                 <div t-attf-class="payment-filter-chips d-flex gap-2 px-2 pb-2 #{ui.isSmall ? 'flex-nowrap overflow-x-auto' : 'flex-wrap'}">
+                    <!-- Toggle de ordenação (DEC-006/DEC-007), na MESMA fila
+                         dos chips: nenhum ponto de ancoragem novo. Sem atalho
+                         de teclado (no PDV, teclas são A–E, nunca dígitos). -->
+                    <div class="btn-group btn-group-sm" role="group" aria-label="Ordenação por data">
+                        <button t-attf-class="btn text-nowrap #{state.pagoOrdenacaoAsc ? 'btn-outline-secondary' : 'btn-primary'}"
+                                t-attf-aria-pressed="#{state.pagoOrdenacaoAsc ? 'false' : 'true'}"
+                                t-on-click="() =&gt; this.setPagoOrdenacao(false)">Mais próximas</button>
+                        <button t-attf-class="btn text-nowrap #{state.pagoOrdenacaoAsc ? 'btn-primary' : 'btn-outline-secondary'}"
+                                t-attf-aria-pressed="#{state.pagoOrdenacaoAsc ? 'true' : 'false'}"
+                                t-on-click="() =&gt; this.setPagoOrdenacao(true)">Mais antigas</button>
+                    </div>
                     <t t-foreach="getAvailablePaymentMethods()" t-as="method" t-key="method.id">
                         <button t-attf-class="btn btn-sm text-nowrap #{state.activePaymentMethodIds.has(method.id) ? 'btn-primary' : 'btn-outline-secondary'}"
                                 t-on-click="() =&gt; this.onTogglePaymentChip(method.id)">

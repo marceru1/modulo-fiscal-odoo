@@ -49,6 +49,7 @@ function lerConstante(nome) {
 }
 const PAGINA = lerConstante("PAGINA");
 const LIMIAR_SCROLL = lerConstante("LIMIAR_SCROLL");
+const ESPERA_OFFLINE = lerConstante("ESPERA_OFFLINE");
 
 // ── Luxon vendorizado do Odoo (mesmo build que o browser carrega) ─────────
 const luxonSrc = fs.readFileSync(LUXON_PATH, "utf8");
@@ -101,6 +102,11 @@ const _t = (s) => s;
 // de rollover trocam a data e reconstroem o objeto do patch.
 function carregarPatch(agora) {
     const DateTimeFake = { now: () => agora };
+    // Hooks do Owl usados no setup do patch: registram o callback, que o
+    // teste dispara manualmente (onMounted/onPatched).
+    const hooks = { mounted: [], patched: [] };
+    const onMounted = (fn) => hooks.mounted.push(fn);
+    const onPatched = (fn) => hooks.patched.push(fn);
     const parseUTCString = (s) => DateTime.fromFormat(s, "yyyy-MM-dd HH:mm:ss", { zone: "utc" });
     // fuzzyLookup do core (@web/core/utils/search): substring case-insensitive
     // sobre o repr de cada pedido, preservando a ordem recebida.
@@ -117,9 +123,24 @@ function carregarPatch(agora) {
         "ConnectionLostError",
         "PAGINA",
         "LIMIAR_SCROLL",
+        "ESPERA_OFFLINE",
+        "onMounted",
+        "onPatched",
         `return (${objLiteral});`
-    )(_t, DateTimeFake, parseUTCString, fuzzyLookup, ConnectionLostError, PAGINA, LIMIAR_SCROLL);
+    )(
+        _t,
+        DateTimeFake,
+        parseUTCString,
+        fuzzyLookup,
+        ConnectionLostError,
+        PAGINA,
+        LIMIAR_SCROLL,
+        ESPERA_OFFLINE,
+        onMounted,
+        onPatched
+    );
     obj.__ConnectionLostError = ConnectionLostError;
+    obj.__hooks = hooks;
     return obj;
 }
 
@@ -134,7 +155,14 @@ const DATE_BASE = {
 const baseMock = {
     setup() {
         this.__superSetupCalled = true;
-        this.state = { filter: null };
+        // Mesmo shape do estado do core (ticket_screen.js:73-81).
+        this.state = {
+            page: 1,
+            nbrPage: 1,
+            filter: null,
+            search: { searchTerm: "", fieldName: "RECEIPT_NUMBER" },
+        };
+        this.pos.ticketScreenState = { offsetByDomain: {}, totalCount: 0 };
     },
     _getSearchFields() {
         return {
@@ -159,6 +187,12 @@ const baseMock = {
         this.__superOrderListCalled = true;
         return this.__baseOrders;
     },
+    async _fetchSyncedOrders() {
+        this.__superFetchCalled = true;
+    },
+    getSelectedOrder() {
+        return this.__selectedOrder || null;
+    },
 };
 
 // ── Helpers ───────────────────────────────────────────────────────────────
@@ -174,6 +208,8 @@ function makeOrder(id, methodIds, { total = 10, dateOrder = "2026-11-13 14:30:00
         // O branch SYNCED do core filtra por finalized && uiState.displayed.
         finalized: true,
         uiState: { displayed: true },
+        // repr do campo RECEIPT_NUMBER no core.
+        pos_reference: name,
         payment_ids: methodIds.map((mid) => ({ payment_method_id: { id: mid, name: "PM" + mid } })),
         get_total_with_tax: () => total,
         date_order: dateOrder,
@@ -192,6 +228,7 @@ function makeThis({ activeIds = [], filter = "SYNCED", searchTerm = "", fieldNam
             page: 1,
             search: { searchTerm, fieldName },
             activePaymentMethodIds: new Set(activeIds),
+            pagoOrdenacaoAsc: false,
         },
         env: { utils: { formatCurrency } },
         pos: {
@@ -221,6 +258,14 @@ function makeThis({ activeIds = [], filter = "SYNCED", searchTerm = "", fieldNam
         __baseOrders: [],
         __modelOrders: [],
         __patch: obj,
+        // Estado que o setup do patch criaria (métodos são chamados direto
+        // nos testes de unidade, sem passar pelo ciclo de vida do Owl).
+        _pagoCarregando: false,
+        _pagoDominioEsgotado: null,
+        _pagoOfflineAte: null,
+        _pagoGeracao: 0,
+        _pagoOffsets: new Map(),
+        el: null,
     });
     return ctx;
 }
@@ -396,28 +441,43 @@ const FIM_UTC = "2026-11-14 04:00:00";
     assert.deepStrictEqual(
         domain,
         [
+            ["config_id", "=", 1],
             ["date_order", ">=", INICIO_UTC],
             ["date_order", "<", FIM_UTC],
         ],
-        "sem termo de busca o domain deve ser só a janela do dia em UTC"
+        "sem termo de busca: loja + janela do dia em UTC"
     );
-    console.log("✓ E1: domain sem busca = janela do dia local→UTC");
+    console.log("✓ E1: domain sem busca = loja + janela do dia local→UTC");
 }
 
-// E2: busca por recibo/data-hora (campo com modelField) mantém o ilike E a janela
+// E2: termo SÓ com data no campo DATE é match client-side — o ilike do core
+// compara a data UTC e perde vendas do fim do dia local.
 {
     const ctx = makeThis({ searchTerm: "2026-11-13", fieldName: "DATE" });
     const domain = ctx.__patch._computeSyncedOrdersDomain.call(ctx);
     assert.deepStrictEqual(
         domain,
         [
-            ["date_order", "ilike", "%2026-11-13%"],
+            ["config_id", "=", 1],
             ["date_order", ">=", INICIO_UTC],
             ["date_order", "<", FIM_UTC],
         ],
-        "busca por data/hora preserva o ilike do core e restringe ao dia"
+        "data pura não pode ir como ilike UTC ao backend"
     );
-    console.log("✓ E2: busca por data/hora continua restrita ao dia");
+    console.log("✓ E2: busca por data pura fica no cliente (sem ilike UTC)");
+}
+
+// E2b: termo com hora mantém o ilike do core (conversão UTC do formatSearch)
+{
+    const ctx = makeThis({ searchTerm: "21:30", fieldName: "DATE" });
+    const domain = ctx.__patch._computeSyncedOrdersDomain.call(ctx);
+    assert.deepStrictEqual(domain, [
+        ["config_id", "=", 1],
+        ["date_order", "ilike", "%21:30%"],
+        ["date_order", ">=", INICIO_UTC],
+        ["date_order", "<", FIM_UTC],
+    ]);
+    console.log("✓ E2b: busca por hora continua no backend");
 }
 
 // E3: busca por recibo (pos_reference) + janela
@@ -425,6 +485,7 @@ const FIM_UTC = "2026-11-14 04:00:00";
     const ctx = makeThis({ searchTerm: "POS/0007", fieldName: "RECEIPT_NUMBER" });
     const domain = ctx.__patch._computeSyncedOrdersDomain.call(ctx);
     assert.deepStrictEqual(domain, [
+        ["config_id", "=", 1],
         ["pos_reference", "ilike", "%POS/0007%"],
         ["date_order", ">=", INICIO_UTC],
         ["date_order", "<", FIM_UTC],
@@ -437,6 +498,7 @@ const FIM_UTC = "2026-11-14 04:00:00";
     const ctx = makeThis({ searchTerm: "85,50", fieldName: "AMOUNT" });
     const domain = ctx.__patch._computeSyncedOrdersDomain.call(ctx);
     assert.deepStrictEqual(domain, [
+        ["config_id", "=", 1],
         ["date_order", ">=", INICIO_UTC],
         ["date_order", "<", FIM_UTC],
     ]);
@@ -460,6 +522,7 @@ const FIM_UTC = "2026-11-14 04:00:00";
     const domain = ctx.__patch._computeSyncedOrdersDomain.call(ctx);
     ctx.__patch._getSearchFields = original;
     assert.deepStrictEqual(domain, [
+        ["config_id", "=", 1],
         ["payment_ids.cardholder_name", "ilike", "%JOAO%"],
         ["date_order", ">=", INICIO_UTC],
         ["date_order", "<", FIM_UTC],
@@ -489,8 +552,8 @@ const FIM_UTC = "2026-11-14 04:00:00";
     assert.deepStrictEqual(result.map((o) => o.id), [2], "virada do dia: pedidos de ontem somem");
 
     const domain = patchAmanha._computeSyncedOrdersDomain.call(ctx);
-    assert.strictEqual(domain[0][2], "2026-11-14 04:00:00", "início da janela vira para o dia novo");
-    assert.strictEqual(domain[1][2], "2026-11-15 04:00:00", "fim da janela vira para o dia novo");
+    assert.strictEqual(domain[1][2], "2026-11-14 04:00:00", "início da janela vira para o dia novo");
+    assert.strictEqual(domain[2][2], "2026-11-15 04:00:00", "fim da janela vira para o dia novo");
     console.log("✓ F1: rollover recalcula a janela e some com ontem");
 }
 
@@ -627,7 +690,11 @@ function comFetch(ctx) {
         const ctx = comFetch(makeThis());
         ctx.__baseOrders = pedidosDoDia(3);
         await ctx.__patch._fetchSyncedOrders.call(ctx);
-        assert.strictEqual(ctx._pagoDominioEsgotado, JSON.stringify(ctx.__patch._computeSyncedOrdersDomain.call(ctx)));
+        assert.strictEqual(
+            ctx._pagoDominioEsgotado,
+            ctx.__patch._pagoChaveDoDominio.call(ctx),
+            "esgotado marcado com a chave (domínio + ordenação)"
+        );
         await ctx.__patch.onPagoScroll.call(ctx, PERTO_DO_FIM);
         assert.strictEqual(ctx.__chamadas.length, 1, "total alcançado → para de buscar");
         console.log("✓ I4: para quando o total do domínio foi alcançado");
@@ -638,7 +705,7 @@ function comFetch(ctx) {
         const ctx = comFetch(makeThis());
         ctx.__baseOrders = pedidosDoDia(45);
         await ctx.__patch._fetchSyncedOrders.call(ctx);
-        const offsetAntes = JSON.stringify(ctx.pos.ticketScreenState.offsetByDomain);
+        const offsetAntes = JSON.stringify([...ctx._pagoOffsets.entries()]);
         const paginaAntes = ctx.state.page;
 
         ctx.pos.data.call = async () => {
@@ -649,7 +716,8 @@ function comFetch(ctx) {
             "perda de conexão não pode virar erro na tela"
         );
         assert.strictEqual(ctx._pagoCarregando, false, "flag de loading limpa");
-        assert.strictEqual(JSON.stringify(ctx.pos.ticketScreenState.offsetByDomain), offsetAntes, "offset não avança offline");
+        assert.strictEqual(JSON.stringify([...ctx._pagoOffsets.entries()]), offsetAntes, "offset não avança offline");
+        assert(ctx._pagoOfflineAte > Date.now(), "janela de silêncio ativa (sem rajada de RPCs)");
         assert.strictEqual(ctx.state.page, paginaAntes, "lista fica estável");
         assert.strictEqual(ctx.__patch.getFilteredOrderList.call(ctx).length, 30, "mostra o que já estava carregado");
         console.log("✓ I5: offline para silenciosamente, lista estável");
@@ -694,6 +762,293 @@ function comFetch(ctx) {
         await ctx.__patch._fetchSyncedOrders.call(ctx);
         assert.deepStrictEqual(lidos, [777], "pedido novo é lido do servidor");
         console.log("✓ I8: pedidos fora do cache são lidos");
+    }
+
+    // ── Grupo J: toggle "Mais próximas" / "Mais antigas" (DEC-006) ────────
+    // J1: default = mais próximas (desc) e o servidor pagina por date_order
+    // desc — coerente com a ordenação local (create_date do core desalinha
+    // pedidos offline sincronizados depois).
+    {
+        const ctx = comFetch(makeThis());
+        ctx.__baseOrders = pedidosDoDia(45);
+        ctx.__patch.setup.call(ctx); // estado inicial real
+        ctx.state.filter = "SYNCED";
+
+        await ctx.__patch._fetchSyncedOrders.call(ctx);
+        assert.strictEqual(ctx.state.pagoOrdenacaoAsc, false, "default é desc");
+        assert.strictEqual(ctx.__chamadas[0].kwargs.order, "date_order desc", "ordem explícita ao servidor");
+
+        const lista = ctx.__patch.getFilteredOrderList.call(ctx);
+        assert.strictEqual(lista[0].id, 45, "a venda mais recente vem primeiro");
+        console.log("✓ J1: default desc (date_order desc no servidor)");
+    }
+
+    // J2: asc ordena crescente no cliente (e desempata por name asc)
+    {
+        const ctx = makeThis();
+        ctx.state.pagoOrdenacaoAsc = true;
+        ctx.__baseOrders = [
+            makeOrder(2, [1], { dateOrder: "2026-11-13 12:10:00", name: "POS/0002" }),
+            makeOrder(1, [1], { dateOrder: "2026-11-13 12:10:00", name: "POS/0001" }),
+            makeOrder(3, [1], { dateOrder: "2026-11-13 12:20:00", name: "POS/0003" }),
+        ];
+        const lista = ctx.__patch.getFilteredOrderList.call(ctx);
+        assert.deepStrictEqual(lista.map((o) => o.id), [1, 2, 3], "data asc e, no empate, nome asc");
+        console.log("✓ J2: asc ordena crescente no cliente");
+    }
+
+    // J3: trocar a ordenação zera offset/página e refaz o fetch com order asc
+    {
+        const ctx = comFetch(makeThis());
+        ctx.__patch.setup.call(ctx);
+        ctx.state.filter = "SYNCED";
+        ctx.__baseOrders = pedidosDoDia(45);
+
+        await ctx.__patch._fetchSyncedOrders.call(ctx); // offset 0 → 30
+        await ctx.__patch.onPagoScroll.call(ctx, PERTO_DO_FIM); // 30 → 45 (esgotado)
+        const chave = ctx.__patch._pagoChaveDoDominio.call(ctx);
+        assert.strictEqual(ctx._pagoOffsets.get(chave), 45);
+        assert.strictEqual(ctx.state.page, 2);
+
+        await ctx.__patch.setPagoOrdenacao.call(ctx, true);
+
+        const ultimo = ctx.__chamadas[ctx.__chamadas.length - 1].kwargs;
+        assert.strictEqual(ultimo.order, "date_order asc", "fetch passa a pedir asc ao servidor");
+        assert.strictEqual(ultimo.offset, 0, "offset do domínio reiniciado");
+        assert.strictEqual(ctx.state.page, 1, "lista recomeça no primeiro bloco");
+        assert.strictEqual(ctx._pagoDominioEsgotado, null, "flag de esgotado limpa");
+        assert.strictEqual(
+            ctx._pagoOffsets.get(ctx.__patch._pagoChaveDoDominio.call(ctx)),
+            30,
+            "a nova ordem recomeça do primeiro bloco"
+        );
+        const lista = ctx.__patch.getFilteredOrderList.call(ctx);
+        assert.strictEqual(lista[0].id, 1, "a venda mais antiga vem primeiro");
+        console.log("✓ J3: troca de ordenação reinicia o carregamento (DEC-006)");
+    }
+
+    // J4: clicar na ordenação já ativa não refaz fetch (nem reordena a janela)
+    {
+        const ctx = comFetch(makeThis());
+        ctx.__patch.setup.call(ctx);
+        ctx.state.filter = "SYNCED";
+        ctx.__baseOrders = pedidosDoDia(10);
+        await ctx.__patch.setPagoOrdenacao.call(ctx, false); // já é false
+        assert.strictEqual(ctx.__chamadas.length, 0, "sem fetch redundante");
+        console.log("✓ J4: toggle idempotente");
+    }
+
+    // J5: em asc o scroll continua paginando do início do dia, sem repetir
+    {
+        const ctx = comFetch(makeThis());
+        ctx.__patch.setup.call(ctx);
+        ctx.state.filter = "SYNCED";
+        ctx.state.pagoOrdenacaoAsc = true;
+        ctx.__baseOrders = pedidosDoDia(45);
+
+        await ctx.__patch._fetchSyncedOrders.call(ctx);
+        await ctx.__patch.onPagoScroll.call(ctx, PERTO_DO_FIM);
+
+        assert.deepStrictEqual(
+            ctx.__chamadas.map((c) => c.kwargs.offset),
+            [0, 30],
+            "asc pagina a partir do início do dia"
+        );
+        assert(
+            ctx.__chamadas.every((c) => c.kwargs.order === "date_order asc"),
+            "todas as páginas pedem asc"
+        );
+        const ids = ctx.__patch.getFilteredOrderList.call(ctx).map((o) => o.id);
+        assert.strictEqual(ids.length, 45, "nada repetido nem pulado");
+        assert.strictEqual(new Set(ids).size, 45, "ids únicos");
+        console.log("✓ J5: scroll em asc continua correto");
+    }
+
+    // J6: chips e toggle combinam
+    {
+        const ctx = makeThis();
+        ctx.state.pagoOrdenacaoAsc = true;
+        ctx.state.activePaymentMethodIds = new Set([2]);
+        ctx.__baseOrders = [
+            makeOrder(1, [2], { dateOrder: "2026-11-13 12:10:00" }),
+            makeOrder(2, [1], { dateOrder: "2026-11-13 12:05:00" }),
+            makeOrder(3, [2], { dateOrder: "2026-11-13 12:20:00" }),
+        ];
+        const lista = ctx.__patch.getFilteredOrderList.call(ctx);
+        assert.deepStrictEqual(lista.map((o) => o.id), [1, 3], "chip Pix + ordem asc");
+        console.log("✓ J6: chips + toggle combinam");
+    }
+
+    // J7: busca respeita a ordenação escolhida
+    {
+        const ctx = makeThis({ searchTerm: "POS/000", fieldName: "RECEIPT_NUMBER" });
+        ctx.state.pagoOrdenacaoAsc = true;
+        ctx.__baseOrders = pedidosDoDia(3);
+        const lista = ctx.__patch.getFilteredOrderList.call(ctx);
+        assert.deepStrictEqual(lista.map((o) => o.id), [1, 2, 3], "busca mantém a ordem asc");
+        console.log("✓ J7: busca respeita a ordenação");
+    }
+
+    // J8: trocar a ordenação offline mantém a lista e não levanta
+    {
+        const ctx = comFetch(makeThis());
+        ctx.__patch.setup.call(ctx);
+        ctx.state.filter = "SYNCED";
+        ctx.__baseOrders = pedidosDoDia(45);
+        await ctx.__patch._fetchSyncedOrders.call(ctx);
+        await ctx.__patch.onPagoScroll.call(ctx, PERTO_DO_FIM); // 45 carregados
+        assert.strictEqual(ctx.state.page, 2);
+
+        ctx.pos.data.call = async () => {
+            throw new ctx.__patch.__ConnectionLostError("sem rede");
+        };
+        await assert.doesNotReject(
+            ctx.__patch.setPagoOrdenacao.call(ctx, true),
+            "offline não pode virar erro ao trocar a ordem"
+        );
+        assert.strictEqual(ctx.state.pagoOrdenacaoAsc, true, "estado do toggle aplicado");
+        assert.strictEqual(ctx.state.page, 2, "página visível preservada offline");
+        assert.strictEqual(
+            ctx.__patch.getFilteredOrderList.call(ctx).length,
+            45,
+            "a lista não encolhe offline (só reordena)"
+        );
+        console.log("✓ J8: toggle offline mantém a lista, sem erro");
+    }
+
+    // ── Grupo K: isolamento, concorrência, auto-preenchimento, seleção ────
+    // K1: fora do SYNCED o fetch é o do core (paginação explícita dos outros
+    //     tabs não pode ser sobrescrita nem ter erro silenciado)
+    {
+        const ctx = makeThis({ filter: "ACTIVE_ORDERS" });
+        ctx.state.page = 2;
+        await ctx.__patch._fetchSyncedOrders.call(ctx);
+        assert(ctx.__superFetchCalled, "delega ao core fora do tab Pago");
+        assert.strictEqual(ctx.state.page, 2, "página do core intacta");
+        console.log("✓ K1: fetch dos outros tabs delega ao core");
+    }
+
+    // K2: resposta de um fetch que perdeu a corrida é descartada
+    {
+        const ctx = comFetch(makeThis());
+        ctx.state.filter = "SYNCED";
+        ctx.__baseOrders = pedidosDoDia(30);
+        const pendentes = [];
+        ctx.pos.data.call = () =>
+            new Promise((resolve) => {
+                pendentes.push(resolve);
+            });
+
+        const antigo = ctx.__patch._fetchSyncedOrders.call(ctx); // geração 1
+        const novo = ctx.__patch._fetchSyncedOrders.call(ctx); // geração 2
+        pendentes[1]({ ordersInfo: pedidosDoDia(30).map((o) => [o.id, o.date_order]), totalCount: 30 });
+        await novo;
+        pendentes[0]({ ordersInfo: [], totalCount: 999 }); // resposta obsoleta
+        await antigo;
+
+        assert.strictEqual(
+            ctx.pos.ticketScreenState.totalCount,
+            30,
+            "a resposta antiga não sobrescreve o total do domínio novo"
+        );
+        assert.strictEqual(ctx.state.page, 1);
+        console.log("✓ K2: resposta obsoleta descartada (sem buraco no offset)");
+    }
+
+    // K3: lista que não rola é completada automaticamente (não há evento de
+    //     scroll para puxar o resto do dia)
+    {
+        const ctx = comFetch(makeThis());
+        ctx.__patch.setup.call(ctx);
+        ctx.state.filter = "SYNCED";
+        ctx.__baseOrders = pedidosDoDia(45);
+        ctx.pos.ticketScreenState.totalCount = 45;
+        ctx.el = {
+            querySelector: () => ({ scrollTop: 0, scrollHeight: 300, clientHeight: 300 }),
+        };
+        ctx.__patch._pagoPreencherLista.call(ctx);
+        await new Promise((resolve) => setTimeout(resolve, 0));
+        assert.strictEqual(ctx.__chamadas.length, 1, "sem rolagem → busca o próximo bloco");
+        console.log("✓ K3: auto-preenchimento quando a lista não rola");
+    }
+
+    // K3b: com rolagem disponível (ou total já coberto) não busca sozinho
+    {
+        const ctx = comFetch(makeThis());
+        ctx.__patch.setup.call(ctx);
+        ctx.state.filter = "SYNCED";
+        ctx.pos.ticketScreenState.totalCount = 45;
+
+        ctx.el = { querySelector: () => ({ scrollTop: 0, scrollHeight: 5000, clientHeight: 300 }) };
+        ctx.__patch._pagoPreencherLista.call(ctx);
+        assert.strictEqual(ctx.__chamadas.length, 0, "há rolagem → o operador puxa pelo scroll");
+
+        ctx.el = { querySelector: () => ({ scrollTop: 0, scrollHeight: 300, clientHeight: 300 }) };
+        ctx.state.page = 2; // 60 >= 45: tudo já coberto
+        ctx.__patch._pagoPreencherLista.call(ctx);
+        assert.strictEqual(ctx.__chamadas.length, 0, "total coberto → não busca");
+        console.log("✓ K3b: auto-preenchimento não dispara à toa");
+    }
+
+    // K4: pedido de outro dia não é reimprimível/estornável no tab Pago
+    {
+        const ontem = makeOrder(1, [1], { dateOrder: "2026-11-12 14:00:00" });
+        const hoje = makeOrder(2, [1], { dateOrder: "2026-11-13 14:00:00" });
+
+        const ctx = makeThis();
+        ctx.__selectedOrder = ontem;
+        assert.strictEqual(
+            ctx.__patch.getSelectedOrder.call(ctx),
+            null,
+            "pedido de ontem não fica selecionado no Pago"
+        );
+
+        ctx.__selectedOrder = hoje;
+        assert.strictEqual(ctx.__patch.getSelectedOrder.call(ctx), hoje);
+
+        ctx.state.filter = "ACTIVE_ORDERS";
+        ctx.__selectedOrder = ontem;
+        assert.strictEqual(
+            ctx.__patch.getSelectedOrder.call(ctx),
+            ontem,
+            "outros tabs mantêm a seleção do core"
+        );
+        console.log("✓ K4: seleção fora do dia bloqueada só no Pago");
+    }
+
+    // K5: entrar de novo na tela recomeça do offset 0 (o mapa de offsets é da
+    //     instância, não da sessão do POS)
+    {
+        const primeira = comFetch(makeThis());
+        primeira.__patch.setup.call(primeira);
+        primeira.state.filter = "SYNCED";
+        primeira.__baseOrders = pedidosDoDia(45);
+        await primeira.__patch._fetchSyncedOrders.call(primeira);
+        await primeira.__patch.onPagoScroll.call(primeira, PERTO_DO_FIM);
+        assert.strictEqual(primeira.state.page, 2);
+
+        const segunda = comFetch(makeThis());
+        segunda.__patch.setup.call(segunda);
+        segunda.state.filter = "SYNCED";
+        segunda.__baseOrders = pedidosDoDia(45);
+        await segunda.__patch._fetchSyncedOrders.call(segunda);
+        assert.strictEqual(segunda.__chamadas[0].kwargs.offset, 0, "nova instância começa do zero");
+        assert.strictEqual(segunda.state.page, 1);
+        console.log("✓ K5: reentrada na tela não herda offset antigo");
+    }
+
+    // K6: voltar para "Mais próximas" também recomeça (offset zerado)
+    {
+        const ctx = comFetch(makeThis());
+        ctx.__patch.setup.call(ctx);
+        ctx.state.filter = "SYNCED";
+        ctx.__baseOrders = pedidosDoDia(45);
+        await ctx.__patch.setPagoOrdenacao.call(ctx, true);
+        await ctx.__patch.setPagoOrdenacao.call(ctx, false);
+        const ultimo = ctx.__chamadas[ctx.__chamadas.length - 1].kwargs;
+        assert.strictEqual(ultimo.offset, 0, "volta para desc recomeça do primeiro bloco");
+        assert.strictEqual(ultimo.order, "date_order desc");
+        console.log("✓ K6: toggle de volta recomeça a lista");
     }
 
     console.log("\nTodos os testes passaram ✓");

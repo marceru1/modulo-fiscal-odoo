@@ -16,25 +16,37 @@
  *   - ticket_screen.js:688 o guard `searchField.modelField` já descarta campos
  *     com modelField null do domínio do backend — por isso AMOUNT não gera
  *     query server-side sem precisar de nenhuma alteração aqui.
- *   - ticket_screen.js:378 no branch SYNCED o core já devolve a lista paginada
- *     (slice de 30); o filtro de chips e a janela do dia rodam por cima.
+ *   - ticket_screen.js:378 no branch SYNCED o core devolve a lista fatiada por
+ *     página; no tab Pago esse corte é substituído pelo corte incremental.
  *   - ticket_screen.js:613-631 o field DATE converte o termo local para UTC
  *     com `parseDateTime(...).toUTC().toFormat("yyyy-MM-dd HH:mm:ss")` — a
  *     janela do dia usa a mesma conversão (luxon, fuso do browser).
+ *   - ticket_screen.js:1327-1335 (py) o `config_id` só entra no domain quando
+ *     o domain recebido é vazio; como a janela do dia nunca é vazia, o filtro
+ *     da loja é re-adicionado aqui explicitamente.
+ *
+ * Luxon NÃO é um módulo do Odoo: o core usa o global (`const { DateTime } =
+ * luxon;` em web/core/l10n/dates.js:6). Um `import ... from "luxon"` deixaria
+ * este arquivo sem módulo definido — o patch não rodaria.
  */
 import { TicketScreen } from "@point_of_sale/app/screens/ticket_screen/ticket_screen";
 import { patch } from "@web/core/utils/patch";
 import { _t } from "@web/core/l10n/translation";
-import { DateTime } from "luxon";
 import { parseUTCString } from "@point_of_sale/utils";
 import { fuzzyLookup } from "@web/core/utils/search";
 import { ConnectionLostError } from "@web/core/network/rpc";
+import { onMounted, onPatched } from "@odoo/owl";
+
+const { DateTime } = luxon;
 
 // Mesmo limite do fetch do core (ticket_screen.js:715) — o scroll carrega
 // mais um bloco desse tamanho.
 const PAGINA = 30;
 // Distância (px) do fim da lista que dispara o próximo bloco.
 const LIMIAR_SCROLL = 300;
+// Janela de silêncio após uma falha de conexão: evita uma rajada de RPCs
+// falhando a cada evento de scroll (DEC-004: nenhuma chamada extra offline).
+const ESPERA_OFFLINE = 3000;
 
 patch(TicketScreen.prototype, {
     setup() {
@@ -43,9 +55,24 @@ patch(TicketScreen.prototype, {
         // torna Set reativo (has/add/delete/size são observados), então
         // alternar um chip re-renderiza a lista sem trabalho extra.
         this.state.activePaymentMethodIds = new Set();
+        // Ordenação do tab Pago (DEC-006): false = "Mais próximas" (padrão,
+        // igual ao core), true = "Mais antigas". Reativo: o toggle re-renderiza.
+        this.state.pagoOrdenacaoAsc = false;
         // Controle do scroll infinito (fora do useState: não pinta nada).
         this._pagoCarregando = false;
         this._pagoDominioEsgotado = null;
+        this._pagoOfflineAte = null;
+        this._pagoGeracao = 0;
+        // Offset acumulado por (domain, ordenação) DESTA instância da tela.
+        // Deliberadamente não usa `ticketScreenState.offsetByDomain`: aquele
+        // mapa vive na sessão do POS e vaza entre aberturas da tela (entrar de
+        // novo com offset antigo pularia os primeiros blocos).
+        this._pagoOffsets = new Map();
+        // Lista curta demais para rolar (filtro/chips escondendo linhas) não
+        // emite scroll — depois de cada render completa até ter rolagem ou
+        // esgotar o domínio.
+        onMounted(() => this._pagoPreencherLista());
+        onPatched(() => this._pagoPreencherLista());
     },
 
     // ── Janela do dia (DEC-001) ──────────────────────────────────────────
@@ -64,11 +91,14 @@ patch(TicketScreen.prototype, {
         return dt.toUTC().toFormat("yyyy-MM-dd HH:mm:ss");
     },
 
-    /** date_order (UTC) dentro do dia local vigente? */
-    _pagoDentroDoDia(order) {
-        const { inicio, fim } = this._pagoJanelaDoDia();
+    /**
+     * date_order (UTC) dentro do dia local vigente?
+     * Recebe a janela pronta quando o chamador já a calculou (evita criar um
+     * DateTime por pedido num filtro O(n) a cada render).
+     */
+    _pagoDentroDoDia(order, janela = this._pagoJanelaDoDia()) {
         const dt = parseUTCString(order.date_order);
-        return dt.isValid && dt >= inicio && dt < fim;
+        return dt.isValid && dt >= janela.inicio && dt < janela.fim;
     },
 
     _getSearchFields() {
@@ -103,12 +133,27 @@ patch(TicketScreen.prototype, {
      * quando o dia vira — de graça, o offset reinicia (DEC-001).
      */
     _computeSyncedOrdersDomain() {
-        const domain = super._computeSyncedOrdersDomain(...arguments);
+        let domain = super._computeSyncedOrdersDomain(...arguments);
         if (this.state.filter !== "SYNCED") {
             return domain;
         }
+
+        // Termo só com data no campo DATE: o ilike do core compara contra a
+        // data UTC e perde vendas do fim do dia local (21h em Manaus já é o
+        // dia seguinte em UTC). O match fica no cliente, sobre a data já
+        // localizada pela repr do campo; o servidor devolve o dia inteiro.
+        const { searchTerm, fieldName } = this.state.search;
+        if (fieldName === "DATE" && searchTerm && !searchTerm.includes(":")) {
+            domain = [];
+        }
+
         const { inicio, fim } = this._pagoJanelaDoDia();
         return [
+            // O core só filtra a loja quando o domain recebido é vazio
+            // (pos_order.py:1330-1334). Como abaixo a janela nunca é vazia,
+            // o filtro é re-adicionado aqui — sem ele a lista traria vendas
+            // de outros caixas da mesma moeda.
+            ["config_id", "=", this.pos.config.id],
             ...domain,
             ["date_order", ">=", this._pagoParaDominio(inicio)],
             ["date_order", "<", this._pagoParaDominio(fim)],
@@ -154,8 +199,10 @@ patch(TicketScreen.prototype, {
 
         // Complemento client-side do DEC-001: o domain já restringe o fetch,
         // mas o cache local guarda pedidos de sessões passadas e a sessão pode
-        // atravessar a meia-noite — a lista exibida também é cortada.
-        orders = orders.filter((order) => this._pagoDentroDoDia(order));
+        // atravessar a meia-noite — a lista exibida também é cortada. A janela
+        // é calculada UMA vez: o corte é O(n) sobre o cache.
+        const janela = this._pagoJanelaDoDia();
+        orders = orders.filter((order) => this._pagoDentroDoDia(order, janela));
 
         // Busca: mesma semântica do core (fuzzyLookup sobre o repr do campo).
         const { searchTerm, fieldName } = this.state.search;
@@ -184,30 +231,85 @@ patch(TicketScreen.prototype, {
     },
 
     /**
+     * Pedido de outro dia não pode ser reimpresso/estornado pelo PDV (user
+     * story 6): mesmo que tenha ficado selecionado na virada da meia-noite ou
+     * tenha saído da lista por um chip, ele deixa de ser "o pedido selecionado"
+     * no tab Pago.
+     */
+    getSelectedOrder() {
+        const order = super.getSelectedOrder(...arguments);
+        if (order && this.state.filter === "SYNCED" && !this._pagoDentroDoDia(order)) {
+            return null;
+        }
+        return order;
+    },
+
+    /**
      * Ordena como o sortOrders do core (ticket_screen.js:364-385): date_order
-     * e, no empate, o número do pedido em `name`.
+     * e, no empate, o número do pedido em `name`. Ascendente quando o toggle
+     * está em "Mais antigas" — a mesma direção que o servidor pagina.
      */
     _pagoOrdenar(orders) {
+        const ascendente = Boolean(this.state.pagoOrdenacaoAsc);
         return orders.sort((a, b) => {
             const dateA = parseUTCString(a.date_order);
             const dateB = parseUTCString(b.date_order);
             if (a.date_order !== b.date_order) {
-                return dateB - dateA;
+                return ascendente ? dateA - dateB : dateB - dateA;
             }
             const nameA = parseInt(a.name.replace(/\D/g, "")) || 0;
             const nameB = parseInt(b.name.replace(/\D/g, "")) || 0;
-            return nameB - nameA;
+            return ascendente ? nameA - nameB : nameB - nameA;
         });
     },
 
+    /**
+     * Toggle "Mais próximas" / "Mais antigas" (DEC-006).
+     *
+     * Trocar a ordem não mistura janelas: o offset do domínio corrente é
+     * zerado e a lista visível recomeça no primeiro bloco; o fetch seguinte
+     * já pede ao servidor a ordem nova, então em "Mais antigas" o offset
+     * pagina a partir do início do dia.
+     */
+    async setPagoOrdenacao(asc) {
+        const ascendente = Boolean(asc);
+        if (this.state.pagoOrdenacaoAsc === ascendente) {
+            return;
+        }
+        const paginaAnterior = this.state.page;
+        this.state.pagoOrdenacaoAsc = ascendente;
+        this.state.page = 1;
+        this._pagoDominioEsgotado = null;
+        // DEC-006: offsets de qualquer ordenação anterior não valem.
+        this._pagoOffsets.clear();
+        const carregou = await this._fetchSyncedOrders();
+        if (carregou === false) {
+            // Offline (DEC-004): mantém o mesmo bloco já visível — a lista só
+            // aparece reordenada, sem erro e sem encolher.
+            this.state.page = paginaAnterior;
+        }
+    },
+
     // ── Scroll infinito (DEC-004/DEC-005) ────────────────────────────────
+    /** Chave do offset/paginação: domínio (dia+busca) + ordenação. */
+    _pagoChaveDoDominio(domain) {
+        return JSON.stringify([
+            domain || this._computeSyncedOrdersDomain(),
+            Boolean(this.state.pagoOrdenacaoAsc),
+        ]);
+    },
+
     /**
      * Handler do `t-on-scroll` no container da lista. Perto do fim dispara
      * mais um bloco; nunca busca com a lista já esgotada, com fetch em
-     * andamento ou antes do primeiro fetch.
+     * andamento, durante a janela de silêncio offline ou antes do primeiro
+     * fetch.
      */
     async onPagoScroll(event) {
         if (this.state.filter !== "SYNCED" || this._pagoCarregando) {
+            return;
+        }
+        if (this._pagoOfflineAte && Date.now() < this._pagoOfflineAte) {
             return;
         }
         const alvo = event && event.target;
@@ -219,7 +321,7 @@ patch(TicketScreen.prototype, {
         if (!pertoDoFim) {
             return;
         }
-        if (this._pagoDominioEsgotado === JSON.stringify(this._computeSyncedOrdersDomain())) {
+        if (this._pagoDominioEsgotado === this._pagoChaveDoDominio()) {
             return;
         }
 
@@ -232,31 +334,81 @@ patch(TicketScreen.prototype, {
     },
 
     /**
-     * Fetch de pedidos pagos do core (ticket_screen.js:702-741), com duas
-     * diferenças: falha por conexão perdida para silenciosamente no cache
-     * (DEC-004) e a página visível avança com o offset acumulado.
+     * Completa a lista quando ela não é alta o bastante para rolar (filtro ou
+     * chips esconderam as linhas carregadas): sem rolagem não há evento de
+     * scroll, e o operador nunca alcançaria o resto do dia. Para quando a
+     * página visível cobre o total do domínio ou quando há rolagem.
+     */
+    _pagoPreencherLista() {
+        if (this.state.filter !== "SYNCED" || this._pagoCarregando) {
+            return;
+        }
+        const total = this.pos.ticketScreenState.totalCount || 0;
+        if (!total || this.state.page * PAGINA >= total) {
+            return;
+        }
+        const el = this.el && this.el.querySelector(".orders");
+        if (!el) {
+            return;
+        }
+        if (el.scrollHeight > el.clientHeight + LIMIAR_SCROLL) {
+            return;
+        }
+        this.onPagoScroll({ target: el });
+    },
+
+    /**
+     * Fetch de pedidos pagos do core (ticket_screen.js:702-741), com as
+     * diferenças do tab Pago: offset próprio por (domínio, ordenação), ordem
+     * explícita pedida ao servidor, página visível derivada do offset e falha
+     * por conexão perdida em silêncio (DEC-004). Devolve `false` só quando a
+     * falha foi de conexão (para o toggle não encolher a lista offline).
      */
     async _fetchSyncedOrders() {
-        const screenState = this.pos.ticketScreenState;
+        // Demais tabs: core intacto (paginação explícita, erros do core).
+        if (this.state.filter !== "SYNCED") {
+            return super._fetchSyncedOrders(...arguments);
+        }
+
         const domain = this._computeSyncedOrdersDomain();
-        const chave = JSON.stringify(domain);
-        const offset = screenState.offsetByDomain[chave] || 0;
+        const chave = this._pagoChaveDoDominio(domain);
+        const offset = this._pagoOffsets.get(chave) || 0;
+        // Descarta a resposta de um fetch que perdeu a corrida para outro
+        // (scroll vs troca de ordenação/busca): sem isso, um resultado antigo
+        // sobrescreveria offset/página do domínio novo.
+        const geracao = ++this._pagoGeracao;
+
+        const kwargs = {
+            config_id: this.pos.config.id,
+            domain,
+            limit: PAGINA,
+            offset,
+            // DEC-002: o servidor pagina na MESMA direção da lista local.
+            // Explicitar desc por date_order (e não o create_date desc do
+            // default do core) mantém página e ordenação coerentes — pedidos
+            // offline sincronizados depois têm create_date fora da ordem.
+            order: this.state.pagoOrdenacaoAsc ? "date_order asc" : "date_order desc",
+        };
 
         let resposta;
         try {
-            resposta = await this.pos.data.call("pos.order", "search_paid_order_ids", [], {
-                config_id: this.pos.config.id,
-                domain,
-                limit: PAGINA,
-                offset,
-            });
+            resposta = await this.pos.data.call(
+                "pos.order",
+                "search_paid_order_ids",
+                [],
+                kwargs
+            );
         } catch (error) {
             if (error instanceof ConnectionLostError) {
                 // Offline: mantém o que já está carregado, sem erro e sem
-                // spinner. O próximo scroll tenta de novo quando houver rede.
-                return;
+                // spinner; a janela de silêncio evita uma rajada de RPCs.
+                this._pagoOfflineAte = Date.now() + ESPERA_OFFLINE;
+                return false;
             }
             throw error;
+        }
+        if (geracao !== this._pagoGeracao) {
+            return;
         }
 
         const { ordersInfo, totalCount } = resposta;
@@ -275,19 +427,27 @@ patch(TicketScreen.prototype, {
                 await this.pos.data.read("pos.order", Array.from(new Set(idsParaLer)));
             } catch (error) {
                 if (error instanceof ConnectionLostError) {
-                    return;
+                    this._pagoOfflineAte = Date.now() + ESPERA_OFFLINE;
+                    return false;
                 }
                 throw error;
+            }
+            if (geracao !== this._pagoGeracao) {
+                return;
             }
         }
 
         const novoOffset = offset + ordersInfo.length;
-        screenState.offsetByDomain[chave] = novoOffset;
-        screenState.totalCount = totalCount;
+        this._pagoOffsets.set(chave, novoOffset);
+        // totalCount continua no estado do core (getNbrPages do tab Pago fica
+        // oculto, mas o valor é usado pelo auto-preenchimento acima).
+        this.pos.ticketScreenState.totalCount = totalCount;
         this.state.page = Math.max(1, Math.ceil(novoOffset / PAGINA));
         // Esgotado: alcançou o total do domínio ou o servidor não devolveu
         // nada novo — para de buscar até o domínio mudar (busca/dia/ordem).
         this._pagoDominioEsgotado =
             novoOffset >= totalCount || ordersInfo.length === 0 ? chave : null;
+        this._pagoOfflineAte = null;
+        return true;
     },
 });
