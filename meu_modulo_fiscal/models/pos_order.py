@@ -15,12 +15,15 @@ _logger = logging.getLogger(__name__)
 # search, então é whitelist fechada — nunca interpolar string vinda do cliente.
 # O default é o mesmo do core (addons/point_of_sale/models/pos_order.py:1335).
 ORDEM_PEDIDOS_PAGOS_PADRAO = 'create_date desc'
-ORDENS_PEDIDOS_PAGOS = frozenset({
-    'create_date asc',
-    'create_date desc',
-    'date_order asc',
-    'date_order desc',
-})
+# Chave aceita -> ORDER BY efetivo. O `id` entra como desempate determinístico:
+# date_order/create_date têm precisão de segundo e, sem desempate, dois pedidos
+# no mesmo segundo podem pular ou repetir entre páginas (offset/limit).
+ORDENS_PEDIDOS_PAGOS = {
+    'create_date asc': 'create_date asc, id asc',
+    'create_date desc': 'create_date desc, id desc',
+    'date_order asc': 'date_order asc, id asc',
+    'date_order desc': 'date_order desc, id desc',
+}
 
 
 def normalizar_ordem_pedidos_pagos(order):
@@ -203,7 +206,9 @@ class PosOrder(models.Model):
 
         A chamada sem ``order`` delega ao ``super`` — retrocompatibilidade
         literal: mesma ordem, mesmo retorno. As demais ordens da whitelist
-        repetem o corpo do core trocando apenas o ``order`` do ``search``.
+        repetem o corpo do core trocando apenas o ``order`` do ``search``
+        (com ``id`` como desempate determinístico — ver
+        ``ORDENS_PEDIDOS_PAGOS``).
         """
         ordem = normalizar_ordem_pedidos_pagos(order)
         if ordem == ORDEM_PEDIDOS_PAGOS_PADRAO:
@@ -214,7 +219,10 @@ class PosOrder(models.Model):
             real_domain = AND([[['config_id', '=', config_id]], default_domain])
         else:
             real_domain = AND([domain, default_domain])
-        orders = self.search(real_domain, limit=limit, offset=offset, order=ordem)
+        orders = self.search(
+            real_domain, limit=limit, offset=offset,
+            order=ORDENS_PEDIDOS_PAGOS[ordem],
+        )
 
         # Mesmo pós-filtro do core: currency_id não é armazenado, então não dá
         # para filtrar no domain. Aplicado DEPOIS do limit/offset, como no core.

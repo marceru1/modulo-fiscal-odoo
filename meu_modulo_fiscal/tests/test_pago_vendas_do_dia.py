@@ -138,6 +138,45 @@ class TestPagoVendasDoDia(TransactionCase):
 
         self.assertEqual(desc['totalCount'], asc['totalCount'])
 
+    # ── Filtro da loja no domain (o core só o aplica com domain vazio) ──────
+    def test_domain_com_config_nao_traz_pedido_de_outro_caixa(self):
+        """O tab Pago manda `config_id` no domain (a janela do dia nunca é
+        vazia, então o branch `domain == []` do core não roda)."""
+        meu = self._pedido('2026-11-13 10:00:00')
+
+        outro_config, outra_sessao = self._segundo_caixa()
+        de_outro_caixa = self._pedido('2026-11-13 11:00:00')
+        de_outro_caixa.write({'session_id': outra_sessao.id})
+        self.assertEqual(de_outro_caixa.config_id, outro_config)
+
+        resultado = self._buscar(
+            order='date_order asc',
+            domain=[['config_id', '=', self.pos_config.id]],
+        )
+
+        self.assertEqual(self._ids(resultado), {meu.id})
+        self.assertEqual(resultado['totalCount'], 1)
+
+    def _segundo_caixa(self):
+        """Config + sessão de outro caixa (mesma empresa/moeda)."""
+        journal = self.env['account.journal'].create({
+            'name': 'Vendas Teste Outro Caixa',
+            'type': 'sale',
+            'code': 'OFC',
+            'company_id': self.env.company.id,
+        })
+        config = self.env['pos.config'].create({
+            'name': 'PDV Teste Outro Caixa',
+            'journal_id': journal.id,
+            'payment_method_ids': [(6, 0, [self.cash_pm.id])],
+        })
+        session = self.env['pos.session'].create({
+            'config_id': config.id,
+            'user_id': self.env.user.id,
+        })
+        session.action_pos_session_open()
+        return config, session
+
 
 class TestNormalizarOrdemPedidosPagos(TransactionCase):
     """Whitelist pura — roda sem precisar de pedidos criados."""
