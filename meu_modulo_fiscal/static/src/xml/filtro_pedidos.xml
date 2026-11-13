@@ -17,6 +17,21 @@
     <t t-name="meu_modulo.FiltroPedidosPagosChips"
        t-inherit="point_of_sale.TicketScreen"
        t-inherit-mode="extension">
+
+        <!-- Tab "Pago": paginação do core oculta (contador "1/10" e ◀ ▶).
+             Nunca replace: o nó continua no DOM (position="attributes"), só
+             ganha a classe de ocultação. t-attf-class repete a string estática
+             porque o atributo dinâmico SUBSTITUI o class do nó (ir_qweb.py,
+             addAttributes()). Os demais tabs mantêm contador e botões. -->
+        <xpath expr="//div[hasclass('controls')]/div[hasclass('item')]" position="attributes">
+            <attribute name="t-attf-class">item d-flex align-items-center justify-content-end #{state.filter === 'SYNCED' ? 'd-none' : ''}</attribute>
+        </xpath>
+
+        <!-- Scroll infinito (DEC-005): o mesmo container rolável do core passa
+             a avisar quando o fim está próximo. O handler só age no SYNCED. -->
+        <xpath expr="//div[hasclass('orders')]" position="attributes">
+            <attribute name="t-on-scroll">onPagoScroll</attribute>
+        </xpath>
         <xpath expr="//div[hasclass('controls')]" position="after">
             <t t-if="state.filter === 'SYNCED'">
                 <!-- Classes numa única t-attf-class: no QWeb, class estático +

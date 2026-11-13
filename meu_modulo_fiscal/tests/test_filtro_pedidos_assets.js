@@ -165,4 +165,43 @@ function assertBalancedTags(source) {
     console.log("✓ 11: manifest registra JS antes do XML em _assets_pos");
 }
 
+// ── 12: paginação do core oculta no tab Pago, sem replace (ticket 03) ─────
+// O contador "1/10" e os botões ◀ ▶ vivem em div.controls > div.item. A
+// herança só ACRESCENTA a classe de ocultação condicionada ao SYNCED; o nó
+// continua no DOM (position="attributes"), então os demais tabs não mudam.
+{
+    const xpathPaginacao =
+        /<xpath expr="\/\/div\[hasclass\('controls'\)\]\/div\[hasclass\('item'\)\]" position="attributes">([\s\S]*?)<\/xpath>/;
+    const bloco = xml.match(xpathPaginacao);
+    assert(bloco, "deve ocultar a paginação via xpath em div.controls > div.item");
+    assert(
+        /<attribute name="t-attf-class">[^<]*d-none[^<]*<\/attribute>/.test(bloco[1]),
+        "a paginação deve ser ocultada por classe (d-none), não removida"
+    );
+    assert(
+        /state\.filter === 'SYNCED'/.test(bloco[1]),
+        "a ocultação de contador/botões vale só no tab Pago"
+    );
+    // t-attf-class repete a string estática: o atributo dinâmico substitui o
+    // class do nó compilado (ir_qweb.py, addAttributes()).
+    assert(
+        /item d-flex align-items-center justify-content-end/.test(bloco[1]),
+        "t-attf-class precisa repetir as classes originais do nó"
+    );
+    assert(!/position="replace"/.test(xml), "nunca replace");
+    console.log("✓ 12: paginação oculta só no SYNCED (d-none, sem replace)");
+}
+
+// ── 13: scroll infinito no container da lista (ticket 03) ─────────────────
+// div.orders é o container rolável do core (ticket_screen.xml:33). O handler
+// só age no SYNCED (guard no JS); o template apenas registra o evento.
+{
+    const bloco = xml.match(
+        /<xpath expr="\/\/div\[hasclass\('orders'\)\]" position="attributes">([\s\S]*?)<\/xpath>/
+    );
+    assert(bloco, "deve registrar o scroll em div.orders");
+    assert(/<attribute name="t-on-scroll">onPagoScroll<\/attribute>/.test(bloco[1]), "handler onPagoScroll");
+    console.log("✓ 13: scroll infinito registrado em div.orders");
+}
+
 console.log("\nTodos os testes passaram ✓");

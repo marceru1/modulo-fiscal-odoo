@@ -27,6 +27,14 @@ import { patch } from "@web/core/utils/patch";
 import { _t } from "@web/core/l10n/translation";
 import { DateTime } from "luxon";
 import { parseUTCString } from "@point_of_sale/utils";
+import { fuzzyLookup } from "@web/core/utils/search";
+import { ConnectionLostError } from "@web/core/network/rpc";
+
+// Mesmo limite do fetch do core (ticket_screen.js:715) — o scroll carrega
+// mais um bloco desse tamanho.
+const PAGINA = 30;
+// Distância (px) do fim da lista que dispara o próximo bloco.
+const LIMIAR_SCROLL = 300;
 
 patch(TicketScreen.prototype, {
     setup() {
@@ -35,6 +43,9 @@ patch(TicketScreen.prototype, {
         // torna Set reativo (has/add/delete/size são observados), então
         // alternar um chip re-renderiza a lista sem trabalho extra.
         this.state.activePaymentMethodIds = new Set();
+        // Controle do scroll infinito (fora do useState: não pinta nada).
+        this._pagoCarregando = false;
+        this._pagoDominioEsgotado = null;
     },
 
     // ── Janela do dia (DEC-001) ──────────────────────────────────────────
@@ -120,32 +131,163 @@ patch(TicketScreen.prototype, {
     },
 
     getFilteredOrderList() {
-        // Preserva toda a lógica do core (filtro de status, busca por recibo/
-        // data/valor via fuzzyLookup e a paginação do tab SYNCED).
-        const orders = super.getFilteredOrderList(...arguments);
-
-        // Fora do tab "Pago" nada muda: os chips e a janela do dia só são
-        // renderizados/calculados ali. Filtrar em outro tab esconderia
-        // pedidos sem nenhuma indicação visual ao operador (filtro fantasma).
+        // Demais tabs: lógica do core intacta (status, busca, paginação).
         if (this.state.filter !== "SYNCED") {
-            return orders;
+            return super.getFilteredOrderList(...arguments);
         }
+
+        // Tab "Pago": o slice de página do core (ticket_screen.js:378-382)
+        // é substituído pelo corte incremental — a lista cresce de 30 em 30
+        // conforme o scroll, em vez de trocar de página.
+        return this._pagoListaVisivel();
+    },
+
+    /**
+     * Lista do tab "Pago": pedidos do dia, busca, ordenação, chips e o corte
+     * incremental. Repete a composição do branch SYNCED do core
+     * (ticket_screen.js:347-349, 369-382) porque o slice de página sai daqui.
+     */
+    _pagoListaVisivel() {
+        let orders = this.pos.models["pos.order"].filter(
+            (order) => order.finalized && order.uiState.displayed
+        );
 
         // Complemento client-side do DEC-001: o domain já restringe o fetch,
         // mas o cache local guarda pedidos de sessões passadas e a sessão pode
         // atravessar a meia-noite — a lista exibida também é cortada.
-        const doDia = orders.filter((order) => this._pagoDentroDoDia(order));
+        orders = orders.filter((order) => this._pagoDentroDoDia(order));
 
-        const active = this.state.activePaymentMethodIds;
-        if (active.size === 0) {
-            return doDia;
+        // Busca: mesma semântica do core (fuzzyLookup sobre o repr do campo).
+        const { searchTerm, fieldName } = this.state.search;
+        if (searchTerm) {
+            const campo = this._getSearchFields()[fieldName];
+            if (campo) {
+                orders = fuzzyLookup(searchTerm, orders, campo.repr);
+            }
         }
 
-        // OR dentro do campo de pagamento (pedido misto aparece em todos os
-        // chips que ele usa); AND com os demais filtros, que já foram
-        // aplicados pelo super acima.
-        return doDia.filter((order) =>
-            order.payment_ids.some((payment) => active.has(payment.payment_method_id.id))
-        );
+        orders = this._pagoOrdenar(orders);
+
+        // Chips: OR dentro do campo de pagamento (pedido misto aparece em
+        // todos os chips que ele usa), AND com os demais filtros.
+        const active = this.state.activePaymentMethodIds;
+        if (active.size > 0) {
+            orders = orders.filter((order) =>
+                order.payment_ids.some((payment) => active.has(payment.payment_method_id.id))
+            );
+        }
+
+        // Corte incremental: a página visível é o número de blocos já
+        // carregados. Para quando o total do domínio foi alcançado (o próprio
+        // slice não passa do tamanho da lista).
+        return orders.slice(0, this.state.page * PAGINA);
+    },
+
+    /**
+     * Ordena como o sortOrders do core (ticket_screen.js:364-385): date_order
+     * e, no empate, o número do pedido em `name`.
+     */
+    _pagoOrdenar(orders) {
+        return orders.sort((a, b) => {
+            const dateA = parseUTCString(a.date_order);
+            const dateB = parseUTCString(b.date_order);
+            if (a.date_order !== b.date_order) {
+                return dateB - dateA;
+            }
+            const nameA = parseInt(a.name.replace(/\D/g, "")) || 0;
+            const nameB = parseInt(b.name.replace(/\D/g, "")) || 0;
+            return nameB - nameA;
+        });
+    },
+
+    // ── Scroll infinito (DEC-004/DEC-005) ────────────────────────────────
+    /**
+     * Handler do `t-on-scroll` no container da lista. Perto do fim dispara
+     * mais um bloco; nunca busca com a lista já esgotada, com fetch em
+     * andamento ou antes do primeiro fetch.
+     */
+    async onPagoScroll(event) {
+        if (this.state.filter !== "SYNCED" || this._pagoCarregando) {
+            return;
+        }
+        const alvo = event && event.target;
+        if (!alvo) {
+            return;
+        }
+        const pertoDoFim =
+            alvo.scrollTop + alvo.clientHeight >= alvo.scrollHeight - LIMIAR_SCROLL;
+        if (!pertoDoFim) {
+            return;
+        }
+        if (this._pagoDominioEsgotado === JSON.stringify(this._computeSyncedOrdersDomain())) {
+            return;
+        }
+
+        this._pagoCarregando = true;
+        try {
+            await this._fetchSyncedOrders();
+        } finally {
+            this._pagoCarregando = false;
+        }
+    },
+
+    /**
+     * Fetch de pedidos pagos do core (ticket_screen.js:702-741), com duas
+     * diferenças: falha por conexão perdida para silenciosamente no cache
+     * (DEC-004) e a página visível avança com o offset acumulado.
+     */
+    async _fetchSyncedOrders() {
+        const screenState = this.pos.ticketScreenState;
+        const domain = this._computeSyncedOrdersDomain();
+        const chave = JSON.stringify(domain);
+        const offset = screenState.offsetByDomain[chave] || 0;
+
+        let resposta;
+        try {
+            resposta = await this.pos.data.call("pos.order", "search_paid_order_ids", [], {
+                config_id: this.pos.config.id,
+                domain,
+                limit: PAGINA,
+                offset,
+            });
+        } catch (error) {
+            if (error instanceof ConnectionLostError) {
+                // Offline: mantém o que já está carregado, sem erro e sem
+                // spinner. O próximo scroll tenta de novo quando houver rede.
+                return;
+            }
+            throw error;
+        }
+
+        const { ordersInfo, totalCount } = resposta;
+        const idsParaLer = ordersInfo
+            .filter(([id, modificadoEm]) => {
+                const order = this.pos.models["pos.order"].get(id);
+                if (order && parseUTCString(modificadoEm) > parseUTCString(order.date_order)) {
+                    return true;
+                }
+                return !order;
+            })
+            .map(([id]) => id);
+
+        if (idsParaLer.length > 0) {
+            try {
+                await this.pos.data.read("pos.order", Array.from(new Set(idsParaLer)));
+            } catch (error) {
+                if (error instanceof ConnectionLostError) {
+                    return;
+                }
+                throw error;
+            }
+        }
+
+        const novoOffset = offset + ordersInfo.length;
+        screenState.offsetByDomain[chave] = novoOffset;
+        screenState.totalCount = totalCount;
+        this.state.page = Math.max(1, Math.ceil(novoOffset / PAGINA));
+        // Esgotado: alcançou o total do domínio ou o servidor não devolveu
+        // nada novo — para de buscar até o domínio mudar (busca/dia/ordem).
+        this._pagoDominioEsgotado =
+            novoOffset >= totalCount || ordersInfo.length === 0 ? chave : null;
     },
 });

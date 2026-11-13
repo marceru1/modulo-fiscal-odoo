@@ -40,6 +40,16 @@ const LUXON_PATH = path.join(
 
 const source = fs.readFileSync(JS_PATH, "utf8");
 
+// Constantes de módulo usadas dentro do patch: lidas do próprio arquivo para
+// o teste não repetir (e não divergir de) o valor real.
+function lerConstante(nome) {
+    const m = source.match(new RegExp(`const ${nome} = (\\d+);`));
+    assert(m, `constante ${nome} não encontrada em filtro_pedidos.js`);
+    return Number(m[1]);
+}
+const PAGINA = lerConstante("PAGINA");
+const LIMIAR_SCROLL = lerConstante("LIMIAR_SCROLL");
+
 // ── Luxon vendorizado do Odoo (mesmo build que o browser carrega) ─────────
 const luxonSrc = fs.readFileSync(LUXON_PATH, "utf8");
 const { DateTime } = new Function(`${luxonSrc}\nreturn luxon;`)();
@@ -105,8 +115,10 @@ function carregarPatch(agora) {
         "parseUTCString",
         "fuzzyLookup",
         "ConnectionLostError",
+        "PAGINA",
+        "LIMIAR_SCROLL",
         `return (${objLiteral});`
-    )(_t, DateTimeFake, parseUTCString, fuzzyLookup, ConnectionLostError);
+    )(_t, DateTimeFake, parseUTCString, fuzzyLookup, ConnectionLostError, PAGINA, LIMIAR_SCROLL);
     obj.__ConnectionLostError = ConnectionLostError;
     return obj;
 }
@@ -159,6 +171,9 @@ function makeOrder(id, methodIds, { total = 10, dateOrder = "2026-11-13 14:30:00
     return {
         id,
         name,
+        // O branch SYNCED do core filtra por finalized && uiState.displayed.
+        finalized: true,
+        uiState: { displayed: true },
         payment_ids: methodIds.map((mid) => ({ payment_method_id: { id: mid, name: "PM" + mid } })),
         get_total_with_tax: () => total,
         date_order: dateOrder,
@@ -174,6 +189,7 @@ function makeThis({ activeIds = [], filter = "SYNCED", searchTerm = "", fieldNam
     Object.assign(ctx, {
         state: {
             filter,
+            page: 1,
             search: { searchTerm, fieldName },
             activePaymentMethodIds: new Set(activeIds),
         },
@@ -188,8 +204,11 @@ function makeThis({ activeIds = [], filter = "SYNCED", searchTerm = "", fieldNam
                     ],
                 },
                 "pos.order": {
-                    getAll: () => ctx.__modelOrders || [],
-                    filter: (fn) => (ctx.__modelOrders || []).filter(fn),
+                    getAll: () => ctx.__baseOrders,
+                    // O patch no SYNCED lê a coleção direto (o core fatiaria
+                    // por página) — a coleção de teste é a mesma lista.
+                    filter: (fn) => ctx.__baseOrders.filter(fn),
+                    get: (id) => ctx.__baseOrders.find((o) => o.id === id),
                 },
             },
             ticketScreenState: { offsetByDomain: {}, totalCount: 0 },
@@ -294,9 +313,9 @@ const FIM_UTC = "2026-11-14 04:00:00";
     const ctx = makeThis();
     ctx.__baseOrders = [makeOrder(1, [1]), makeOrder(2, [2])];
     const result = ctx.__patch.getFilteredOrderList.call(ctx);
-    assert.deepStrictEqual(result.map((o) => o.id), [1, 2], "sem chip não deve filtrar");
-    assert(ctx.__superOrderListCalled, "super.getFilteredOrderList() deve ser chamado no SYNCED");
-    console.log("✓ D1: sem chip → passthrough (super chamado)");
+    assert.deepStrictEqual(result.map((o) => o.id), [1, 2], "mesmo date_order/nome → ordem estável do cache");
+    assert(!ctx.__superOrderListCalled, "no SYNCED o slice de página do core é substituído");
+    console.log("✓ D1: SYNCED compõe a lista sem o slice do core");
 }
 {
     const ctx = makeThis({ activeIds: [2] });
@@ -356,7 +375,8 @@ const FIM_UTC = "2026-11-14 04:00:00";
         makeOrder(4, [1], { dateOrder: "2026-11-14 04:00:00" }), // 14/11 00:00 local
     ];
     const result = ctx.__patch.getFilteredOrderList.call(ctx);
-    assert.deepStrictEqual(result.map((o) => o.id), [2, 3], "só o dia corrido local (00:00–23:59) aparece");
+    // desc: a venda mais recente do dia (id 3) primeiro.
+    assert.deepStrictEqual(result.map((o) => o.id), [3, 2], "só o dia corrido local (00:00–23:59) aparece");
     console.log("✓ D8: lista exibe só vendas do dia local");
 }
 
@@ -493,7 +513,191 @@ const FIM_UTC = "2026-11-14 04:00:00";
     assert(ctx.__superSetupCalled, "setup() deve chamar super.setup()");
     assert(ctx.state.activePaymentMethodIds instanceof Set, "activePaymentMethodIds deve ser um Set");
     assert.strictEqual(ctx.state.activePaymentMethodIds.size, 0, "Set deve começar vazio");
-    console.log("✓ G1: setup() inicializa activePaymentMethodIds vazio");
+    assert.strictEqual(ctx._pagoCarregando, false, "flag de fetch começa limpa");
+    assert.strictEqual(ctx._pagoDominioEsgotado, null, "nenhum domínio esgotado no início");
+    console.log("✓ G1: setup() inicializa chips e controle do scroll");
 }
 
-console.log("\nTodos os testes passaram ✓");
+// ── Helpers do scroll ─────────────────────────────────────────────────────
+/** N pedidos do dia 13/11 (12:00..12:59), com name/date únicos. */
+function pedidosDoDia(qtd) {
+    return Array.from({ length: qtd }, (_, i) =>
+        makeOrder(i + 1, [1], {
+            dateOrder: `2026-11-13 12:${String(i).padStart(2, "0")}:00`,
+            name: `POS/${String(i + 1).padStart(4, "0")}`,
+        })
+    );
+}
+
+/** "Perto do fim": scrollTop + clientHeight >= scrollHeight - 300. */
+const PERTO_DO_FIM = { target: { scrollTop: 700, clientHeight: 300, scrollHeight: 1000 } };
+const LONGE_DO_FIM = { target: { scrollTop: 0, clientHeight: 300, scrollHeight: 2000 } };
+
+/** pos.data.call que devolve a página pedida da lista fake. */
+function comFetch(ctx) {
+    ctx.__chamadas = [];
+    ctx.pos.data.call = async (modelo, metodo, args, kwargs) => {
+        ctx.__chamadas.push({ modelo, metodo, kwargs });
+        const inicio = kwargs.offset;
+        const pagina = ctx.__baseOrders.slice(inicio, inicio + kwargs.limit);
+        return {
+            ordersInfo: pagina.map((o) => [o.id, o.date_order]),
+            totalCount: ctx.__baseOrders.length,
+        };
+    };
+    ctx.pos.data.read = async () => [];
+    return ctx;
+}
+
+// ── Grupo H: corte incremental (DEC-005) ──────────────────────────────────
+{
+    const ctx = makeThis();
+    ctx.__baseOrders = pedidosDoDia(45);
+    assert.strictEqual(
+        ctx.__patch.getFilteredOrderList.call(ctx).length,
+        30,
+        "primeiro bloco = 30 (não a lista inteira)"
+    );
+    ctx.state.page = 2;
+    assert.strictEqual(
+        ctx.__patch.getFilteredOrderList.call(ctx).length,
+        45,
+        "segundo bloco = +30 (45 no total)"
+    );
+    ctx.state.page = 3;
+    assert.strictEqual(
+        ctx.__patch.getFilteredOrderList.call(ctx).length,
+        45,
+        "não passa do total do domínio"
+    );
+    console.log("✓ H1: lista cresce em blocos de 30, sem passar do total");
+}
+
+// ── Grupo I: scroll e fetch (DEC-004/DEC-005) ─────────────────────────────
+(async () => {
+    // I1: primeiro fetch (offset 0, limit 30, domain com a janela do dia) e
+    //     scroll perto do fim busca o próximo bloco
+    {
+        const ctx = comFetch(makeThis());
+        ctx.__baseOrders = pedidosDoDia(45);
+
+        await ctx.__patch._fetchSyncedOrders.call(ctx);
+        assert.strictEqual(ctx.__chamadas.length, 1, "primeiro fetch");
+        const primeira = ctx.__chamadas[0].kwargs;
+        assert.strictEqual(primeira.limit, 30, "fetch do core: 30 por vez");
+        assert.strictEqual(primeira.offset, 0, "primeiro offset é 0");
+        assert.deepStrictEqual(
+            primeira.domain,
+            ctx.__patch._computeSyncedOrdersDomain.call(ctx),
+            "o fetch usa o domain com a janela do dia"
+        );
+        assert.strictEqual(ctx.state.page, 1, "primeiro bloco visível");
+
+        await ctx.__patch.onPagoScroll.call(ctx, PERTO_DO_FIM);
+        assert.strictEqual(ctx.__chamadas.length, 2, "scroll perto do fim busca mais 30");
+        assert.strictEqual(ctx.__chamadas[1].kwargs.offset, 30, "offset avança em 30");
+        assert.strictEqual(ctx.state.page, 2, "a lista cresce um bloco");
+        assert.strictEqual(ctx.__patch.getFilteredOrderList.call(ctx).length, 45);
+        console.log("✓ I1: scroll infinito busca +30 e a lista cresce");
+    }
+
+    // I2: longe do fim não busca
+    {
+        const ctx = comFetch(makeThis());
+        ctx.__baseOrders = pedidosDoDia(45);
+        await ctx.__patch._fetchSyncedOrders.call(ctx);
+        await ctx.__patch.onPagoScroll.call(ctx, LONGE_DO_FIM);
+        assert.strictEqual(ctx.__chamadas.length, 1, "longe do fim não busca");
+        console.log("✓ I2: fetch só perto do fim");
+    }
+
+    // I3: já há fetch em andamento → não dispara outro
+    {
+        const ctx = comFetch(makeThis());
+        ctx.__baseOrders = pedidosDoDia(45);
+        ctx._pagoCarregando = true;
+        await ctx.__patch.onPagoScroll.call(ctx, PERTO_DO_FIM);
+        assert.strictEqual(ctx.__chamadas.length, 0, "não duplica fetch concorrente");
+        ctx._pagoCarregando = false;
+        console.log("✓ I3: guarda de fetch concorrente");
+    }
+
+    // I4: domínio já esgotado → não busca de novo
+    {
+        const ctx = comFetch(makeThis());
+        ctx.__baseOrders = pedidosDoDia(3);
+        await ctx.__patch._fetchSyncedOrders.call(ctx);
+        assert.strictEqual(ctx._pagoDominioEsgotado, JSON.stringify(ctx.__patch._computeSyncedOrdersDomain.call(ctx)));
+        await ctx.__patch.onPagoScroll.call(ctx, PERTO_DO_FIM);
+        assert.strictEqual(ctx.__chamadas.length, 1, "total alcançado → para de buscar");
+        console.log("✓ I4: para quando o total do domínio foi alcançado");
+    }
+
+    // I5: offline (ConnectionLostError) → para quieto no cache, sem erro
+    {
+        const ctx = comFetch(makeThis());
+        ctx.__baseOrders = pedidosDoDia(45);
+        await ctx.__patch._fetchSyncedOrders.call(ctx);
+        const offsetAntes = JSON.stringify(ctx.pos.ticketScreenState.offsetByDomain);
+        const paginaAntes = ctx.state.page;
+
+        ctx.pos.data.call = async () => {
+            throw new ctx.__patch.__ConnectionLostError("sem rede");
+        };
+        await assert.doesNotReject(
+            ctx.__patch.onPagoScroll.call(ctx, PERTO_DO_FIM),
+            "perda de conexão não pode virar erro na tela"
+        );
+        assert.strictEqual(ctx._pagoCarregando, false, "flag de loading limpa");
+        assert.strictEqual(JSON.stringify(ctx.pos.ticketScreenState.offsetByDomain), offsetAntes, "offset não avança offline");
+        assert.strictEqual(ctx.state.page, paginaAntes, "lista fica estável");
+        assert.strictEqual(ctx.__patch.getFilteredOrderList.call(ctx).length, 30, "mostra o que já estava carregado");
+        console.log("✓ I5: offline para silenciosamente, lista estável");
+    }
+
+    // I6: erro que NÃO é de conexão continua visível (não engolimos bug)
+    {
+        const ctx = comFetch(makeThis());
+        ctx.pos.data.call = async () => {
+            throw new Error("boom");
+        };
+        await assert.rejects(
+            ctx.__patch._fetchSyncedOrders.call(ctx),
+            /boom/,
+            "erro real não pode ser silenciado"
+        );
+        console.log("✓ I6: erro não-offline propaga");
+    }
+
+    // I7: fora do SYNCED o scroll não busca nada
+    {
+        const ctx = comFetch(makeThis({ filter: "ACTIVE_ORDERS" }));
+        ctx.__baseOrders = pedidosDoDia(45);
+        await ctx.__patch.onPagoScroll.call(ctx, PERTO_DO_FIM);
+        assert.strictEqual(ctx.__chamadas.length, 0, "scroll só vale no tab Pago");
+        console.log("✓ I7: scroll sem efeito nos demais tabs");
+    }
+
+    // I8: a leitura de pedidos fora do cache acontece ANTES do offset avançar
+    {
+        const ctx = comFetch(makeThis());
+        ctx.__baseOrders = []; // nada em cache
+        ctx.pos.data.call = async () => ({
+            ordersInfo: [[777, "2026-11-13 12:00:00"]],
+            totalCount: 1,
+        });
+        let lidos = null;
+        ctx.pos.data.read = async (modelo, ids) => {
+            lidos = ids;
+            return [];
+        };
+        await ctx.__patch._fetchSyncedOrders.call(ctx);
+        assert.deepStrictEqual(lidos, [777], "pedido novo é lido do servidor");
+        console.log("✓ I8: pedidos fora do cache são lidos");
+    }
+
+    console.log("\nTodos os testes passaram ✓");
+})().catch((error) => {
+    console.error(error);
+    process.exit(1);
+});
