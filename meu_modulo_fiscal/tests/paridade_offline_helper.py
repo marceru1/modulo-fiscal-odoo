@@ -88,10 +88,14 @@ def montar_pos_offline(teste):
     })
 
 
-def criar_pedido(teste, amount, method, partner=None):
-    """Cria um pos.order 'done' com um pagamento no método informado."""
+def criar_pedido(teste, amount, method, partner=None, session=None):
+    """Cria um pos.order 'done' com um pagamento no método informado.
+
+    ``session`` permite criar o pedido em outra sessão/caixa; sem ele usa a
+    sessão do cenário offline.
+    """
     order = teste.env['pos.order'].create({
-        'session_id': teste.pos_session.id,
+        'session_id': (session or teste.pos_session).id,
         'partner_id': (partner or teste.env.ref('base.public_partner')).id,
         'pricelist_id': teste.pricelist.id,
         'state': 'draft',

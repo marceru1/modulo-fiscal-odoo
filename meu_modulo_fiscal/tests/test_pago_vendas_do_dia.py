@@ -27,9 +27,9 @@ class TestPagoVendasDoDia(TransactionCase):
         montar_pos_offline(self)
 
     # ── Helpers ──────────────────────────────────────────────────────────────
-    def _pedido(self, momento):
+    def _pedido(self, momento, metodo=None, sessao=None):
         """Cria um pedido 'done' com data de venda e de criação controladas."""
-        order = criar_pedido(self, 10.0, self.cash_pm)
+        order = criar_pedido(self, 10.0, metodo or self.cash_pm, session=sessao)
         order.write({'date_order': momento, 'create_date': momento})
         return order
 
@@ -148,8 +148,7 @@ class TestPagoVendasDoDia(TransactionCase):
         meu = self._pedido('2026-11-13 10:00:00')
 
         outro_config, outra_sessao = self._segundo_caixa()
-        de_outro_caixa = self._pedido('2026-11-13 11:00:00')
-        de_outro_caixa.write({'session_id': outra_sessao.id})
+        de_outro_caixa = self._pedido('2026-11-13 11:00:00', self.outro_pm, outra_sessao)
         self.assertEqual(de_outro_caixa.config_id, outro_config)
 
         resultado = self._buscar(
@@ -167,8 +166,7 @@ class TestPagoVendasDoDia(TransactionCase):
         meu = self._pedido('2026-11-13 10:00:00')
 
         _outro_config, outra_sessao = self._segundo_caixa()
-        de_outro = self._pedido('2026-11-13 11:00:00')
-        de_outro.write({'session_id': outra_sessao.id})
+        de_outro = self._pedido('2026-11-13 11:00:00', self.outro_pm, outra_sessao)
 
         resultado = self._buscar(order='date_order asc')  # helper manda domain=[]
 
@@ -176,17 +174,35 @@ class TestPagoVendasDoDia(TransactionCase):
         self.assertEqual(resultado['totalCount'], 1)
 
     def _segundo_caixa(self):
-        """Config + sessão de outro caixa (mesma empresa/moeda)."""
-        journal = self.env['account.journal'].create({
+        """Config + sessão de outro caixa (mesma empresa/moeda).
+
+        O método de dinheiro NÃO pode ser o `cash_pm` do primeiro caixa:
+        `pos.config._check_payment_method_ids_journal`
+        (addons/point_of_sale/models/pos_config.py:424-432) proíbe o mesmo
+        método de dinheiro em dois pontos de venda. Cada caixa ganha seu
+        journal caixa + método próprio.
+        """
+        sale_journal = self.env['account.journal'].create({
             'name': 'Vendas Teste Outro Caixa',
             'type': 'sale',
             'code': 'OFC',
             'company_id': self.env.company.id,
         })
+        cash_journal = self.env['account.journal'].create({
+            'name': 'Caixa Teste Outro Caixa',
+            'type': 'cash',
+            'code': 'OFC2',
+            'company_id': self.env.company.id,
+        })
+        self.outro_pm = self.env['pos.payment.method'].create({
+            'name': 'Dinheiro Outro Caixa',
+            'journal_id': cash_journal.id,
+        })
         config = self.env['pos.config'].create({
             'name': 'PDV Teste Outro Caixa',
-            'journal_id': journal.id,
-            'payment_method_ids': [(6, 0, [self.cash_pm.id])],
+            'journal_id': sale_journal.id,
+            # Sessão exige ao menos um método (pos_config.py:397-402).
+            'payment_method_ids': [(6, 0, [self.outro_pm.id])],
         })
         session = self.env['pos.session'].create({
             'config_id': config.id,
