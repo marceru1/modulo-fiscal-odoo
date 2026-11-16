@@ -22,6 +22,9 @@
         'views/etiquetas_wizard_views.xml',
         'views/etiquetas_menu_views.xml',
         'views/campos_fiscais_views.xml',
+        # rastreio-produto: troca só o widget do campo is_storable no form do
+        # template (confirmação ao desmarcar). Sem position="replace".
+        'views/rastreio_produto_views.xml',
         'views/res_company_views.xml',
         'views/res_config_settings_views.xml',
         # prazo-por-contato: historico + botao Registrar Pagamento na aba
@@ -183,6 +186,11 @@
             # consulta-vendas-caixa-dia-ui-ux: estilos escopados na consulta
             # (nunca no bundle do POS nem em componentes globais do backend).
             'meu_modulo_fiscal/static/src/css/consulta_vendas_caixa_dia.scss',
+            # rastreio-produto: widget do is_storable no form do produto
+            # (modal de confirmação ao desmarcar). JS antes do XML — o
+            # template usa a classe/handler registrados no JS.
+            'meu_modulo_fiscal/static/src/js/rastreio_produto.js',
+            'meu_modulo_fiscal/static/src/xml/rastreio_produto.xml',
         ],
     },
     'installable': True,

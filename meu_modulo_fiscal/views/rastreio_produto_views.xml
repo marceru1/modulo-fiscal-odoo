@@ -1,0 +1,21 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <!-- rastreio-produto (DEC-003): troca SÓ o widget do campo is_storable no
+         form do template. O campo é do stock — o único nó is_storable do form
+         nativo vem de stock.view_template_property_form
+         (addons/stock/views/product_views.xml:118-121, dentro do div
+         o_row ao lado do tracking), então o xpath casa 1 nó na view final.
+         O invisible="type != 'consu'" nativo fica no label/div do core e é
+         preservado: a herança não toca atributos além do widget.
+         Proibido position="replace". -->
+    <record id="product_template_form_view_inherit_rastreio" model="ir.ui.view">
+        <field name="name">product.template.form.inherit.rastreio</field>
+        <field name="model">product.template</field>
+        <field name="inherit_id" ref="product.product_template_form_view"/>
+        <field name="arch" type="xml">
+            <xpath expr="//field[@name='is_storable']" position="attributes">
+                <attribute name="widget">desmarcar_rastreio_confirmacao</attribute>
+            </xpath>
+        </field>
+    </record>
+</odoo>

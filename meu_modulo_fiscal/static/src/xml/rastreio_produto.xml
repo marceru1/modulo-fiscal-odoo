@@ -1,0 +1,16 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<templates xml:space="preserve">
+    <!-- Variante do boolean nativo usada só no campo is_storable do form do
+         produto (feature rastreio-produto). O t-key remonta o CheckBox quando
+         o usuário cancela o diálogo: o <input> nasce de novo com
+         checked=state.value, desfazendo a alteração de DOM feita pelo toggle
+         nativo antes do handler (checkbox.js onChange). -->
+    <t t-name="meu_modulo_fiscal.DesmarcarRastreioBooleanField">
+        <CheckBox t-key="state.desmarcarRastreioRemontar"
+                  id="props.id"
+                  value="state.value"
+                  className="'d-inline-block'"
+                  disabled="props.readonly"
+                  onChange.bind="onChange" />
+    </t>
+</templates>
