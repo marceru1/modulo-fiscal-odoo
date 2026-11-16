@@ -4,6 +4,7 @@ from . import account_move
 from . import res_partner
 from . import pos_payment_method
 from . import campos_fiscais
+from . import rastreio_produto
 from . import recursos_variantes
 from . import pos_order
 from . import consulta_vendas_caixa_dia
