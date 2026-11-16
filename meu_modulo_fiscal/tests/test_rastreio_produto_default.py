@@ -64,8 +64,29 @@ class TestRastreioProdutoDefault(TransactionCase):
             .default_get(['is_storable'])
         )
 
-        self.assertNotIn('is_storable', defaults,
-                         'Tipo padrão diferente de Bem não recebe o default da feature')
+        # O core SEMPRE inclui o default do campo em res (is_storable tem
+        # default=False no stock e field.default é um callable truthy —
+        # odoo/models.py:1671-1674). O contrato é não virar True.
+        self.assertIs(defaults.get('is_storable'), False,
+                      'Tipo padrão diferente de Bem não pode receber o default da feature')
+
+    def test_default_so_is_storable_resolve_tipo_padrao_do_campo(self):
+        # Regressão (suíte runtime): sem 'type' no fields_list, o tipo precisa
+        # ser resolvido pelo callable do default do campo ('consu'), não pela
+        # comparação do atributo com a string.
+        defaults = self.env['product.template'].default_get(['is_storable'])
+
+        self.assertIs(defaults.get('is_storable'), True,
+                      'Sem type pedido, o tipo padrão resolvido é Bem → default marcado')
+
+    def test_default_ir_default_do_chamador_vence(self):
+        # Origem explícita (ir.default) vence o default da feature, mesmo False.
+        self.env['ir.default'].set('product.template', 'is_storable', False)
+
+        defaults = self.env['product.template'].default_get(['type', 'is_storable'])
+
+        self.assertIs(defaults.get('is_storable'), False,
+                      'ir.default explícito nunca pode ser sobrescrito pela feature')
 
     def test_default_nao_incluido_quando_campo_nao_pedido(self):
         defaults = self.env['product.template'].default_get(['name'])
@@ -98,6 +119,31 @@ class TestRastreioProdutoDefault(TransactionCase):
 
         self.assertFalse(tmpl.is_storable,
                          'Serviço criado sem is_storable mantém o comportamento do core')
+
+    def test_create_respeita_contexto_default_is_storable(self):
+        # Contrato "o que veio do chamador vence" também no create: a guarda
+        # não pode sobrescrever default_is_storable do contexto.
+        tmpl = (
+            self.env['product.template']
+            .with_context(default_is_storable=False)
+            .create({'name': 'Bem desmarcado por contexto'})
+        )
+
+        self.assertFalse(tmpl.is_storable,
+                         'default_is_storable=False no contexto vence o default da feature')
+
+    def test_create_servico_por_contexto_default_type(self):
+        # O tipo resolvido via contexto também governa a guarda do create
+        # (o ORM aplica default_type em _add_missing_default_values).
+        tmpl = (
+            self.env['product.template']
+            .with_context(default_type='service')
+            .create({'name': 'Serviço por contexto'})
+        )
+
+        self.assertEqual(tmpl.type, 'service')
+        self.assertFalse(tmpl.is_storable,
+                         'Tipo resolvido por default_type no contexto não pode nascer rastreado')
 
     def test_create_combo_sem_is_storable_fica_false(self):
         base = self.env['product.template'].create({'name': 'Produto base do combo'})
