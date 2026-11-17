@@ -37,7 +37,7 @@ class TestNfeConfigTributaria(TransactionCase):
         config = self._config()
 
         self.assertFalse(config.conferida)
-        self.assertEqual(config.cfop_mesma_uf, '5152')
+        self.assertEqual(config.cfop, '5152')
         self.assertEqual(config.icms_cst_csosn, '102')
         self.assertEqual(config.pis_cst, '07')
         self.assertEqual(config.cofins_cst, '07')
@@ -47,7 +47,7 @@ class TestNfeConfigTributaria(TransactionCase):
         config = self._config()
         config.conferida = True
 
-        config.write({'cfop_mesma_uf': '5151'})
+        config.write({'cfop': '5151'})
 
         self.assertFalse(config.conferida)
 
@@ -56,7 +56,6 @@ class TestNfeConfigTributaria(TransactionCase):
         for campo, valor in (
             ('natureza_operacao', 'Remessa'),
             ('finalidade', '3'),
-            ('cfop_outra_uf', '6152'),
             ('icms_cst_csosn', '00'),
             ('origem', '1'),
             ('pis_cst', '01'),
@@ -80,32 +79,33 @@ class TestNfeConfigTributaria(TransactionCase):
         """O form ajusta o campo e marca "Conferida" antes de salvar."""
         config = self._config()
 
-        config.write({'cfop_mesma_uf': '5151', 'conferida': True})
+        config.write({'cfop': '5151', 'conferida': True})
 
         self.assertTrue(config.conferida)
 
-    # ── CFOP por destino ─────────────────────────────────────────────────────
-    def test_cfop_por_destino_independente(self):
+    # ── CFOP ─────────────────────────────────────────────────────────────────
+    def test_cfop_e_unico_da_operacao_estadual(self):
+        """DEC-008: a operação é só estadual; não existe CFOP interestadual."""
         config = self._config()
 
-        config.write({'cfop_mesma_uf': '5152', 'cfop_outra_uf': '6152'})
+        config.write({'cfop': '5151'})
 
-        self.assertEqual(config.cfop_mesma_uf, '5152')
-        self.assertEqual(config.cfop_outra_uf, '6152')
+        self.assertEqual(config.cfop, '5151')
+        self.assertNotIn('cfop_outra_uf', config._fields)
 
     def test_cfop_invalido_e_rejeitado(self):
         config = self._config()
 
         for invalido in ('515', '51520', '51A2'):
             with self.assertRaises(ValidationError):
-                config.write({'cfop_mesma_uf': invalido})
+                config.write({'cfop': invalido})
 
     # ── Acesso ───────────────────────────────────────────────────────────────
     def test_usuario_nfe_nao_altera_operacao(self):
         config = self._config()
 
         with self.assertRaises(AccessError):
-            config.with_user(self.usuario_nfe).write({'cfop_mesma_uf': '5151'})
+            config.with_user(self.usuario_nfe).write({'cfop': '5151'})
         with self.assertRaises(AccessError):
             config.with_user(self.usuario_nfe).write({'conferida': True})
 
@@ -114,7 +114,7 @@ class TestNfeConfigTributaria(TransactionCase):
 
         config.with_user(self.responsavel).write({
             'natureza_operacao': 'Transferência para filial',
-            'cfop_outra_uf': '6152',
+            'cfop': '5151',
             'conferida': True,
         })
 
@@ -129,8 +129,8 @@ class TestNfeConfigTributaria(TransactionCase):
             'x_cfop': '5102',
         })
 
-        config = self._config(cfop_mesma_uf='5152')
+        config = self._config(cfop='5152')
         config.conferida = True
 
-        self.assertEqual(config.cfop_mesma_uf, '5152')
+        self.assertEqual(config.cfop, '5152')
         self.assertEqual(produto.x_cfop, '5102')

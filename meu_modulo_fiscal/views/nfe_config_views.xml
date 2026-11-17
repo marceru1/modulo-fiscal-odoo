@@ -42,8 +42,7 @@
                         <group>
                             <field name="natureza_operacao"/>
                             <field name="finalidade"/>
-                            <field name="cfop_mesma_uf" placeholder="5152"/>
-                            <field name="cfop_outra_uf" placeholder="6xxx (outra UF)"/>
+                            <field name="cfop" placeholder="5152"/>
                         </group>
                         <group>
                             <field name="icms_cst_csosn"/>

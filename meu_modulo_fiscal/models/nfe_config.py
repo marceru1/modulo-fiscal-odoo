@@ -111,16 +111,11 @@ class NfeConfig(models.Model):
         string="Finalidade",
         default='1',
     )
-    cfop_mesma_uf = fields.Char(
-        string="CFOP na mesma UF",
+    cfop = fields.Char(
+        string="CFOP",
         default='5152',
-        help="Referência: 5152 para operação na mesma UF (série 5). "
+        help="Operação estadual (mesma UF), série 5. Referência: 5152. "
              "Confirme com o contador.",
-    )
-    cfop_outra_uf = fields.Char(
-        string="CFOP para outra UF",
-        help="CFOP interestadual (6xxx) e série 6. A spec não define este "
-             "código: confirme com o contador antes de conferir a operação.",
     )
     icms_cst_csosn = fields.Selection(
         ICMS_CST_CSOSN_SELECTION,
@@ -144,7 +139,7 @@ class NfeConfig(models.Model):
 
     # Campos cuja alteração desmarca a conferência (spec, decisão 4).
     CAMPOS_TRIBUTARIOS = (
-        'natureza_operacao', 'finalidade', 'cfop_mesma_uf', 'cfop_outra_uf',
+        'natureza_operacao', 'finalidade', 'cfop',
         'icms_cst_csosn', 'origem', 'pis_cst', 'cofins_cst',
     )
 
@@ -160,15 +155,11 @@ class NfeConfig(models.Model):
             if config.ibge_municipio and not config.ibge_municipio.isdigit():
                 raise ValidationError(_("O código IBGE do município deve conter apenas dígitos."))
 
-    @api.constrains('cfop_mesma_uf', 'cfop_outra_uf')
+    @api.constrains('cfop')
     def _check_cfop(self):
         for config in self:
-            for campo in ('cfop_mesma_uf', 'cfop_outra_uf'):
-                cfop = config[campo]
-                if cfop and (len(cfop) != 4 or not cfop.isdigit()):
-                    raise ValidationError(
-                        _("O CFOP deve ter 4 dígitos numéricos (campo: %s).", config._fields[campo].string)
-                    )
+            if config.cfop and (len(config.cfop) != 4 or not config.cfop.isdigit()):
+                raise ValidationError(_("O CFOP deve ter 4 dígitos numéricos."))
 
     # ── Conferência ──────────────────────────────────────────────────────────
     def write(self, vals):
