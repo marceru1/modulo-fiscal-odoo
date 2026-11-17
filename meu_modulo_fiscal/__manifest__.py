@@ -12,6 +12,9 @@
     ],
     'data': [
         'data/br.ncm.csv',
+        # nfe-modelo-55: grupos e record rule ANTES da ACL — o CSV referencia
+        # o xmlid do grupo "Responsável fiscal".
+        'security/nfe_security.xml',
         'security/ir.model.access.csv',
         # etiquetas-produto-impressao: paperformats, reports e templates QWeb
         # antes das views — a view do wizard referencia a action registrada aqui.
@@ -53,6 +56,9 @@
         # nfe-modelo-55: filial destinatária na transferência de estoque
         # (origem da NF-e modelo 55).
         'views/stock_picking_nfe_views.xml',
+        # nfe-modelo-55: configuração fiscal por empresa + menu Faturamento → NF-e.
+        'views/nfe_config_views.xml',
+        'views/nfe_menus.xml',
     ],
     'assets': {
         'point_of_sale._assets_pos': [

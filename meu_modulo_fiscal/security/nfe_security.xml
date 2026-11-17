@@ -1,0 +1,45 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <!--
+        Grupos da NF-e modelo 55 (ticket 02).
+
+        Carregado ANTES de security/ir.model.access.csv no manifest: o CSV
+        referencia o grupo "Responsável fiscal" pelo xmlid, e o registro tem
+        que existir quando a ACL é aplicada.
+
+        "Responsável fiscal" implica "Usuário" (implied_ids): quem configura
+        a operação também prepara, valida e simula a nota.
+    -->
+    <record id="module_category_nfe" model="ir.module.category">
+        <field name="name">NF-e</field>
+        <field name="sequence">10</field>
+    </record>
+
+    <record id="group_nfe_usuario" model="res.groups">
+        <field name="name">Usuário</field>
+        <field name="category_id" ref="module_category_nfe"/>
+        <field name="comment">Preparar a NF-e a partir de transferência permitida, consultar, validar e simular o envio.</field>
+    </record>
+
+    <record id="group_nfe_responsavel_fiscal" model="res.groups">
+        <field name="name">Responsável fiscal</field>
+        <field name="category_id" ref="module_category_nfe"/>
+        <field name="comment">Mesmas ações do Usuário, mais a configuração fiscal das empresas e as correções tributárias por item.</field>
+        <field name="implied_ids" eval="[(4, ref('group_nfe_usuario'))]"/>
+    </record>
+
+    <!--
+        Configuração NF-e por empresa: visível só dentro das empresas
+        permitidas ao usuário. Regra global (sem grupo) para valer para
+        qualquer um que venha a receber acesso ao modelo.
+    -->
+    <record id="rule_nfe_config_empresa" model="ir.rule">
+        <field name="name">NF-e: configuração fiscal por empresa</field>
+        <field name="model_id" ref="model_nfe_config"/>
+        <field name="domain_force">[('company_id', 'in', company_ids)]</field>
+        <field name="perm_read" eval="True"/>
+        <field name="perm_write" eval="True"/>
+        <field name="perm_create" eval="True"/>
+        <field name="perm_unlink" eval="True"/>
+    </record>
+</odoo>

@@ -1,0 +1,21 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <!--
+        Menu Faturamento → NF-e (ticket 02).
+        O menu pai "Faturamento" é do módulo account (account.menu_finance),
+        já instalado via point_of_sale. Nenhuma dependência nova no manifest.
+        Configurações fiscais ficam restritas ao Responsável fiscal; a lista de
+        notas (ticket 06) entra no mesmo menu pai.
+    -->
+    <menuitem id="menu_nfe_root"
+              name="NF-e"
+              parent="account.menu_finance"
+              sequence="95"/>
+
+    <menuitem id="menu_nfe_config"
+              name="Configurações fiscais"
+              parent="menu_nfe_root"
+              action="action_nfe_config"
+              groups="group_nfe_responsavel_fiscal"
+              sequence="20"/>
+</odoo>

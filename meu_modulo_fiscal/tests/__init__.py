@@ -15,3 +15,4 @@ from . import test_consulta_vendas_caixa_dia
 from . import test_pago_vendas_do_dia
 from . import test_rastreio_produto_default
 from . import test_nfe_elegibilidade
+from . import test_nfe_config
