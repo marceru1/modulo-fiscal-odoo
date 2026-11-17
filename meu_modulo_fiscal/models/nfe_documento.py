@@ -19,6 +19,7 @@ from psycopg2 import IntegrityError
 
 from odoo import _, api, fields, models
 from odoo.exceptions import AccessError, UserError
+from odoo.tools import float_compare
 
 from .campos_fiscais import CST_PIS_COFINS, ICMS_CST_CSOSN_SELECTION, ORIGEM_SELECTION
 from .nfe_config import AMBIENTE_SELECTION, CRT_SELECTION, UF_IBGE_SELECTION
@@ -140,6 +141,17 @@ class NfeDocumento(models.Model):
         help="Resultado da última conferência local (Validar NF-e). "
              "Pendência mantém a nota em Rascunho.",
     )
+    divergente = fields.Boolean(
+        string="Divergente da transferência",
+        compute='_compute_divergencia',
+        help="A origem mudou depois da preparação: a nota precisa ser "
+             "atualizada explicitamente antes de nova validação.",
+    )
+    divergencia_detalhe = fields.Text(
+        string="Divergências com a transferência",
+        compute='_compute_divergencia',
+        readonly=True,
+    )
 
     data_movimentacao = fields.Datetime(string="Data da movimentação", readonly=True)
     data_preparacao = fields.Datetime(
@@ -194,7 +206,7 @@ class NfeDocumento(models.Model):
     def write(self, vals):
         fiscal = any(campo in vals for campo in self.CAMPOS_FISCAIS)
         if fiscal:
-            if not self.env.user.has_group(GRUPO_RESPONSAVEL_FISCAL):
+            if not self.env.su and not self.env.user.has_group(GRUPO_RESPONSAVEL_FISCAL):
                 raise AccessError(
                     _("Apenas o Responsável fiscal pode ajustar dados fiscais da NF-e.")
                 )
@@ -372,6 +384,10 @@ class NfeDocumento(models.Model):
         if not self.serie:
             pendencias.append("Série da NF-e ausente.")
 
+        # Origem corrigida depois da preparação: bloqueia validar/emitir até
+        # a atualização explícita.
+        pendencias.extend(self._nfe_divergencias())
+
         if not self.linha_ids:
             pendencias.append("Nota sem itens.")
         for linha in self.linha_ids:
@@ -402,6 +418,89 @@ class NfeDocumento(models.Model):
     def _compute_total_produtos(self):
         for documento in self:
             documento.total_produtos = sum(documento.linha_ids.mapped('total_linha'))
+
+    # ── Divergência com a origem (ticket 10) ─────────────────────────────────
+    def _compute_divergencia(self):
+        for documento in self:
+            divergencias = documento._nfe_divergencias()
+            documento.divergente = bool(divergencias)
+            documento.divergencia_detalhe = "\n".join(divergencias) or False
+
+    def _nfe_divergencias(self):
+        """Compara os movimentos realizados da origem com as linhas guardadas.
+
+        Casa por ``move_id`` (o item é o movimento). Quantidade é comparada
+        com o arredondamento da unidade do movimento.
+        """
+        self.ensure_one()
+        if not self.picking_id:
+            return []
+        moves = self.picking_id._nfe_moves_realizados()
+        por_move = {
+            linha.move_id.id: linha for linha in self.linha_ids if linha.move_id
+        }
+        divergencias = []
+        for move in moves:
+            linha = por_move.pop(move.id, None)
+            if not linha:
+                divergencias.append(
+                    "%s: item novo na transferência (quantidade %s)."
+                    % (move.product_id.display_name, move.quantity)
+                )
+                continue
+            if move.product_id != linha.product_id or move.product_uom != linha.uom_id:
+                divergencias.append(
+                    "%s: produto/unidade alterados na transferência." % linha.descricao
+                )
+            elif float_compare(
+                move.quantity, linha.quantidade,
+                precision_rounding=move.product_uom.rounding,
+            ):
+                divergencias.append(
+                    "%s: quantidade %s → %s na transferência."
+                    % (linha.descricao, linha.quantidade, move.quantity)
+                )
+        for linha in por_move.values():
+            divergencias.append("%s: item removido da transferência." % linha.descricao)
+        return divergencias
+
+    def nfe_atualizar_da_transferencia(self):
+        """Botão **Atualizar da transferência**: sincroniza produtos e
+        quantidades com a origem; devolve a nota a Rascunho.
+
+        Preserva o custo capturado das linhas existentes (o custo só é
+        recapturado quando o produto/unidade do movimento mudou). Itens novos
+        capturam o custo vigente da remetente; itens removidos saem.
+
+        Os valores vêm SEMPRE da origem (nunca do usuário) — por isso a
+        escrita roda com ``sudo``: não é ajuste fiscal do Responsável.
+        """
+        self.ensure_one()
+        moves = self.picking_id._nfe_moves_realizados()
+        config = self._nfe_config_da_empresa(self.company_id)
+        por_move = {
+            linha.move_id.id: linha for linha in self.linha_ids if linha.move_id
+        }
+        for move in moves:
+            linha = por_move.pop(move.id, None)
+            if not linha:
+                self.write({'linha_ids': [(0, 0, self._nfe_linha_vals(move, config))]})
+                continue
+            vals = {'quantidade': move.quantity}
+            if move.product_id != linha.product_id or move.product_uom != linha.uom_id:
+                vals.update({
+                    'product_id': move.product_id.id,
+                    'uom_id': move.product_uom.id,
+                    'descricao': move.product_id.display_name,
+                    'ncm': move.product_id.x_ncm_id.code,
+                    'custo_unitario': self._nfe_custo_unitario(move),
+                })
+            # Sempre regrava: os valores vêm da origem (idempotente).
+            linha.sudo().write(vals)
+        for linha in por_move.values():
+            linha.sudo().unlink()
+        self.write({'state': 'rascunho', 'pendencias': False})
+        return self._nfe_acao_reabrir()
 
     # ── Referência ───────────────────────────────────────────────────────────
     @api.model
@@ -623,7 +722,7 @@ class NfeDocumentoLinha(models.Model):
 
     def write(self, vals):
         fiscal = any(campo in vals for campo in self.CAMPOS_FISCAIS)
-        if fiscal and not self.env.user.has_group(GRUPO_RESPONSAVEL_FISCAL):
+        if fiscal and not self.env.su and not self.env.user.has_group(GRUPO_RESPONSAVEL_FISCAL):
             raise AccessError(
                 _("Apenas o Responsável fiscal pode ajustar dados fiscais dos itens da NF-e.")
             )

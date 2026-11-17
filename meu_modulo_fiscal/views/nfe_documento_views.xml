@@ -16,17 +16,30 @@
                     <button name="nfe_validar" type="object" string="Validar NF-e"
                             class="btn-primary"
                             groups="meu_modulo_fiscal.group_nfe_usuario"
-                            invisible="state != 'rascunho'"/>
+                            invisible="state != 'rascunho' or divergente"/>
                     <button name="nfe_emitir" type="object" string="Emitir"
                             class="btn-primary"
                             groups="meu_modulo_fiscal.group_nfe_usuario"
-                            invisible="state != 'validada'"
+                            invisible="state != 'validada' or divergente"
                             confirm="Emitir agora? Nesta etapa é apenas uma simulação: nenhuma NF-e será emitida."/>
+                    <button name="nfe_atualizar_da_transferencia" type="object"
+                            string="Atualizar da transferência"
+                            class="btn-secondary"
+                            groups="meu_modulo_fiscal.group_nfe_usuario"
+                            invisible="not divergente"
+                            confirm="Sincronizar produtos e quantidades com a transferência? O custo já capturado dos itens existentes é preservado e a nota volta para Rascunho."/>
+                    <field name="divergente" invisible="1"/>
                     <field name="state" widget="statusbar" statusbar_visible="rascunho,validada"/>
                 </header>
                 <sheet>
                     <div class="oe_title">
                         <h1><field name="name"/></h1>
+                    </div>
+                    <div class="alert alert-danger" role="status" invisible="not divergente">
+                        <strong>A transferência mudou depois da preparação</strong>
+                        <p>A nota está bloqueada para Validar e Emitir. Use
+                           <em>Atualizar da transferência</em> e valide de novo.</p>
+                        <field name="divergencia_detalhe" readonly="1" nolabel="1"/>
                     </div>
                     <div class="alert alert-warning" role="status" invisible="not pendencias">
                         <strong>Pendências da conferência local</strong>
