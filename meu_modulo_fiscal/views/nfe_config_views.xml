@@ -32,6 +32,27 @@
                             <field name="cep"/>
                         </group>
                     </group>
+                    <div class="alert alert-warning" role="status" invisible="conferida">
+                        Operação ainda NÃO conferida. Os valores abaixo são referência
+                        (CFOP 5152, CSOSN 102, PIS/COFINS 07) e dependem de confirmação
+                        do responsável fiscal com o contador. A NF-e não pode ser
+                        validada enquanto a operação não estiver conferida.
+                    </div>
+                    <group string="Operação de transferência">
+                        <group>
+                            <field name="natureza_operacao"/>
+                            <field name="finalidade"/>
+                            <field name="cfop_mesma_uf" placeholder="5152"/>
+                            <field name="cfop_outra_uf" placeholder="6xxx (outra UF)"/>
+                        </group>
+                        <group>
+                            <field name="icms_cst_csosn"/>
+                            <field name="origem"/>
+                            <field name="pis_cst"/>
+                            <field name="cofins_cst"/>
+                            <field name="conferida"/>
+                        </group>
+                    </group>
                 </sheet>
             </form>
         </field>
@@ -47,6 +68,7 @@
                 <field name="crt"/>
                 <field name="ambiente"/>
                 <field name="serie"/>
+                <field name="conferida"/>
             </list>
         </field>
     </record>

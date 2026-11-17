@@ -16,6 +16,8 @@ default é homologação (spec, decisão 4).
 from odoo import _, api, fields, models
 from odoo.exceptions import ValidationError
 
+from .campos_fiscais import CST_PIS_COFINS, ICMS_CST_CSOSN_SELECTION, ORIGEM_SELECTION
+
 # Códigos IBGE das UFs. Lista intencionalmente separada da usada em
 # res.company.x_uf_codigo: aquele campo alimenta a chave da NFC-e no PDV e não
 # pode ser tocado por esta feature (spec, decisão 7).
@@ -91,6 +93,61 @@ class NfeConfig(models.Model):
     uf = fields.Selection(UF_IBGE_SELECTION, string="UF")
     cep = fields.Char(string="CEP")
 
+    # ── Operação de transferência (ticket 03) ────────────────────────────────
+    # Valores iniciais são a referência vista no vídeo (CFOP 5152, CSOSN 102,
+    # PIS/COFINS 07) e valem como SUGESTÃO: a configuração nasce com
+    # ``conferida = False`` e depende do responsável fiscal + contador.
+    natureza_operacao = fields.Char(
+        string="Natureza da operação",
+        default="Transferência de mercadoria",
+    )
+    finalidade = fields.Selection(
+        selection=[
+            ('1', '1 - Normal'),
+            ('2', '2 - Complementar'),
+            ('3', '3 - Ajuste'),
+            ('4', '4 - Devolução de mercadoria'),
+        ],
+        string="Finalidade",
+        default='1',
+    )
+    cfop_mesma_uf = fields.Char(
+        string="CFOP na mesma UF",
+        default='5152',
+        help="Referência: 5152 para operação na mesma UF (série 5). "
+             "Confirme com o contador.",
+    )
+    cfop_outra_uf = fields.Char(
+        string="CFOP para outra UF",
+        help="CFOP interestadual (6xxx) e série 6. A spec não define este "
+             "código: confirme com o contador antes de conferir a operação.",
+    )
+    icms_cst_csosn = fields.Selection(
+        ICMS_CST_CSOSN_SELECTION,
+        string="ICMS (CST/CSOSN)",
+        default='102',
+    )
+    origem = fields.Selection(
+        ORIGEM_SELECTION,
+        string="Origem da mercadoria",
+        default='0',
+    )
+    pis_cst = fields.Selection(CST_PIS_COFINS, string="CST PIS", default='07')
+    cofins_cst = fields.Selection(CST_PIS_COFINS, string="CST COFINS", default='07')
+    conferida = fields.Boolean(
+        string="Conferida",
+        default=False,
+        copy=False,
+        help="Marcada pelo Responsável fiscal depois de conferir a operação "
+             "com o contador. Qualquer alteração tributária desmarca.",
+    )
+
+    # Campos cuja alteração desmarca a conferência (spec, decisão 4).
+    CAMPOS_TRIBUTARIOS = (
+        'natureza_operacao', 'finalidade', 'cfop_mesma_uf', 'cfop_outra_uf',
+        'icms_cst_csosn', 'origem', 'pis_cst', 'cofins_cst',
+    )
+
     _sql_constraints = [
         ('company_uniq', 'unique(company_id)',
          'Já existe uma configuração de NF-e para esta empresa.'),
@@ -102,6 +159,29 @@ class NfeConfig(models.Model):
         for config in self:
             if config.ibge_municipio and not config.ibge_municipio.isdigit():
                 raise ValidationError(_("O código IBGE do município deve conter apenas dígitos."))
+
+    @api.constrains('cfop_mesma_uf', 'cfop_outra_uf')
+    def _check_cfop(self):
+        for config in self:
+            for campo in ('cfop_mesma_uf', 'cfop_outra_uf'):
+                cfop = config[campo]
+                if cfop and (len(cfop) != 4 or not cfop.isdigit()):
+                    raise ValidationError(
+                        _("O CFOP deve ter 4 dígitos numéricos (campo: %s).", config._fields[campo].string)
+                    )
+
+    # ── Conferência ──────────────────────────────────────────────────────────
+    def write(self, vals):
+        """Alterar dado tributário desmarca a conferência anterior.
+
+        A cópia de ``vals`` evita mutar o dict do chamador. Marcar
+        ``conferida`` EXPLICITAMENTE no mesmo write vence: o responsável
+        fiscal está confirmando justamente os valores novos (é o caso do
+        form: ajusta o campo e marca "Conferida" antes de salvar).
+        """
+        if 'conferida' not in vals and any(campo in vals for campo in self.CAMPOS_TRIBUTARIOS):
+            vals = dict(vals, conferida=False)
+        return super().write(vals)
 
     # ── Sugestões iniciais (nunca parse) ─────────────────────────────────────
     @api.onchange('company_id')
