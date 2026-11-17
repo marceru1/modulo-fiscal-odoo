@@ -18,11 +18,17 @@ recalculados ao reabrir (tickets 05 e 07 completam os valores).
 from psycopg2 import IntegrityError
 
 from odoo import _, api, fields, models
+from odoo.exceptions import AccessError
+
+from .campos_fiscais import CST_PIS_COFINS, ICMS_CST_CSOSN_SELECTION, ORIGEM_SELECTION
+from .nfe_config import AMBIENTE_SELECTION, CRT_SELECTION, UF_IBGE_SELECTION
 
 NFE_STATE_SELECTION = [
     ('rascunho', 'Rascunho'),
     ('validada', 'Validada'),
 ]
+
+GRUPO_RESPONSAVEL_FISCAL = 'meu_modulo_fiscal.group_nfe_responsavel_fiscal'
 
 
 class NfeDocumento(models.Model):
@@ -63,6 +69,62 @@ class NfeDocumento(models.Model):
         required=True,
         readonly=True,
     )
+
+    # ── Snapshot fiscal do emitente (config da empresa, ticket 07) ───────────
+    emitente_cnpj = fields.Char(string="CNPJ do emitente")
+    emitente_ie = fields.Char(string="IE do emitente")
+    emitente_crt = fields.Selection(CRT_SELECTION, string="CRT do emitente")
+    emitente_ibge_municipio = fields.Char(string="IBGE do município (emitente)")
+    emitente_logradouro = fields.Char(string="Logradouro (emitente)")
+    emitente_numero = fields.Char(string="Número (emitente)")
+    emitente_bairro = fields.Char(string="Bairro (emitente)")
+    emitente_complemento = fields.Char(string="Complemento (emitente)")
+    emitente_municipio = fields.Char(string="Município (emitente)")
+    emitente_uf = fields.Selection(UF_IBGE_SELECTION, string="UF (emitente)")
+    emitente_cep = fields.Char(string="CEP (emitente)")
+    ambiente = fields.Selection(AMBIENTE_SELECTION, string="Ambiente")
+    serie = fields.Integer(string="Série")
+
+    # ── Snapshot fiscal da destinatária (config da filial, ticket 07) ────────
+    destinataria_cnpj = fields.Char(string="CNPJ da destinatária")
+    destinataria_ie = fields.Char(string="IE da destinatária")
+    destinataria_crt = fields.Selection(CRT_SELECTION, string="CRT da destinatária")
+    destinataria_ibge_municipio = fields.Char(string="IBGE do município (destinatária)")
+    destinataria_logradouro = fields.Char(string="Logradouro (destinatária)")
+    destinataria_numero = fields.Char(string="Número (destinatária)")
+    destinataria_bairro = fields.Char(string="Bairro (destinatária)")
+    destinataria_complemento = fields.Char(string="Complemento (destinatária)")
+    destinataria_municipio = fields.Char(string="Município (destinatária)")
+    destinataria_uf = fields.Selection(UF_IBGE_SELECTION, string="UF (destinatária)")
+    destinataria_cep = fields.Char(string="CEP (destinatária)")
+
+    # ── Dados complementares ─────────────────────────────────────────────────
+    modalidade_frete = fields.Selection(
+        selection=[
+            ('0', '0 - Emitente'),
+            ('1', '1 - Destinatária'),
+            ('2', '2 - Terceiros'),
+            ('3', '3 - Próprio, por conta do remetente'),
+            ('4', '4 - Próprio, por conta da destinatária'),
+            ('9', '9 - Sem ocorrência de transporte'),
+        ],
+        string="Modalidade do frete",
+        default='9',
+    )
+    transportadora = fields.Char(string="Transportadora")
+    forma_pagamento = fields.Selection(
+        selection=[('sem_pagamento', 'Sem pagamento')],
+        string="Forma de pagamento",
+        default='sem_pagamento',
+        required=True,
+    )
+    valor_pagamento = fields.Monetary(
+        string="Valor do pagamento",
+        default=0.0,
+        currency_field='currency_id',
+    )
+    informacoes_adicionais = fields.Text(string="Informações adicionais")
+
     data_movimentacao = fields.Datetime(string="Data da movimentação", readonly=True)
     data_preparacao = fields.Datetime(
         string="Data de preparação",
@@ -91,6 +153,35 @@ class NfeDocumento(models.Model):
         ('picking_uniq', 'unique(picking_id)',
          'Já existe uma NF-e para esta transferência.'),
     ]
+
+    # Dados fiscais e de endereço: somente o Responsável fiscal corrige
+    # (spec, decisões 4 e 7). O snapshot vem da configuração na preparação.
+    CAMPOS_FISCAIS = (
+        'emitente_cnpj', 'emitente_ie', 'emitente_crt', 'emitente_ibge_municipio',
+        'emitente_logradouro', 'emitente_numero', 'emitente_bairro',
+        'emitente_complemento', 'emitente_municipio', 'emitente_uf', 'emitente_cep',
+        'destinataria_cnpj', 'destinataria_ie', 'destinataria_crt',
+        'destinataria_ibge_municipio', 'destinataria_logradouro',
+        'destinataria_numero', 'destinataria_bairro', 'destinataria_complemento',
+        'destinataria_municipio', 'destinataria_uf', 'destinataria_cep',
+        'ambiente', 'serie',
+    )
+
+    pode_editar_fiscal = fields.Boolean(compute='_compute_pode_editar_fiscal')
+
+    @api.depends_context('uid')
+    def _compute_pode_editar_fiscal(self):
+        pode = self.env.user.has_group(GRUPO_RESPONSAVEL_FISCAL)
+        for documento in self:
+            documento.pode_editar_fiscal = pode
+
+    def write(self, vals):
+        if 'state' not in vals and any(campo in vals for campo in self.CAMPOS_FISCAIS):
+            if not self.env.user.has_group(GRUPO_RESPONSAVEL_FISCAL):
+                raise AccessError(
+                    _("Apenas o Responsável fiscal pode ajustar dados fiscais da NF-e.")
+                )
+        return super().write(vals)
 
     @api.depends('linha_ids.total_linha')
     def _compute_total_produtos(self):
@@ -131,32 +222,101 @@ class NfeDocumento(models.Model):
 
     @api.model
     def _nfe_vals_do_picking(self, picking):
-        return {
+        config = self._nfe_config_da_empresa(picking.company_id)
+        vals = {
             'picking_id': picking.id,
             'filial_id': picking.x_nfe_filial_id.id,
             'data_movimentacao': picking.date_done,
             'linha_ids': [
-                (0, 0, self._nfe_linha_vals(move))
+                (0, 0, self._nfe_linha_vals(move, config))
                 for move in picking._nfe_moves_realizados()
             ],
         }
+        vals.update(self._nfe_vals_emitente(picking, config))
+        vals.update(self._nfe_vals_destinataria(picking))
+        return vals
 
     @api.model
-    def _nfe_linha_vals(self, move):
-        """Item de origem: produto, unidade, quantidade REALIZADA e custo.
+    def _nfe_config_da_empresa(self, empresa):
+        """Configuração NF-e da empresa, lida com ``sudo``.
+
+        A configuração é do Responsável fiscal e a empresa DESTINATÁRIA pode
+        não estar entre as empresas permitidas do usuário que prepara a nota.
+        O ``sudo`` serve apenas para copiar os dados fiscais necessários para
+        o snapshot — nada além disso é exposto.
+        """
+        if not empresa:
+            return self.env['nfe.config']
+        return self.env['nfe.config'].sudo().search(
+            [('company_id', '=', empresa.id)], limit=1
+        )
+
+    @api.model
+    def _nfe_vals_emitente(self, picking, config):
+        empresa = picking.company_id
+        return {
+            'emitente_cnpj': empresa.x_cnpj,
+            'emitente_ie': empresa.x_ie,
+            'emitente_crt': config.crt,
+            'emitente_ibge_municipio': config.ibge_municipio,
+            'emitente_logradouro': config.logradouro,
+            'emitente_numero': config.numero,
+            'emitente_bairro': config.bairro,
+            'emitente_complemento': config.complemento,
+            'emitente_municipio': config.municipio,
+            'emitente_uf': config.uf,
+            'emitente_cep': config.cep,
+            'ambiente': config.ambiente,
+            'serie': config.serie,
+        }
+
+    @api.model
+    def _nfe_vals_destinataria(self, picking):
+        empresa = picking.x_nfe_filial_id
+        config = self._nfe_config_da_empresa(empresa)
+        return {
+            'destinataria_cnpj': empresa.x_cnpj,
+            'destinataria_ie': empresa.x_ie,
+            'destinataria_crt': config.crt,
+            'destinataria_ibge_municipio': config.ibge_municipio,
+            'destinataria_logradouro': config.logradouro,
+            'destinataria_numero': config.numero,
+            'destinataria_bairro': config.bairro,
+            'destinataria_complemento': config.complemento,
+            'destinataria_municipio': config.municipio,
+            'destinataria_uf': config.uf,
+            'destinataria_cep': config.cep,
+        }
+
+    @api.model
+    def _nfe_linha_vals(self, move, config=None):
+        """Item de origem: produto, unidade, quantidade REALIZADA, custo e
+        dados fiscais capturados da configuração de transferência.
 
         ``stock.move.quantity`` é a quantidade feita (soma das move lines),
         então uma transferência parcial de 8 entre 10 vale 8.
 
-        O custo é capturado AQUI, uma única vez, na primeira preparação:
-        a nota não recalcula ao reabrir nem quando o cadastro muda.
+        Tudo é capturado AQUI, uma única vez, na primeira preparação: a nota
+        não recalcula ao reabrir nem quando cadastro/config mudam. O CFOP
+        comercial do produto NUNCA é sobrescrito — o CFOP da nota vem da
+        configuração da operação.
         """
+        if config is None:
+            config = self._nfe_config_da_empresa(move.picking_id.company_id)
+        produto = move.product_id
         return {
             'move_id': move.id,
-            'product_id': move.product_id.id,
+            'product_id': produto.id,
             'uom_id': move.product_uom.id,
             'quantidade': move.quantity,
             'custo_unitario': self._nfe_custo_unitario(move),
+            'descricao': produto.display_name,
+            'ncm': produto.x_ncm_id.code,
+            'origem': config.origem,
+            'cfop': config.cfop,
+            'icms_cst_csosn': config.icms_cst_csosn,
+            'pis_cst': config.pis_cst,
+            'cofins_cst': config.cofins_cst,
         }
 
     @api.model
@@ -222,6 +382,35 @@ class NfeDocumentoLinha(models.Model):
         store=True,
         currency_field='currency_id',
     )
+
+    # ── Snapshot fiscal do item (ticket 07) ──────────────────────────────────
+    # Editáveis apenas pelo Responsável fiscal, em Rascunho (view + write).
+    descricao = fields.Char(string="Descrição")
+    ncm = fields.Char(string="NCM")
+    origem = fields.Selection(ORIGEM_SELECTION, string="Origem")
+    cfop = fields.Char(string="CFOP")
+    icms_cst_csosn = fields.Selection(ICMS_CST_CSOSN_SELECTION, string="ICMS (CST/CSOSN)")
+    pis_cst = fields.Selection(CST_PIS_COFINS, string="CST PIS")
+    cofins_cst = fields.Selection(CST_PIS_COFINS, string="CST COFINS")
+
+    CAMPOS_FISCAIS = (
+        'descricao', 'ncm', 'origem', 'cfop', 'icms_cst_csosn', 'pis_cst', 'cofins_cst',
+    )
+
+    pode_editar_fiscal = fields.Boolean(compute='_compute_pode_editar_fiscal')
+
+    @api.depends('documento_id')
+    def _compute_pode_editar_fiscal(self):
+        for linha in self:
+            linha.pode_editar_fiscal = linha.documento_id.pode_editar_fiscal
+
+    def write(self, vals):
+        if any(campo in vals for campo in self.CAMPOS_FISCAIS):
+            if not self.env.user.has_group(GRUPO_RESPONSAVEL_FISCAL):
+                raise AccessError(
+                    _("Apenas o Responsável fiscal pode ajustar dados fiscais dos itens da NF-e.")
+                )
+        return super().write(vals)
 
     @api.depends('quantidade', 'custo_unitario', 'currency_id')
     def _compute_total_linha(self):

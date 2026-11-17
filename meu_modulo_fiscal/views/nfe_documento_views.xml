@@ -28,21 +28,89 @@
                         <group string="Empresas">
                             <field name="company_id"/>
                             <field name="filial_id"/>
+                            <field name="pode_editar_fiscal" invisible="1"/>
                         </group>
                     </group>
                     <notebook>
                         <page string="Produtos" name="produtos">
-                            <field name="linha_ids" readonly="1">
+                            <field name="linha_ids">
                                 <list string="Produtos transferidos">
+                                    <field name="pode_editar_fiscal" invisible="1"/>
                                     <field name="product_id"/>
+                                    <field name="descricao" optional="show" readonly="not pode_editar_fiscal"/>
                                     <field name="uom_id"/>
                                     <field name="quantidade"/>
                                     <field name="custo_unitario"/>
                                     <field name="total_linha" sum="Total dos produtos"/>
+                                    <field name="ncm" optional="show" readonly="not pode_editar_fiscal"/>
+                                    <field name="cfop" optional="show" readonly="not pode_editar_fiscal"/>
+                                    <field name="origem" optional="show" readonly="not pode_editar_fiscal"/>
+                                    <field name="icms_cst_csosn" optional="show" readonly="not pode_editar_fiscal"/>
+                                    <field name="pis_cst" optional="hide" readonly="not pode_editar_fiscal"/>
+                                    <field name="cofins_cst" optional="hide" readonly="not pode_editar_fiscal"/>
                                 </list>
                             </field>
                             <group class="oe_subtotal_footer">
                                 <field name="total_produtos"/>
+                            </group>
+                        </page>
+                        <page string="Dados complementares" name="complementares">
+                            <group>
+                                <group string="Transporte">
+                                    <field name="modalidade_frete"/>
+                                    <field name="transportadora" placeholder="Nome da transportadora (opcional)"/>
+                                </group>
+                                <group string="Pagamento">
+                                    <field name="forma_pagamento"/>
+                                    <field name="valor_pagamento"/>
+                                </group>
+                            </group>
+                            <separator string="Informações adicionais"/>
+                            <field name="informacoes_adicionais" nolabel="1"
+                                   placeholder="Observações que vão para a NF-e"/>
+                        </page>
+                        <page string="Dados fiscais" name="fiscais">
+                            <div class="alert alert-info" role="status">
+                                Dados copiados da configuração fiscal na preparação da nota.
+                                Alterações posteriores na configuração NÃO atualizam esta nota —
+                                a correção no rascunho é explícita e exige nova validação.
+                                Ajustes só pelo Responsável fiscal.
+                            </div>
+                            <group string="Emitente">
+                                <group>
+                                    <field name="emitente_cnpj" readonly="not pode_editar_fiscal"/>
+                                    <field name="emitente_ie" readonly="not pode_editar_fiscal"/>
+                                    <field name="emitente_crt" readonly="not pode_editar_fiscal"/>
+                                    <field name="emitente_ibge_municipio" readonly="not pode_editar_fiscal"/>
+                                    <field name="ambiente" readonly="not pode_editar_fiscal"/>
+                                    <field name="serie" readonly="not pode_editar_fiscal"/>
+                                </group>
+                                <group>
+                                    <field name="emitente_logradouro" readonly="not pode_editar_fiscal"/>
+                                    <field name="emitente_numero" readonly="not pode_editar_fiscal"/>
+                                    <field name="emitente_complemento" readonly="not pode_editar_fiscal"/>
+                                    <field name="emitente_bairro" readonly="not pode_editar_fiscal"/>
+                                    <field name="emitente_municipio" readonly="not pode_editar_fiscal"/>
+                                    <field name="emitente_uf" readonly="not pode_editar_fiscal"/>
+                                    <field name="emitente_cep" readonly="not pode_editar_fiscal"/>
+                                </group>
+                            </group>
+                            <group string="Destinatária">
+                                <group>
+                                    <field name="destinataria_cnpj" readonly="not pode_editar_fiscal"/>
+                                    <field name="destinataria_ie" readonly="not pode_editar_fiscal"/>
+                                    <field name="destinataria_crt" readonly="not pode_editar_fiscal"/>
+                                    <field name="destinataria_ibge_municipio" readonly="not pode_editar_fiscal"/>
+                                </group>
+                                <group>
+                                    <field name="destinataria_logradouro" readonly="not pode_editar_fiscal"/>
+                                    <field name="destinataria_numero" readonly="not pode_editar_fiscal"/>
+                                    <field name="destinataria_complemento" readonly="not pode_editar_fiscal"/>
+                                    <field name="destinataria_bairro" readonly="not pode_editar_fiscal"/>
+                                    <field name="destinataria_municipio" readonly="not pode_editar_fiscal"/>
+                                    <field name="destinataria_uf" readonly="not pode_editar_fiscal"/>
+                                    <field name="destinataria_cep" readonly="not pode_editar_fiscal"/>
+                                </group>
                             </group>
                         </page>
                     </notebook>

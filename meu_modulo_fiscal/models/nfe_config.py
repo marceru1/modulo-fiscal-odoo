@@ -21,6 +21,17 @@ from .campos_fiscais import CST_PIS_COFINS, ICMS_CST_CSOSN_SELECTION, ORIGEM_SEL
 # Códigos IBGE das UFs. Lista intencionalmente separada da usada em
 # res.company.x_uf_codigo: aquele campo alimenta a chave da NFC-e no PDV e não
 # pode ser tocado por esta feature (spec, decisão 7).
+CRT_SELECTION = [
+    ('1', '1 - Simples Nacional'),
+    ('2', '2 - Simples Nacional (excesso de sublimite de receita bruta)'),
+    ('3', '3 - Regime Normal'),
+]
+
+AMBIENTE_SELECTION = [
+    ('homologacao', 'Homologação (Testes)'),
+    ('producao', 'Produção'),
+]
+
 UF_IBGE_SELECTION = [
     ('11', 'RO - Rondônia'), ('12', 'AC - Acre'), ('13', 'AM - Amazonas'),
     ('14', 'RR - Roraima'), ('15', 'PA - Pará'), ('16', 'AP - Amapá'),
@@ -54,11 +65,7 @@ class NfeConfig(models.Model):
 
     # ── Identificação fiscal ─────────────────────────────────────────────────
     crt = fields.Selection(
-        selection=[
-            ('1', '1 - Simples Nacional'),
-            ('2', '2 - Simples Nacional (excesso de sublimite de receita bruta)'),
-            ('3', '3 - Regime Normal'),
-        ],
+        selection=CRT_SELECTION,
         string="CRT",
         help="Código de Regime Tributário da empresa. Confirme o regime com o contador.",
     )
@@ -68,10 +75,7 @@ class NfeConfig(models.Model):
         help="Código IBGE do município do estabelecimento emitente (7 dígitos).",
     )
     ambiente = fields.Selection(
-        selection=[
-            ('homologacao', 'Homologação (Testes)'),
-            ('producao', 'Produção'),
-        ],
+        selection=AMBIENTE_SELECTION,
         string="Ambiente NF-e",
         default='homologacao',
         required=True,
