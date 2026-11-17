@@ -22,3 +22,4 @@ from . import test_nfe_custo
 from . import test_nfe_acesso
 from . import test_nfe_dados_fiscais
 from . import test_nfe_validacao
+from . import test_nfe_emissao

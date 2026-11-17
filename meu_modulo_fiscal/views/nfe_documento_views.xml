@@ -17,6 +17,11 @@
                             class="btn-primary"
                             groups="meu_modulo_fiscal.group_nfe_usuario"
                             invisible="state != 'rascunho'"/>
+                    <button name="nfe_emitir" type="object" string="Emitir"
+                            class="btn-primary"
+                            groups="meu_modulo_fiscal.group_nfe_usuario"
+                            invisible="state != 'validada'"
+                            confirm="Emitir agora? Nesta etapa é apenas uma simulação: nenhuma NF-e será emitida."/>
                     <field name="state" widget="statusbar" statusbar_visible="rascunho,validada"/>
                 </header>
                 <sheet>
@@ -88,14 +93,18 @@
                                 a correção no rascunho é explícita e exige nova validação.
                                 Ajustes só pelo Responsável fiscal.
                             </div>
+                            <group string="Operação">
+                                <field name="natureza_operacao" readonly="not pode_editar_fiscal"/>
+                                <field name="finalidade" readonly="not pode_editar_fiscal"/>
+                                <field name="ambiente" readonly="not pode_editar_fiscal"/>
+                                <field name="serie" readonly="not pode_editar_fiscal"/>
+                            </group>
                             <group string="Emitente">
                                 <group>
                                     <field name="emitente_cnpj" readonly="not pode_editar_fiscal"/>
                                     <field name="emitente_ie" readonly="not pode_editar_fiscal"/>
                                     <field name="emitente_crt" readonly="not pode_editar_fiscal"/>
                                     <field name="emitente_ibge_municipio" readonly="not pode_editar_fiscal"/>
-                                    <field name="ambiente" readonly="not pode_editar_fiscal"/>
-                                    <field name="serie" readonly="not pode_editar_fiscal"/>
                                 </group>
                                 <group>
                                     <field name="emitente_logradouro" readonly="not pode_editar_fiscal"/>

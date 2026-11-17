@@ -181,6 +181,9 @@
         # (stock.picking internal/incoming) em vez de download de PDF.
         'web.assets_backend': [
             'meu_modulo_fiscal/static/src/js/picking_print_helper.js',
+            # nfe-modelo-55: action client da simulação de envio (console +
+            # aviso). Só backend — NUNCA no point_of_sale._assets_pos.
+            'meu_modulo_fiscal/static/src/js/nfe_emitir_simulacao.js',
             # etiquetas-produto-impressao: botão de impressão direta no wizard de
             # etiquetas. O JS registra o campo que fala com o QZ Tray (instalado
             # no PC da impressora); o XML o renderiza. JS antes do XML.

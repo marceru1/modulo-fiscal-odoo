@@ -84,6 +84,16 @@ class NfeDocumento(models.Model):
     emitente_cep = fields.Char(string="CEP (emitente)")
     ambiente = fields.Selection(AMBIENTE_SELECTION, string="Ambiente")
     serie = fields.Integer(string="Série")
+    natureza_operacao = fields.Char(string="Natureza da operação")
+    finalidade = fields.Selection(
+        selection=[
+            ('1', '1 - Normal'),
+            ('2', '2 - Complementar'),
+            ('3', '3 - Ajuste'),
+            ('4', '4 - Devolução de mercadoria'),
+        ],
+        string="Finalidade",
+    )
 
     # ── Snapshot fiscal da destinatária (config da filial, ticket 07) ────────
     destinataria_cnpj = fields.Char(string="CNPJ da destinatária")
@@ -170,7 +180,7 @@ class NfeDocumento(models.Model):
         'destinataria_ibge_municipio', 'destinataria_logradouro',
         'destinataria_numero', 'destinataria_bairro', 'destinataria_complemento',
         'destinataria_municipio', 'destinataria_uf', 'destinataria_cep',
-        'ambiente', 'serie',
+        'ambiente', 'serie', 'natureza_operacao', 'finalidade',
     )
 
     pode_editar_fiscal = fields.Boolean(compute='_compute_pode_editar_fiscal')
@@ -224,6 +234,111 @@ class NfeDocumento(models.Model):
             'res_id': self.id,
             'view_mode': 'form',
             'target': 'current',
+        }
+
+    # ── Emissão (ticket 09): simulação, sem transmissão ──────────────────────
+    NFE_SIMULACAO_TAG = 'meu_modulo_fiscal.nfe_simulacao'
+
+    def nfe_emitir(self):
+        """Botão **Emitir** de uma nota Validada.
+
+        Repete a conferência no servidor (elegibilidade, acesso e
+        consistência) e devolve o JSON preliminar para a action client, que
+        faz ``console.log`` e avisa que nada foi emitido. Nenhuma requisição
+        ao middleware/SEFAZ, nenhum número fiscal fictício.
+        """
+        self.ensure_one()
+        if self.state != 'validada':
+            raise UserError(_("Somente uma NF-e Validada pode ser emitida."))
+        pendencias = self._nfe_pendencias()
+        if pendencias:
+            raise UserError(
+                _("A NF-e deixou de estar consistente:\n%s") % "\n".join(pendencias)
+            )
+        carga = self._nfe_preparar_envio()
+        return {
+            'type': 'ir.actions.client',
+            'tag': self.NFE_SIMULACAO_TAG,
+            'params': {'json': carga},
+        }
+
+    def _nfe_preparar_envio(self):
+        """Ponto único de integração com o middleware (próxima etapa).
+
+        Hoje devolve o JSON preliminar; não faz HTTP. O contrato definitivo
+        pode exigir novos campos — este JSON não é prova de completude
+        fiscal (spec, decisão 6).
+        """
+        self.ensure_one()
+        return {
+            'nota': {
+                'id': self.id,
+                'referencia': self.name,
+                'situacao': self.state,
+            },
+            'origem': {
+                'transferencia': self.picking_id.name,
+                'picking_id': self.picking_id.id,
+                'data_movimentacao': fields.Datetime.to_string(self.data_movimentacao),
+                'data_preparacao': fields.Datetime.to_string(self.data_preparacao),
+            },
+            'emitente': self._nfe_json_empresa('emitente', self.company_id.name, self.company_id.id),
+            'destinataria': self._nfe_json_empresa('destinataria', self.filial_id.name, self.filial_id.id),
+            'ambiente': self.ambiente,
+            'serie': self.serie,
+            'operacao': {
+                'natureza': self.natureza_operacao,
+                'finalidade': self.finalidade,
+            },
+            'itens': [
+                {
+                    'produto_id': linha.product_id.id,
+                    'descricao': linha.descricao,
+                    'ncm': linha.ncm,
+                    'cfop': linha.cfop,
+                    'origem': linha.origem,
+                    'icms_cst_csosn': linha.icms_cst_csosn,
+                    'pis_cst': linha.pis_cst,
+                    'cofins_cst': linha.cofins_cst,
+                    'unidade': linha.uom_id.name,
+                    'quantidade': linha.quantidade,
+                    'custo_unitario': linha.custo_unitario,
+                    'total': linha.total_linha,
+                }
+                for linha in self.linha_ids
+            ],
+            'totais': {
+                'moeda': self.currency_id.name,
+                'total_produtos': self.total_produtos,
+            },
+            'transporte': {
+                'modalidade_frete': self.modalidade_frete,
+                'transportadora': self.transportadora,
+            },
+            'pagamento': {
+                'forma': self.forma_pagamento,
+                'valor': self.valor_pagamento,
+            },
+            'observacoes': self.informacoes_adicionais,
+        }
+
+    def _nfe_json_empresa(self, prefixo, nome, empresa_id):
+        return {
+            'empresa_id': empresa_id,
+            'nome': nome,
+            'cnpj': self['%s_cnpj' % prefixo],
+            'ie': self['%s_ie' % prefixo],
+            'crt': self['%s_crt' % prefixo],
+            'ibge_municipio': self['%s_ibge_municipio' % prefixo],
+            'endereco': {
+                'logradouro': self['%s_logradouro' % prefixo],
+                'numero': self['%s_numero' % prefixo],
+                'bairro': self['%s_bairro' % prefixo],
+                'complemento': self['%s_complemento' % prefixo],
+                'municipio': self['%s_municipio' % prefixo],
+                'uf': self['%s_uf' % prefixo],
+                'cep': self['%s_cep' % prefixo],
+            },
         }
 
     def _nfe_pendencias(self):
@@ -368,6 +483,8 @@ class NfeDocumento(models.Model):
             'emitente_cep': config.cep,
             'ambiente': config.ambiente,
             'serie': config.serie,
+            'natureza_operacao': config.natureza_operacao,
+            'finalidade': config.finalidade,
         }
 
     @api.model
