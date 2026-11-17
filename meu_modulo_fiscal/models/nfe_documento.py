@@ -69,6 +69,17 @@ class NfeDocumento(models.Model):
         default=fields.Datetime.now,
         readonly=True,
     )
+    currency_id = fields.Many2one(
+        'res.currency',
+        string="Moeda",
+        related='company_id.currency_id',
+    )
+    total_produtos = fields.Monetary(
+        string="Total dos produtos",
+        compute='_compute_total_produtos',
+        store=True,
+        currency_field='currency_id',
+    )
     linha_ids = fields.One2many(
         'nfe.documento.linha',
         'documento_id',
@@ -80,6 +91,11 @@ class NfeDocumento(models.Model):
         ('picking_uniq', 'unique(picking_id)',
          'Já existe uma NF-e para esta transferência.'),
     ]
+
+    @api.depends('linha_ids.total_linha')
+    def _compute_total_produtos(self):
+        for documento in self:
+            documento.total_produtos = sum(documento.linha_ids.mapped('total_linha'))
 
     # ── Referência ───────────────────────────────────────────────────────────
     @api.model
@@ -127,17 +143,40 @@ class NfeDocumento(models.Model):
 
     @api.model
     def _nfe_linha_vals(self, move):
-        """Item de origem: produto, unidade e quantidade REALIZADA.
+        """Item de origem: produto, unidade, quantidade REALIZADA e custo.
 
         ``stock.move.quantity`` é a quantidade feita (soma das move lines),
         então uma transferência parcial de 8 entre 10 vale 8.
+
+        O custo é capturado AQUI, uma única vez, na primeira preparação:
+        a nota não recalcula ao reabrir nem quando o cadastro muda.
         """
         return {
             'move_id': move.id,
             'product_id': move.product_id.id,
             'uom_id': move.product_uom.id,
             'quantidade': move.quantity,
+            'custo_unitario': self._nfe_custo_unitario(move),
         }
+
+    @api.model
+    def _nfe_custo_unitario(self, move):
+        """Custo do produto na empresa REMETENTE, na unidade da linha.
+
+        ``standard_price`` é ``company_dependent`` e resolve pelo
+        ``env.company`` (``odoo/models.py:2999-3003``): ``with_company`` põe a
+        empresa da movimentação nesse lugar, então a empresa ativa na
+        interface nunca influencia o valor.
+
+        ``uom._compute_price`` (``addons/uom/models/uom_uom.py:243``) converte
+        o preço da unidade de cadastro para a unidade do movimento; mesma
+        unidade (ou categoria diferente) devolve o preço inalterado.
+
+        Não é custo histórico por camada/lote: é o custo vigente da remetente
+        no momento da preparação (spec, decisão 2).
+        """
+        produto = move.product_id.with_company(move.picking_id.company_id)
+        return produto.uom_id._compute_price(produto.standard_price, move.product_uom)
 
 
 class NfeDocumentoLinha(models.Model):
@@ -165,3 +204,33 @@ class NfeDocumentoLinha(models.Model):
         digits='Product Unit of Measure',
         readonly=True,
     )
+    currency_id = fields.Many2one(
+        'res.currency',
+        string="Moeda",
+        related='documento_id.currency_id',
+    )
+    custo_unitario = fields.Float(
+        string="Custo unitário",
+        digits='Product Price',
+        readonly=True,
+        help="Custo do produto na empresa remetente, na unidade da linha, "
+             "capturado na primeira preparação.",
+    )
+    total_linha = fields.Monetary(
+        string="Total",
+        compute='_compute_total_linha',
+        store=True,
+        currency_field='currency_id',
+    )
+
+    @api.depends('quantidade', 'custo_unitario', 'currency_id')
+    def _compute_total_linha(self):
+        """Quantidade × custo arredondado pela moeda da empresa emitente.
+
+        O custo unitário NÃO é arredondado: arredondar antes de multiplicar
+        desvia o total em centavos (ex.: 3,333 × 3 = 9,999 → 10,00).
+        """
+        for linha in self:
+            linha.total_linha = linha.currency_id.round(
+                linha.quantidade * linha.custo_unitario
+            )

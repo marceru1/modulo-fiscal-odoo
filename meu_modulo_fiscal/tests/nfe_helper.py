@@ -19,10 +19,11 @@ class NfeTransferMixin:
         cls.tipo_entrega = cls.env.ref('stock.picking_type_out')
 
     def _criar_transferencia(self, tipo=None, quantidade=10.0, realizada=None,
-                             filial=None, produto=None, validar=True):
+                             filial=None, produto=None, uom=None, validar=True):
         """Cria (e opcionalmente conclui) a transferência da filial."""
         tipo = tipo or self.tipo_interno
         produto = produto or self.produto
+        uom = uom or produto.uom_id
         picking = self.env['stock.picking'].create({
             'picking_type_id': tipo.id,
             'location_id': tipo.default_location_src_id.id,
@@ -33,7 +34,7 @@ class NfeTransferMixin:
             'name': produto.name,
             'product_id': produto.id,
             'product_uom_qty': quantidade,
-            'product_uom': produto.uom_id.id,
+            'product_uom': uom.id,
             'location_id': picking.location_id.id,
             'location_dest_id': picking.location_dest_id.id,
             'picking_id': picking.id,

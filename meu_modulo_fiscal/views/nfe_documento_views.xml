@@ -37,8 +37,13 @@
                                     <field name="product_id"/>
                                     <field name="uom_id"/>
                                     <field name="quantidade"/>
+                                    <field name="custo_unitario"/>
+                                    <field name="total_linha" sum="Total dos produtos"/>
                                 </list>
                             </field>
+                            <group class="oe_subtotal_footer">
+                                <field name="total_produtos"/>
+                            </group>
                         </page>
                     </notebook>
                 </sheet>
