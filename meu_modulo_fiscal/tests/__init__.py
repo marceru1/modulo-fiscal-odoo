@@ -17,3 +17,4 @@ from . import test_rastreio_produto_default
 from . import test_nfe_elegibilidade
 from . import test_nfe_config
 from . import test_nfe_config_tributaria
+from . import test_nfe_documento

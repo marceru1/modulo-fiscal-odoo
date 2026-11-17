@@ -1,0 +1,18 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <!--
+        Referência estável do documento NF-e (ticket 04). É identidade do
+        documento no Odoo — a numeração fiscal definitiva será controlada
+        pelo middleware, na etapa de integração.
+        noupdate="1": o upgrade não reinicia a numeração.
+    -->
+    <data noupdate="1">
+        <record id="seq_nfe_documento" model="ir.sequence">
+            <field name="name">NF-e modelo 55</field>
+            <field name="code">nfe.documento</field>
+            <field name="prefix">NFE/</field>
+            <field name="padding">5</field>
+            <field name="company_id" eval="False"/>
+        </record>
+    </data>
+</odoo>

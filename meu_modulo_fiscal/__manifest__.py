@@ -58,7 +58,10 @@
         'views/stock_picking_nfe_views.xml',
         # nfe-modelo-55: configuração fiscal por empresa + menu Faturamento → NF-e.
         'views/nfe_config_views.xml',
+        'views/nfe_documento_views.xml',
         'views/nfe_menus.xml',
+        # nfe-modelo-55: referência estável do documento (noupdate).
+        'data/nfe_sequence.xml',
     ],
     'assets': {
         'point_of_sale._assets_pos': [

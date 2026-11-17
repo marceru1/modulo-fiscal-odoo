@@ -40,6 +40,26 @@ class StockPicking(models.Model):
              "preparar a NF-e modelo 55; não altera locais, rotas nem a "
              "empresa emitente da movimentação.",
     )
+    # Vínculo de leitura com a nota (uma por picking — DEC-004). Computed não
+    # armazenado: a fonte da verdade é o unique em nfe.documento.picking_id.
+    x_nfe_documento_id = fields.Many2one(
+        'nfe.documento',
+        string="NF-e",
+        compute='_compute_x_nfe_documento',
+    )
+    x_nfe_documento_state = fields.Selection(
+        [('rascunho', 'Rascunho'), ('validada', 'Validada')],
+        string="Situação da NF-e",
+        compute='_compute_x_nfe_documento',
+    )
+
+    def _compute_x_nfe_documento(self):
+        documentos = self.env['nfe.documento'].search([('picking_id', 'in', self.ids)])
+        por_picking = {documento.picking_id.id: documento for documento in documentos}
+        for picking in self:
+            documento = por_picking.get(picking.id)
+            picking.x_nfe_documento_id = documento
+            picking.x_nfe_documento_state = documento.state if documento else False
 
     # ── Elegibilidade ────────────────────────────────────────────────────────
     def _nfe_motivos_inelegibilidade(self):
@@ -88,3 +108,34 @@ class StockPicking(models.Model):
         return self.move_ids.filtered(
             lambda move: move.state == 'done' and not move.scrapped and move.quantity > 0
         )
+
+    # ── Ações ────────────────────────────────────────────────────────────────
+    def action_nfe_emitir(self):
+        """Botão **Emitir NF-e**: abre a nota, criando-a no primeiro clique.
+
+        A elegibilidade é revalidada AQUI (servidor), não só pela
+        visibilidade do botão. Cliques repetidos — inclusive simultâneos —
+        retornam a mesma nota (unique em ``nfe.documento.picking_id``).
+        """
+        self.ensure_one()
+        self.nfe_verificar_elegibilidade()
+        documento = self.env['nfe.documento']._nfe_obter_ou_criar(self)
+        return self._nfe_acao_documento(documento)
+
+    def action_nfe_abrir_documento(self):
+        """Stat button da transferência: abre a nota já preparada."""
+        self.ensure_one()
+        documento = self.x_nfe_documento_id
+        if not documento:
+            raise UserError(_("Esta transferência ainda não tem NF-e preparada."))
+        return self._nfe_acao_documento(documento)
+
+    def _nfe_acao_documento(self, documento):
+        return {
+            'type': 'ir.actions.act_window',
+            'name': _("NF-e"),
+            'res_model': 'nfe.documento',
+            'res_id': documento.id,
+            'view_mode': 'form',
+            'target': 'current',
+        }
