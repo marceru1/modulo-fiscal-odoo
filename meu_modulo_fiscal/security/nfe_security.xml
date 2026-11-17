@@ -42,4 +42,32 @@
         <field name="perm_create" eval="True"/>
         <field name="perm_unlink" eval="True"/>
     </record>
+
+    <!--
+        Notas e itens: só as notas da EMPRESA EMITENTE dentro das empresas
+        permitidas ao usuário. A filial destinatária é apenas dado fiscal
+        (nome da empresa + snapshot do ticket 07) — nenhum acesso às
+        movimentações de estoque da outra empresa é concedido aqui.
+    -->
+    <record id="rule_nfe_documento_empresa" model="ir.rule">
+        <field name="name">NF-e: notas fiscais por empresa emitente</field>
+        <field name="model_id" ref="model_nfe_documento"/>
+        <field name="domain_force">[('company_id', 'in', company_ids)]</field>
+        <field name="groups" eval="[(4, ref('group_nfe_usuario')), (4, ref('group_nfe_responsavel_fiscal'))]"/>
+        <field name="perm_read" eval="True"/>
+        <field name="perm_write" eval="True"/>
+        <field name="perm_create" eval="True"/>
+        <field name="perm_unlink" eval="True"/>
+    </record>
+
+    <record id="rule_nfe_documento_linha_empresa" model="ir.rule">
+        <field name="name">NF-e: itens por empresa emitente</field>
+        <field name="model_id" ref="model_nfe_documento_linha"/>
+        <field name="domain_force">[('documento_id.company_id', 'in', company_ids)]</field>
+        <field name="groups" eval="[(4, ref('group_nfe_usuario')), (4, ref('group_nfe_responsavel_fiscal'))]"/>
+        <field name="perm_read" eval="True"/>
+        <field name="perm_write" eval="True"/>
+        <field name="perm_create" eval="True"/>
+        <field name="perm_unlink" eval="True"/>
+    </record>
 </odoo>

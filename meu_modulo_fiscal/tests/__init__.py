@@ -19,3 +19,4 @@ from . import test_nfe_config
 from . import test_nfe_config_tributaria
 from . import test_nfe_documento
 from . import test_nfe_custo
+from . import test_nfe_acesso

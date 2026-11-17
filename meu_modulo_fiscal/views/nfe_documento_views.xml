@@ -11,7 +11,7 @@
         <field name="name">nfe.documento.form</field>
         <field name="model">nfe.documento</field>
         <field name="arch" type="xml">
-            <form string="NF-e">
+            <form string="NF-e" create="false">
                 <header>
                     <field name="state" widget="statusbar" statusbar_visible="rascunho,validada"/>
                 </header>
@@ -48,6 +48,57 @@
                     </notebook>
                 </sheet>
             </form>
+        </field>
+    </record>
+
+    <!-- Lista: sem criação avulsa nesta versão (a nota nasce da transferência). -->
+    <record id="view_nfe_documento_list" model="ir.ui.view">
+        <field name="name">nfe.documento.list</field>
+        <field name="model">nfe.documento</field>
+        <field name="arch" type="xml">
+            <list create="false" delete="false">
+                <field name="name"/>
+                <field name="picking_id"/>
+                <field name="data_movimentacao"/>
+                <field name="company_id"/>
+                <field name="filial_id"/>
+                <field name="total_produtos" sum="Total dos produtos"/>
+                <field name="state" widget="badge"
+                       decoration-info="state == 'rascunho'"
+                       decoration-success="state == 'validada'"/>
+            </list>
+        </field>
+    </record>
+
+    <record id="view_nfe_documento_search" model="ir.ui.view">
+        <field name="name">nfe.documento.search</field>
+        <field name="model">nfe.documento</field>
+        <field name="arch" type="xml">
+            <search string="Notas fiscais">
+                <field name="name"/>
+                <field name="picking_id" filter_domain="[('picking_id.name', 'ilike', self)]"/>
+                <field name="company_id"/>
+                <field name="filial_id"/>
+                <filter name="periodo" date="data_movimentacao" string="Período"/>
+                <separator/>
+                <filter name="situacao_rascunho" string="Rascunho" domain="[('state', '=', 'rascunho')]"/>
+                <filter name="situacao_validada" string="Validada" domain="[('state', '=', 'validada')]"/>
+                <group expand="0" string="Agrupar por">
+                    <filter name="agrupar_empresa" string="Empresa" context="{'group_by': 'company_id'}"/>
+                    <filter name="agrupar_filial" string="Filial" context="{'group_by': 'filial_id'}"/>
+                    <filter name="agrupar_situacao" string="Situação" context="{'group_by': 'state'}"/>
+                </group>
+            </search>
+        </field>
+    </record>
+
+    <record id="action_nfe_documento" model="ir.actions.act_window">
+        <field name="name">Notas fiscais</field>
+        <field name="res_model">nfe.documento</field>
+        <field name="view_mode">list,form</field>
+        <field name="help" type="html">
+            <p class="o_view_nocontent_smiling_face">Nenhuma NF-e preparada</p>
+            <p>A nota nasce do botão <strong>Emitir NF-e</strong> de uma transferência concluída para a filial.</p>
         </field>
     </record>
 </odoo>

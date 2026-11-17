@@ -3,6 +3,7 @@
 
 Uma transferência interna concluída, com filial destinatária, é o ponto de
 partida de todo o fluxo (elegibilidade, preparo, custo, divergência).
+Os helpers são ``classmethod`` para poderem ser usados no ``setUpClass``.
 """
 
 
@@ -18,23 +19,27 @@ class NfeTransferMixin:
         cls.tipo_recebimento = cls.env.ref('stock.picking_type_in')
         cls.tipo_entrega = cls.env.ref('stock.picking_type_out')
 
-    def _criar_transferencia(self, tipo=None, quantidade=10.0, realizada=None,
+    @classmethod
+    def _criar_transferencia(cls, tipo=None, quantidade=10.0, realizada=None,
                              filial=None, produto=None, uom=None, validar=True):
         """Cria (e opcionalmente conclui) a transferência da filial."""
-        tipo = tipo or self.tipo_interno
-        produto = produto or self.produto
+        tipo = tipo or cls.tipo_interno
+        produto = produto or cls.produto
         uom = uom or produto.uom_id
-        picking = self.env['stock.picking'].create({
+        picking = cls.env['stock.picking'].create({
             'picking_type_id': tipo.id,
             'location_id': tipo.default_location_src_id.id,
             'location_dest_id': tipo.default_location_dest_id.id,
-            'x_nfe_filial_id': (filial or self.filial).id,
+            'x_nfe_filial_id': (filial or cls.filial).id,
         })
-        self.env['stock.move'].create({
+        cls.env['stock.move'].create({
             'name': produto.name,
             'product_id': produto.id,
             'product_uom_qty': quantidade,
             'product_uom': uom.id,
+            # stock.move.company_id tem default env.company (stock_move.py:41-44);
+            # a transferência pode ser de OUTRA empresa emitente.
+            'company_id': picking.company_id.id,
             'location_id': picking.location_id.id,
             'location_dest_id': picking.location_dest_id.id,
             'picking_id': picking.id,
@@ -49,7 +54,8 @@ class NfeTransferMixin:
         picking.with_context(skip_backorder=True).button_validate()
         return picking
 
-    def _concluir_transferencia(self, picking):
+    @classmethod
+    def _concluir_transferencia(cls, picking):
         picking.action_confirm()
         for move in picking.move_ids:
             move.quantity = move.product_uom_qty
