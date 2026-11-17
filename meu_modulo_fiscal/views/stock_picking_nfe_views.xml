@@ -1,0 +1,24 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <!--
+        NF-e modelo 55 — filial destinatária na transferência (ticket 01).
+
+        Só acrescenta o campo na aba "Additional Info / Other Information".
+        Não usa position="replace": nenhum nó do core é removido, então o
+        fluxo nativo de estoque (inclusive backorder) segue inalterado.
+        O campo não é obrigatório na transferência; a obrigatoriedade só
+        existe para preparar a NF-e (verificação no servidor).
+    -->
+    <record id="view_picking_form_inherit_nfe" model="ir.ui.view">
+        <field name="name">stock.picking.form.inherit.nfe</field>
+        <field name="model">stock.picking</field>
+        <field name="inherit_id" ref="stock.view_picking_form"/>
+        <field name="arch" type="xml">
+            <xpath expr="//page[@name='extra']//group[@name='other_infos']" position="inside">
+                <field name="x_nfe_filial_id"
+                       readonly="state in ['cancel', 'done']"
+                       options="{'no_create': True}"/>
+            </xpath>
+        </field>
+    </record>
+</odoo>

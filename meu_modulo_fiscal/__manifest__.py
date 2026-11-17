@@ -50,6 +50,9 @@
         'views/web_login_cleanup.xml',
         'views/pos_order_report_analise_views.xml',
         'views/consulta_vendas_caixa_dia_views.xml',
+        # nfe-modelo-55: filial destinatária na transferência de estoque
+        # (origem da NF-e modelo 55).
+        'views/stock_picking_nfe_views.xml',
     ],
     'assets': {
         'point_of_sale._assets_pos': [

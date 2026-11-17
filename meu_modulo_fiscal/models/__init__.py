@@ -13,3 +13,5 @@ from . import ir_http
 from . import res_company
 from . import res_config_settings
 from . import report_pos_order
+# NF-e modelo 55: origem na transferência de estoque (feature nfe-modelo-55).
+from . import stock_picking
