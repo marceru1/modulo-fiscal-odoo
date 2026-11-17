@@ -18,7 +18,7 @@ recalculados ao reabrir (tickets 05 e 07 completam os valores).
 from psycopg2 import IntegrityError
 
 from odoo import _, api, fields, models
-from odoo.exceptions import AccessError
+from odoo.exceptions import AccessError, UserError
 
 from .campos_fiscais import CST_PIS_COFINS, ICMS_CST_CSOSN_SELECTION, ORIGEM_SELECTION
 from .nfe_config import AMBIENTE_SELECTION, CRT_SELECTION, UF_IBGE_SELECTION
@@ -124,6 +124,12 @@ class NfeDocumento(models.Model):
         currency_field='currency_id',
     )
     informacoes_adicionais = fields.Text(string="Informações adicionais")
+    pendencias = fields.Text(
+        string="Pendências",
+        readonly=True,
+        help="Resultado da última conferência local (Validar NF-e). "
+             "Pendência mantém a nota em Rascunho.",
+    )
 
     data_movimentacao = fields.Datetime(string="Data da movimentação", readonly=True)
     data_preparacao = fields.Datetime(
@@ -176,12 +182,106 @@ class NfeDocumento(models.Model):
             documento.pode_editar_fiscal = pode
 
     def write(self, vals):
-        if 'state' not in vals and any(campo in vals for campo in self.CAMPOS_FISCAIS):
+        fiscal = any(campo in vals for campo in self.CAMPOS_FISCAIS)
+        if fiscal:
             if not self.env.user.has_group(GRUPO_RESPONSAVEL_FISCAL):
                 raise AccessError(
                     _("Apenas o Responsável fiscal pode ajustar dados fiscais da NF-e.")
                 )
+            # Correção fiscal em nota Validada exige nova validação
+            # (spec, decisão 6): volta para Rascunho.
+            if any(documento.state == 'validada' for documento in self):
+                vals = dict(vals, state='rascunho', pendencias=False)
         return super().write(vals)
+
+    # ── Validação local (ticket 08) ──────────────────────────────────────────
+    def nfe_validar(self):
+        """Botão **Validar NF-e**: confere a nota e move Rascunho → Validada.
+
+        Com qualquer pendência a nota CONTINUA em Rascunho e a lista fica
+        gravada no campo Pendências (visível na nota). A validação é local:
+        não é autorização fiscal.
+        """
+        self.ensure_one()
+        pendencias = self._nfe_pendencias()
+        if pendencias:
+            # Pendência mantém (ou devolve) a nota em Rascunho: nota com
+            # pendência não pode estar Validada.
+            self.write({
+                'state': 'rascunho',
+                'pendencias': "\n".join(pendencias),
+            })
+            # Recarrega o form para o operador ver as pendências gravadas.
+            return self._nfe_acao_reabrir()
+        self.write({'state': 'validada', 'pendencias': False})
+        return True
+
+    def _nfe_acao_reabrir(self):
+        return {
+            'type': 'ir.actions.act_window',
+            'name': _("NF-e"),
+            'res_model': 'nfe.documento',
+            'res_id': self.id,
+            'view_mode': 'form',
+            'target': 'current',
+        }
+
+    def _nfe_pendencias(self):
+        """Lista de pendências por campo e por item (texto, uma por linha)."""
+        self.ensure_one()
+        pendencias = []
+
+        # Origem: mesma checagem do servidor usada pelo botão de preparo.
+        try:
+            self.picking_id.nfe_verificar_elegibilidade()
+        except UserError as erro:
+            pendencias.extend(
+                "Transferência: %s" % linha for linha in str(erro).splitlines()
+            )
+
+        pendencias.extend(self._nfe_pendencias_empresa('emitente', "Emitente"))
+        pendencias.extend(self._nfe_pendencias_empresa('destinataria', "Destinatária"))
+
+        config = self._nfe_config_da_empresa(self.company_id)
+        if not config:
+            pendencias.append(
+                "Configuração fiscal da empresa ausente (Faturamento → NF-e → Configurações fiscais)."
+            )
+        elif not config.conferida:
+            pendencias.append(
+                "Configuração fiscal da operação não conferida pelo Responsável fiscal."
+            )
+
+        if not self.ambiente:
+            pendencias.append("Ambiente da NF-e ausente.")
+        if not self.serie:
+            pendencias.append("Série da NF-e ausente.")
+
+        if not self.linha_ids:
+            pendencias.append("Nota sem itens.")
+        for linha in self.linha_ids:
+            pendencias.extend(linha._nfe_pendencias())
+
+        return pendencias
+
+    def _nfe_pendencias_empresa(self, prefixo, rotulo):
+        campos = (
+            ('cnpj', "CNPJ"),
+            ('ie', "Inscrição Estadual"),
+            ('crt', "CRT"),
+            ('ibge_municipio', "código IBGE do município"),
+            ('logradouro', "logradouro"),
+            ('numero', "número"),
+            ('bairro', "bairro"),
+            ('municipio', "município"),
+            ('uf', "UF"),
+            ('cep', "CEP"),
+        )
+        return [
+            "%s: %s ausente." % (rotulo, nome)
+            for sufixo, nome in campos
+            if not self['%s_%s' % (prefixo, sufixo)]
+        ]
 
     @api.depends('linha_ids.total_linha')
     def _compute_total_produtos(self):
@@ -405,12 +505,50 @@ class NfeDocumentoLinha(models.Model):
             linha.pode_editar_fiscal = linha.documento_id.pode_editar_fiscal
 
     def write(self, vals):
-        if any(campo in vals for campo in self.CAMPOS_FISCAIS):
-            if not self.env.user.has_group(GRUPO_RESPONSAVEL_FISCAL):
-                raise AccessError(
-                    _("Apenas o Responsável fiscal pode ajustar dados fiscais dos itens da NF-e.")
-                )
-        return super().write(vals)
+        fiscal = any(campo in vals for campo in self.CAMPOS_FISCAIS)
+        if fiscal and not self.env.user.has_group(GRUPO_RESPONSAVEL_FISCAL):
+            raise AccessError(
+                _("Apenas o Responsável fiscal pode ajustar dados fiscais dos itens da NF-e.")
+            )
+        resultado = super().write(vals)
+        if fiscal:
+            # Ajuste tributário por item em nota Validada exige nova validação.
+            self.documento_id.filtered(lambda doc: doc.state == 'validada').write({
+                'state': 'rascunho',
+                'pendencias': False,
+            })
+        return resultado
+
+    def _nfe_pendencias(self):
+        """Pendências deste item, prefixadas pelo produto."""
+        self.ensure_one()
+        rotulo = self.descricao or (
+            self.product_id.display_name if self.product_id else "item sem produto"
+        )
+        faltando = []
+        if not self.product_id:
+            faltando.append("produto")
+        if not self.uom_id:
+            faltando.append("unidade")
+        if not self.quantidade:
+            faltando.append("quantidade realizada")
+        if self.custo_unitario <= 0:
+            faltando.append("custo unitário")
+        if not self.ncm:
+            faltando.append("NCM")
+        if not self.cfop:
+            faltando.append("CFOP")
+        if not self.origem:
+            faltando.append("origem")
+        if not self.icms_cst_csosn:
+            faltando.append("ICMS (CST/CSOSN)")
+        if not self.pis_cst:
+            faltando.append("CST PIS")
+        if not self.cofins_cst:
+            faltando.append("CST COFINS")
+        return [
+            "Produto %s: %s ausente." % (rotulo, nome) for nome in faltando
+        ]
 
     @api.depends('quantidade', 'custo_unitario', 'currency_id')
     def _compute_total_linha(self):

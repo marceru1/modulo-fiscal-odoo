@@ -29,33 +29,8 @@ class TestNfeDadosFiscais(NfeTransferMixin, TransactionCase):
             'company_ids': [(6, 0, [cls.env.company.id])],
         })
 
-    def _config(self, empresa=None, **vals):
-        return self.env['nfe.config'].create({
-            'company_id': (empresa or self.env.company).id,
-            **vals,
-        })
-
     def _config_completa(self, empresa=None):
-        return self._config(
-            empresa,
-            crt='1',
-            ibge_municipio='1302702',
-            ambiente='homologacao',
-            serie=5,
-            logradouro='Av. 7 de Setembro',
-            numero='767',
-            bairro='Centro',
-            complemento='Sala 2',
-            municipio='Itacoatiara',
-            uf='13',
-            cep='69100000',
-            natureza_operacao='Transferência para filial',
-            cfop='5152',
-            icms_cst_csosn='102',
-            origem='0',
-            pis_cst='07',
-            cofins_cst='07',
-        )
+        return self._nfe_config_completa(empresa)
 
     def _nota(self, picking):
         return self.env['nfe.documento']._nfe_obter_ou_criar(picking)

@@ -61,3 +61,42 @@ class NfeTransferMixin:
             move.quantity = move.product_uom_qty
         picking.with_context(skip_backorder=True).button_validate()
         return picking
+
+    @classmethod
+    def _nfe_config_completa(cls, empresa=None, **overrides):
+        """Configuração fiscal completa (endereço + operação conferida)."""
+        vals = dict(
+            company_id=(empresa or cls.env.company).id,
+            crt='1',
+            ibge_municipio='1302702',
+            ambiente='homologacao',
+            serie=5,
+            logradouro='Av. 7 de Setembro',
+            numero='767',
+            bairro='Centro',
+            complemento='Sala 2',
+            municipio='Itacoatiara',
+            uf='13',
+            cep='69100000',
+            natureza_operacao='Transferência para filial',
+            cfop='5152',
+            icms_cst_csosn='102',
+            origem='0',
+            pis_cst='07',
+            cofins_cst='07',
+            conferida=True,
+        )
+        vals.update(overrides)
+        return cls.env['nfe.config'].create(vals)
+
+    @classmethod
+    def _nfe_preparar_nota_valida(cls, **kw):
+        """Cenário completo: emitente e filial configurados → nota validável."""
+        cls._nfe_config_completa()
+        cls._nfe_config_completa(cls.filial)
+        cls.env.company.write({'x_cnpj': '26343314000180', 'x_ie': '053917464'})
+        cls.filial.write({'x_cnpj': '11222333000144', 'x_ie': '999888777'})
+        cls.produto.with_company(cls.env.company).standard_price = 10.0
+        cls.produto.x_ncm_id = cls.env['br.ncm'].search([], limit=1)
+        picking = cls._criar_transferencia(**kw)
+        return cls.env['nfe.documento']._nfe_obter_ou_criar(picking)

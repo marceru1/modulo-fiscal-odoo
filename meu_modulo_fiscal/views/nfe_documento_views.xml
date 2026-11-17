@@ -13,11 +13,23 @@
         <field name="arch" type="xml">
             <form string="NF-e" create="false">
                 <header>
+                    <button name="nfe_validar" type="object" string="Validar NF-e"
+                            class="btn-primary"
+                            groups="meu_modulo_fiscal.group_nfe_usuario"
+                            invisible="state != 'rascunho'"/>
                     <field name="state" widget="statusbar" statusbar_visible="rascunho,validada"/>
                 </header>
                 <sheet>
                     <div class="oe_title">
                         <h1><field name="name"/></h1>
+                    </div>
+                    <div class="alert alert-warning" role="status" invisible="not pendencias">
+                        <strong>Pendências da conferência local</strong>
+                        <field name="pendencias" readonly="1" nolabel="1"/>
+                    </div>
+                    <div class="alert alert-info" role="status">
+                        A conferência é local e <strong>não é autorização fiscal</strong>:
+                        ela apenas verifica os dados antes de preparar o envio.
                     </div>
                     <group>
                         <group string="Origem">
