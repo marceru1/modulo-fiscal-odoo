@@ -14,3 +14,13 @@ from . import test_analise_vendas_pdv
 from . import test_consulta_vendas_caixa_dia
 from . import test_pago_vendas_do_dia
 from . import test_rastreio_produto_default
+from . import test_nfe_elegibilidade
+from . import test_nfe_config
+from . import test_nfe_config_tributaria
+from . import test_nfe_documento
+from . import test_nfe_custo
+from . import test_nfe_acesso
+from . import test_nfe_dados_fiscais
+from . import test_nfe_validacao
+from . import test_nfe_emissao
+from . import test_nfe_divergencia

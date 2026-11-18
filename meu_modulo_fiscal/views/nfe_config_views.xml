@@ -1,0 +1,84 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <record id="view_nfe_config_form" model="ir.ui.view">
+        <field name="name">nfe.config.form</field>
+        <field name="model">nfe.config</field>
+        <field name="arch" type="xml">
+            <form string="Configuração fiscal da NF-e">
+                <sheet>
+                    <group>
+                        <group string="Empresa">
+                            <field name="company_id" options="{'no_create': True}"/>
+                            <field name="cnpj"/>
+                            <field name="ie"/>
+                        </group>
+                        <group string="Identificação fiscal">
+                            <field name="crt"/>
+                            <field name="ibge_municipio"/>
+                            <field name="ambiente"/>
+                            <field name="serie"/>
+                        </group>
+                    </group>
+                    <group string="Endereço fiscal do emitente">
+                        <group>
+                            <field name="logradouro" placeholder="Rua / Avenida, sem o número"/>
+                            <field name="numero"/>
+                            <field name="complemento"/>
+                            <field name="bairro"/>
+                        </group>
+                        <group>
+                            <field name="municipio"/>
+                            <field name="uf"/>
+                            <field name="cep"/>
+                        </group>
+                    </group>
+                    <div class="alert alert-warning" role="status" invisible="conferida">
+                        Operação ainda NÃO conferida. Os valores abaixo são referência
+                        (CFOP 5152, CSOSN 102, PIS/COFINS 07) e dependem de confirmação
+                        do responsável fiscal com o contador. A NF-e não pode ser
+                        validada enquanto a operação não estiver conferida.
+                    </div>
+                    <group string="Operação de transferência">
+                        <group>
+                            <field name="natureza_operacao"/>
+                            <field name="finalidade"/>
+                            <field name="cfop" placeholder="5152"/>
+                        </group>
+                        <group>
+                            <field name="icms_cst_csosn"/>
+                            <field name="origem"/>
+                            <field name="pis_cst"/>
+                            <field name="cofins_cst"/>
+                            <field name="conferida"/>
+                        </group>
+                    </group>
+                </sheet>
+            </form>
+        </field>
+    </record>
+
+    <record id="view_nfe_config_list" model="ir.ui.view">
+        <field name="name">nfe.config.list</field>
+        <field name="model">nfe.config</field>
+        <field name="arch" type="xml">
+            <list>
+                <field name="company_id"/>
+                <field name="cnpj"/>
+                <field name="crt"/>
+                <field name="ambiente"/>
+                <field name="serie"/>
+                <field name="conferida"/>
+            </list>
+        </field>
+    </record>
+
+    <record id="action_nfe_config" model="ir.actions.act_window">
+        <field name="name">Configurações fiscais</field>
+        <field name="res_model">nfe.config</field>
+        <field name="view_mode">list,form</field>
+        <field name="help" type="html">
+            <p class="o_view_nocontent_smiling_face">Cadastre a configuração fiscal da NF-e</p>
+            <p>Preencha uma configuração por empresa: CRT, código IBGE, ambiente, série e endereço fiscal.</p>
+        </field>
+    </record>
+</odoo>

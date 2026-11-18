@@ -2,3 +2,8 @@ id,name,model_id:id,group_id:id,perm_read,perm_write,perm_create,perm_unlink
 access_br_ncm,br.ncm,model_br_ncm,,1,1,1,1
 access_x_prazo_movimentacao_user,access_x_prazo_movimentacao_user,model_x_prazo_movimentacao,base.group_user,1,1,1,1
 access_x_label_line_user,access_x_label_line_user,model_x_label_line,base.group_user,1,1,1,1
+access_nfe_config_responsavel,nfe.config responsavel fiscal,model_nfe_config,meu_modulo_fiscal.group_nfe_responsavel_fiscal,1,1,1,1
+access_nfe_documento_usuario,nfe.documento usuario,model_nfe_documento,meu_modulo_fiscal.group_nfe_usuario,1,1,1,0
+access_nfe_documento_linha_usuario,nfe.documento.linha usuario,model_nfe_documento_linha,meu_modulo_fiscal.group_nfe_usuario,1,1,1,0
+access_nfe_documento_responsavel,nfe.documento responsavel fiscal,model_nfe_documento,meu_modulo_fiscal.group_nfe_responsavel_fiscal,1,1,1,1
+access_nfe_documento_linha_responsavel,nfe.documento.linha responsavel fiscal,model_nfe_documento_linha,meu_modulo_fiscal.group_nfe_responsavel_fiscal,1,1,1,1

@@ -12,6 +12,9 @@
     ],
     'data': [
         'data/br.ncm.csv',
+        # nfe-modelo-55: grupos e record rule ANTES da ACL — o CSV referencia
+        # o xmlid do grupo "Responsável fiscal".
+        'security/nfe_security.xml',
         'security/ir.model.access.csv',
         # etiquetas-produto-impressao: paperformats, reports e templates QWeb
         # antes das views — a view do wizard referencia a action registrada aqui.
@@ -50,6 +53,15 @@
         'views/web_login_cleanup.xml',
         'views/pos_order_report_analise_views.xml',
         'views/consulta_vendas_caixa_dia_views.xml',
+        # nfe-modelo-55: filial destinatária na transferência de estoque
+        # (origem da NF-e modelo 55).
+        'views/stock_picking_nfe_views.xml',
+        # nfe-modelo-55: configuração fiscal por empresa + menu Faturamento → NF-e.
+        'views/nfe_config_views.xml',
+        'views/nfe_documento_views.xml',
+        'views/nfe_menus.xml',
+        # nfe-modelo-55: referência estável do documento (noupdate).
+        'data/nfe_sequence.xml',
     ],
     'assets': {
         'point_of_sale._assets_pos': [
@@ -169,6 +181,9 @@
         # (stock.picking internal/incoming) em vez de download de PDF.
         'web.assets_backend': [
             'meu_modulo_fiscal/static/src/js/picking_print_helper.js',
+            # nfe-modelo-55: action client da simulação de envio (console +
+            # aviso). Só backend — NUNCA no point_of_sale._assets_pos.
+            'meu_modulo_fiscal/static/src/js/nfe_emitir_simulacao.js',
             # etiquetas-produto-impressao: botão de impressão direta no wizard de
             # etiquetas. O JS registra o campo que fala com o QZ Tray (instalado
             # no PC da impressora); o XML o renderiza. JS antes do XML.

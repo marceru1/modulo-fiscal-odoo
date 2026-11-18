@@ -1,0 +1,49 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <!--
+        NF-e modelo 55 — vínculo com a transferência (tickets 01 e 04).
+
+        (a) Campo Filial destinatária na aba Additional Info.
+        (b) Botão Emitir NF-e no header, visível só quando a origem é
+            elegível para o usuário do grupo NF-e — a condição é revalidada
+            no servidor por nfe_verificar_elegibilidade().
+        (c) Stat button com a situação da nota, quando já preparada.
+
+        Nenhum nó do core é removido (sem position="replace"), então o
+        fluxo nativo de estoque segue inalterado.
+    -->
+    <record id="view_picking_form_inherit_nfe" model="ir.ui.view">
+        <field name="name">stock.picking.form.inherit.nfe</field>
+        <field name="model">stock.picking</field>
+        <field name="inherit_id" ref="stock.view_picking_form"/>
+        <field name="arch" type="xml">
+            <xpath expr="//header/button[@name='action_cancel']" position="after">
+                <button name="action_nfe_emitir"
+                        type="object"
+                        string="Emitir NF-e"
+                        class="btn-primary"
+                        groups="meu_modulo_fiscal.group_nfe_usuario"
+                        invisible="state != 'done' or picking_type_code != 'internal' or not x_nfe_filial_id"/>
+            </xpath>
+            <xpath expr="//div[@name='button_box']" position="inside">
+                <field name="x_nfe_documento_id" invisible="1"/>
+                <button name="action_nfe_abrir_documento"
+                        type="object"
+                        class="oe_stat_button"
+                        icon="fa-file-text-o"
+                        groups="meu_modulo_fiscal.group_nfe_usuario"
+                        invisible="not x_nfe_documento_id">
+                    <div class="o_stat_info">
+                        <span class="o_stat_text">NF-e</span>
+                        <span class="o_stat_text"><field name="x_nfe_documento_state"/></span>
+                    </div>
+                </button>
+            </xpath>
+            <xpath expr="//page[@name='extra']//group[@name='other_infos']" position="inside">
+                <field name="x_nfe_filial_id"
+                       readonly="state in ['cancel', 'done']"
+                       options="{'no_create': True}"/>
+            </xpath>
+        </field>
+    </record>
+</odoo>
