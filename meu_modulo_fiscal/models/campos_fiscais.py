@@ -10,24 +10,6 @@ CST_PIS_COFINS = [
     ('99', '99 - Outras Operações'),
 ]
 
-# Extraídas para constante: a configuração de transferência da NF-e modelo 55
-# (nfe_config.py) usa as MESMAS tabelas do cadastro do produto. Valores
-# idênticos aos que já existiam inline — nenhuma mudança de comportamento.
-ORIGEM_SELECTION = [
-    ('0', '0 - Nacional, exceto códigos 3, 4, 5 e 8'), ('1', '1 - Importação direta'),
-    ('2', '2 - Estrangeira adquirida no mercado interno'), ('3', '3 - Nacional, conteúdo importado >40% e ≤70%'),
-    ('4', '4 - Nacional conforme PPB'), ('5', '5 - Nacional, conteúdo importado ≤40%'),
-    ('6', '6 - Importação direta sem similar nacional'), ('7', '7 - Estrangeira adquirida sem similar nacional'),
-    ('8', '8 - Nacional, conteúdo importado >70%'),
-]
-
-ICMS_CST_CSOSN_SELECTION = [
-    ('00', '00 - Tributada integralmente'), ('20', '20 - Com redução de base de cálculo'),
-    ('40', '40 - Isenta'), ('41', '41 - Não tributada'),
-    ('60', '60 - ICMS cobrado anteriormente por substituição tributária (ST)'),
-    ('102', '102 - Tributada pelo Simples Nacional sem permissão de crédito'),
-]
-
 class ProductTemplate(models.Model):
     """
     Extensão do cadastro de produtos base do Odoo (product.template).
@@ -85,7 +67,13 @@ class ProductTemplate(models.Model):
     )
 
     x_origem = fields.Selection(
-        ORIGEM_SELECTION,
+        [
+            ('0', '0 - Nacional, exceto códigos 3, 4, 5 e 8'), ('1', '1 - Importação direta'),
+            ('2', '2 - Estrangeira adquirida no mercado interno'), ('3', '3 - Nacional, conteúdo importado >40% e ≤70%'),
+            ('4', '4 - Nacional conforme PPB'), ('5', '5 - Nacional, conteúdo importado ≤40%'),
+            ('6', '6 - Importação direta sem similar nacional'), ('7', '7 - Estrangeira adquirida sem similar nacional'),
+            ('8', '8 - Nacional, conteúdo importado >70%'),
+        ],
         string="Origem (NF-e)", required=True, default='0', help="Origem da mercadoria (Nacional/Importada) que ditará as alíquotas de ICMS."
     )
 
@@ -100,7 +88,12 @@ class ProductTemplate(models.Model):
     )
 
     x_icms = fields.Selection(
-        ICMS_CST_CSOSN_SELECTION,
+        [
+            ('00', '00 - Tributada integralmente'), ('20', '20 - Com redução de base de cálculo'),
+            ('40', '40 - Isenta'), ('41', '41 - Não tributada'),
+            ('60', '60 - ICMS cobrado anteriormente por substituição tributária (ST)'),
+            ('102', '102 - Tributada pelo Simples Nacional sem permissão de crédito'),
+        ],
         string="ICMS (CST/CSOSN)", default='00', help="Código de Situação Tributária do ICMS pertinente ao regime da empresa."
     )
 
